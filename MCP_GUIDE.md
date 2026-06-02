@@ -1409,7 +1409,7 @@ When using Claude Desktop, set `"cwd"` to the RetailOps project root, such as
 
 ### `UnicodeEncodeError` on Windows terminals
 
-If running `test_mcp_tools.py` in a Windows terminal that defaults to `cp1252`, the test file handles this automatically by calling `sys.stdout.reconfigure(encoding="utf-8")` at startup. If you see this error in other scripts, add the same line at the top.
+If a custom Python script prints Unicode characters in a Windows terminal that defaults to `cp1252`, configure the stream for UTF-8 output before printing user-facing symbols or non-ASCII text. A small helper can call `sys.stdout.reconfigure(encoding="utf-8", errors="replace")` when `sys.stdout` supports `reconfigure`.
 
 ### A tool returns a 409 Conflict on delete
 
