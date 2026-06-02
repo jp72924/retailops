@@ -1,0 +1,1 @@
+# RetailOps MCP Server package

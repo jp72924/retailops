@@ -1,0 +1,134 @@
+{% extends "core/base.html" %}
+{% load regional %}
+{% block title %}Payments | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Payments</div>
+      <div class="page-subtitle">All recorded payments</div>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <form method="get" action="{% url 'payment-list' %}">
+    <div class="filter-bar">
+      <input type="text" name="q" class="form-control"
+        placeholder="&#128269; Search payment # or order #…" value="{{ query|default:'' }}">
+      <select name="method" class="form-control">
+        <option value="">All Methods</option>
+        {% for value, label in method_choices %}
+        <option value="{{ value }}" {% if method_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <select name="status" class="form-control">
+        <option value="">All Statuses</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="From date">
+      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="To date">
+      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+      {% if query or method_filter or status_filter or date_from or date_to %}
+        <a href="{% url 'payment-list' %}" class="btn btn-secondary btn-sm">Clear</a>
+        <span class="filter-active">Filters active</span>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Payment #</th>
+          <th>Order #</th>
+          <th>Customer</th>
+          <th>Amount</th>
+          <th>Method</th>
+          <th>Status</th>
+          <th>Reference</th>
+          <th>Receipt</th>
+          <th>Recorded By</th>
+          <th>Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for payment in page_obj %}
+        <tr>
+          <td class="td-mono">
+            <a href="{% url 'payment-detail' payment.pk %}">{{ payment.payment_number }}</a>
+          </td>
+          <td class="td-mono">
+            <a href="{% url 'order-detail' payment.sales_order.pk %}">{{ payment.sales_order.order_number }}</a>
+          </td>
+          <td>{{ payment.sales_order.customer.get_full_name }}</td>
+          <td><strong>{{ payment.amount|currency }}</strong></td>
+          <td>{{ payment.get_payment_method_display }}</td>
+          <td>
+            <span class="badge {% if payment.status == 'confirmed' %}badge-paid{% else %}badge-pending{% endif %}">
+              {{ payment.get_status_display }}
+            </span>
+          </td>
+          <td style="color:var(--muted);">{{ payment.reference_number|default:"—" }}</td>
+          <td>
+            {% if payment.receipt_image %}
+            <a href="{{ payment.receipt_image.url }}" class="btn btn-ghost btn-sm">Receipt</a>
+            {% else %}
+            <span style="color:var(--muted);">-</span>
+            {% endif %}
+          </td>
+          <td>{{ payment.recorded_by.get_full_name }}</td>
+          <td>{{ payment.created_at|date:"M j, Y" }}</td>
+          <td>
+            <a href="{% url 'payment-detail' payment.pk %}" class="btn btn-ghost btn-sm">View</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    <span class="pg-info">
+      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+    </span>
+    {% if page_obj.has_previous %}
+      <a href="?page={{ page_obj.previous_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">‹</a>
+    {% else %}
+      <span class="pg-btn disabled">‹</span>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="pg-btn active">{{ num }}</span>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <a href="?page={{ num }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a href="?page={{ page_obj.next_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">›</a>
+    {% else %}
+      <span class="pg-btn disabled">›</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="table-wrap">
+    <div class="empty-state">
+      <div class="empty-icon">💳</div>
+      <div class="empty-title">No payments found</div>
+      {% if query or method_filter or status_filter %}
+        <div>No results match your filters. <a href="{% url 'payment-list' %}">Clear filters</a></div>
+      {% else %}
+        <div>Payments are recorded from the <a href="{% url 'order-list' %}">order detail</a> view.</div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

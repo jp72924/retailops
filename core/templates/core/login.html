@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign In | RetailOps</title>
+<style>
+  :root {
+    --primary: #2563EB; --secondary: #1E293B; --danger: #DC2626;
+    --background: #F8FAFC; --surface: #FFFFFF; --text: #0F172A;
+    --muted: #64748B; --border: #E2E8F0; --border-input: #CBD5E1;
+    --radius-sm: 6px; --radius-md: 8px;
+    --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--background); color: var(--text); }
+
+  .login-wrap {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    width: 100%; max-width: 400px;
+    padding: 40px;
+  }
+  .login-logo { text-align: center; margin-bottom: 28px; }
+  .login-logo .brand { font-size: 1.75rem; font-weight: 800; color: var(--secondary); }
+  .login-logo .brand .dot { color: var(--primary); }
+  .login-logo .tagline { font-size: 0.8rem; color: var(--muted); margin-top: 4px; }
+
+  .login-error {
+    background: #FEE2E2; border: 1px solid #FCA5A5; color: #991B1B;
+    padding: 10px 14px; border-radius: var(--radius-sm);
+    font-size: 0.875rem; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+  .form-label { font-size: 0.8rem; font-weight: 600; color: var(--secondary); }
+  .form-control {
+    padding: 8px 12px;
+    border: 1px solid var(--border-input);
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem; font-family: var(--font);
+    color: var(--text); background: var(--surface);
+    width: 100%;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .form-control:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.15); }
+  .form-control.is-invalid { border-color: var(--danger); }
+  .form-check { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; margin-bottom: 20px; cursor: pointer; }
+  .form-check input { accent-color: var(--primary); width: 15px; height: 15px; }
+
+  .btn-submit {
+    display: block; width: 100%;
+    background: var(--primary); color: #fff;
+    border: none; border-radius: var(--radius-sm);
+    padding: 10px; font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; font-family: var(--font);
+    transition: background 0.15s;
+  }
+  .btn-submit:hover { background: #1D4ED8; }
+
+  .login-footer { text-align: center; margin-top: 20px; font-size: 0.8rem; color: var(--muted); }
+  .login-footer a { color: var(--primary); }
+</style>
+</head>
+<body>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="brand">&#9632;<span class="dot">R</span>etailOps</div>
+      <div class="tagline">Unified Retail &amp; Order Management</div>
+    </div>
+
+    {% if error %}
+    <div class="login-error">
+      <span>✕</span> {{ error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="{% url 'login' %}{% if request.GET.next %}?next={{ request.GET.next }}{% endif %}">
+      {% csrf_token %}
+
+      <div class="form-group">
+        <label class="form-label" for="id_email">Email Address</label>
+        <input
+          type="email"
+          id="id_email"
+          name="email"
+          class="form-control{% if error %} is-invalid{% endif %}"
+          value="{{ request.POST.email|default:'' }}"
+          placeholder="you@company.com"
+          autocomplete="email"
+          required
+          autofocus
+        >
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="id_password">Password</label>
+        <input
+          type="password"
+          id="id_password"
+          name="password"
+          class="form-control{% if error %} is-invalid{% endif %}"
+          placeholder="••••••••"
+          autocomplete="current-password"
+          required
+        >
+      </div>
+
+      <label class="form-check">
+        <input type="checkbox" name="remember_me" {% if request.POST.remember_me %}checked{% endif %}>
+        Remember me
+      </label>
+
+      <button type="submit" class="btn-submit">Sign In</button>
+    </form>
+
+    <div class="login-footer">
+      <a href="{% url 'password_reset' %}">Forgot password?</a>
+    </div>
+  </div>
+</div>
+</body>
+</html>

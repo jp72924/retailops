@@ -1,0 +1,121 @@
+{% extends "core/base.html" %}
+{% block title %}Categories | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Product Categories</div>
+      <div class="page-subtitle">{{ page_obj.paginator.count }} categor{{ page_obj.paginator.count|pluralize:"y,ies" }} registered</div>
+    </div>
+    {% if user.role and user.role.name in "Manager,Admin" %}
+    <div class="page-header-actions">
+      <a href="{% url 'category-create-page' %}" class="btn btn-primary">+ New Category</a>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Filter Bar -->
+  <form method="get" action="{% url 'category-list' %}">
+    <div class="filter-bar">
+      <input type="text" name="q" class="form-control" placeholder="&#128269; Search name or description…" value="{{ query|default:'' }}">
+      <button type="submit" class="btn btn-primary btn-sm">Search</button>
+      {% if query %}
+        <a href="{% url 'category-list' %}" class="btn btn-secondary btn-sm">Clear</a>
+        <span class="filter-active">Filtered by "{{ query }}"</span>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Parent</th>
+          <th>Products</th>
+          <th>Created</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for cat in page_obj %}
+        <tr>
+          <td>
+            <a href="{% url 'category-edit' cat.pk %}"><strong>{{ cat.name }}</strong></a>
+            {% if cat.description %}<div style="font-size:0.8rem;color:var(--muted);">{{ cat.description|truncatechars:60 }}</div>{% endif %}
+          </td>
+          <td>
+            {% if cat.parent_category %}
+              <span class="badge badge-pending">Subcategory</span>
+            {% else %}
+              <span class="badge badge-active">Parent</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if cat.parent_category %}
+              <a href="{% url 'category-edit' cat.parent_category.pk %}">{{ cat.parent_category.name }}</a>
+            {% else %}—{% endif %}
+          </td>
+          <td>{{ cat.product_count }}</td>
+          <td style="color:var(--muted);">{{ cat.created_at|date:"M j, Y" }}</td>
+          <td class="td-actions">
+            <a href="{% url 'category-edit' cat.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+            {% if user.role and user.role.name in "Manager,Admin" %}
+            <form method="post" action="{% url 'category-delete' cat.pk %}" class="inline"
+                  onsubmit="return confirm('Delete category &quot;{{ cat.name|escapejs }}&quot;?\nSubcategories will become top-level. This cannot be undone.')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm"
+                      style="color:var(--danger);border:1px solid var(--border);background:transparent;">Delete</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    <span class="pg-info">
+      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+    </span>
+    {% if page_obj.has_previous %}
+      <a href="?{% if query %}q={{ query }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
+    {% else %}
+      <span class="pg-btn disabled">‹</span>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="pg-btn active">{{ num }}</span>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <a href="?{% if query %}q={{ query }}&{% endif %}page={{ num }}" class="pg-btn">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a href="?{% if query %}q={{ query }}&{% endif %}page={{ page_obj.next_page_number }}" class="pg-btn">›</a>
+    {% else %}
+      <span class="pg-btn disabled">›</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="table-wrap">
+    <div class="empty-state">
+      <div class="empty-icon">🗂️</div>
+      <div class="empty-title">No categories found</div>
+      {% if query %}
+        <div>No results for "{{ query }}". <a href="{% url 'category-list' %}">Clear search</a></div>
+      {% else %}
+        <div><a href="{% url 'category-create-page' %}">Add your first product category</a></div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

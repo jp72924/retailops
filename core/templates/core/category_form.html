@@ -1,0 +1,70 @@
+{% extends "core/base.html" %}
+{% block title %}{% if category %}Edit {{ category.name }}{% else %}New Category{% endif %} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">{% if category %}Edit Category{% else %}New Category{% endif %}</div>
+      <div class="page-subtitle">
+        {% if category %}Update details for {{ category.name }}{% else %}Add a new product category{% endif %}
+      </div>
+    </div>
+    <a href="{% url 'category-list' %}" style="color:var(--muted);font-size:0.875rem;">← Back</a>
+  </div>
+
+  <div class="card" style="max-width:640px;">
+    <div class="card-body">
+      <form method="post" action="{% if category %}{% url 'category-edit' category.pk %}{% else %}{% url 'category-create-page' %}{% endif %}">
+        {% csrf_token %}
+
+        <div class="form-section">
+          <div class="form-section-title">Category Details</div>
+
+          <!-- Name (required) -->
+          <div class="form-group">
+            <label class="form-label" for="id_name">Name <span class="req">*</span></label>
+            <input type="text" id="id_name" name="name" maxlength="150" required
+              class="form-control{% if errors.name %} is-invalid{% endif %}"
+              value="{{ form_data.name|default:'' }}"
+              placeholder="e.g. Electronics">
+            {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
+          </div>
+
+          <!-- Description (optional) -->
+          <div class="form-group">
+            <label class="form-label" for="id_description">Description</label>
+            <textarea id="id_description" name="description" class="form-control"
+              placeholder="Optional description…">{{ form_data.description|default:'' }}</textarea>
+          </div>
+
+          <!-- Parent Category (optional) -->
+          <div class="form-group">
+            <label class="form-label" for="id_parent_category">Parent Category</label>
+            <select id="id_parent_category" name="parent_category"
+              class="form-control{% if errors.parent_category %} is-invalid{% endif %}">
+              <option value="">— None (top-level category) —</option>
+              {% for cat in all_categories %}
+                {% if not category or cat.pk != category.pk %}
+                  <option value="{{ cat.pk }}"
+                    {% if form_data.parent_category == cat.pk|stringformat:"s" %}selected{% endif %}>
+                    {{ cat }}
+                  </option>
+                {% endif %}
+              {% endfor %}
+            </select>
+            {% if errors.parent_category %}<div class="invalid-feedback">{{ errors.parent_category }}</div>{% endif %}
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">
+            {% if category %}Save Changes{% else %}Create Category{% endif %}
+          </button>
+          <a href="{% url 'category-list' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

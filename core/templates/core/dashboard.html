@@ -1,0 +1,167 @@
+{% extends "core/base.html" %}
+{% load regional %}
+{% block title %}Dashboard | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Dashboard</div>
+      <div class="page-subtitle">Welcome back, {{ user.first_name }}. Here's what's happening today.</div>
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="stat-grid">
+    <div class="stat-card primary">
+      <div class="stat-label">Orders This Month</div>
+      <div class="stat-value">{{ stats.orders_this_month|default:"0" }}</div>
+      <div class="stat-sub">Sales orders created</div>
+    </div>
+    <div class="stat-card success">
+      <div class="stat-label">Revenue This Month</div>
+      <div class="stat-value">{{ stats.revenue_this_month|default:"0.00"|currency }}</div>
+      <div class="stat-sub">From paid orders</div>
+    </div>
+    <div class="stat-card warning">
+      <div class="stat-label">Pending Payments</div>
+      <div class="stat-value">{{ stats.pending_payments_count|default:"0" }}</div>
+      <div class="stat-sub">Orders awaiting payment</div>
+    </div>
+    <div class="stat-card danger">
+      <div class="stat-label">Low Stock Items</div>
+      <div class="stat-value">{{ stats.low_stock_count|default:"0" }}</div>
+      <div class="stat-sub">Below threshold</div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="dash-main">
+
+      <!-- Tabs -->
+      <div class="card">
+        <div class="card-header">
+          <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
+            <button class="btn btn-sm" id="tab-btn-orders" onclick="dashTab('orders')"
+              style="border-radius:0;border:none;background:var(--primary);color:#fff;">
+              Recent Orders
+            </button>
+            <button class="btn btn-sm" id="tab-btn-alerts" onclick="dashTab('alerts')"
+              style="border-radius:0;border:none;">
+              Inventory Alerts
+            </button>
+          </div>
+          <a href="{% url 'order-list' %}" class="btn btn-ghost btn-sm">View all →</a>
+        </div>
+
+        <!-- Recent Orders Tab -->
+        <div id="dash-tab-orders">
+          {% if recent_orders %}
+          <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Order #</th>
+                  <th>Customer</th>
+                  <th>Date</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for order in recent_orders %}
+                <tr>
+                  <td class="td-mono">
+                    <a href="{% url 'order-detail' order.pk %}">{{ order.order_number }}</a>
+                  </td>
+                  <td>{{ order.customer.get_full_name }}</td>
+                  <td>{{ order.created_at|date:"M j, Y" }}</td>
+                  <td><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
+                  <td><strong>{{ order.total_amount|currency }}</strong></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <div class="empty-title">No orders yet</div>
+            <div><a href="{% url 'order-create' %}">Create your first order</a></div>
+          </div>
+          {% endif %}
+        </div>
+
+        <!-- Inventory Alerts Tab -->
+        <div id="dash-tab-alerts" style="display:none;">
+          <div class="card-body">
+            {% if low_stock_products %}
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              {% for product in low_stock_products %}
+              <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
+                background:{% if product.current_stock == 0 %}#FEE2E2;border:1px solid #FCA5A5{% else %}#FEF3C7;border:1px solid #FCD34D{% endif %};
+                border-radius:var(--radius-sm);font-size:0.875rem;">
+                <div>
+                  <strong>{{ product.sku }}</strong> — {{ product.name }}
+                  <span style="color:var(--muted);font-size:0.8rem;">({{ product.category.name }})</span>
+                </div>
+                {% if product.current_stock == 0 %}
+                  <span class="badge badge-cancelled">Out of stock</span>
+                {% else %}
+                  <span class="badge badge-pending">{{ product.current_stock }} left</span>
+                {% endif %}
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state" style="padding:24px;">
+              <div class="empty-title" style="color:var(--success);">✓ All stock levels are healthy</div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Sidebar: Quick Actions -->
+    <div class="dash-side">
+      <div class="card">
+        <div class="card-header"><div class="card-title">Quick Actions</div></div>
+        <div class="card-body" style="padding:12px;">
+          <div class="quick-actions">
+            <a href="{% url 'order-create' %}" class="qa-btn">
+              <span class="qa-icon">+</span> New Order
+            </a>
+            <a href="{% url 'customer-create' %}" class="qa-btn">
+              <span class="qa-icon">👤</span> Register Customer
+            </a>
+            <a href="{% url 'payment-list' %}" class="qa-btn">
+              <span class="qa-icon">💳</span> View Payments
+            </a>
+            <a href="{% url 'inventory-list' %}" class="qa-btn">
+              <span class="qa-icon">📦</span> Inventory
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function dashTab(tab) {
+    const isOrders = tab === 'orders';
+    document.getElementById('dash-tab-orders').style.display = isOrders ? '' : 'none';
+    document.getElementById('dash-tab-alerts').style.display = isOrders ? 'none' : '';
+    document.getElementById('tab-btn-orders').style.cssText = isOrders
+      ? 'border-radius:0;border:none;background:var(--primary);color:#fff;'
+      : 'border-radius:0;border:none;';
+    document.getElementById('tab-btn-alerts').style.cssText = !isOrders
+      ? 'border-radius:0;border:none;background:var(--primary);color:#fff;'
+      : 'border-radius:0;border:none;';
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,55 @@
+# Environment & secrets
+.env
+.env.*
+!.env.example
+.claude/
+CLAUDE.md
+AGENTS.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Django
+db.sqlite3
+*.sqlite3
+db_backups/
+staticfiles/
+media/
+test_media/
+*.log
+*.bak
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Independent RetailOps components kept in separate repositories.
+kiosk/
+kiosk-wireframe.html
+retailops-cli/
+scripts/render-kiosk-index.py
+
+# Provider-specific deployment notes kept outside the public backend repo.
+DIGITALOCEAN_PRODUCTION.md
+deploy/digitalocean/
+
+# Local accidental artifacts
+=*

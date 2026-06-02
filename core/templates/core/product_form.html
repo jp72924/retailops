@@ -1,0 +1,307 @@
+{% extends "core/base.html" %}
+{% block title %}{% if product %}Edit {{ product.name }}{% else %}Add Product{% endif %} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">{% if product %}Edit Product{% else %}Add Product{% endif %}</div>
+      <div class="page-subtitle">
+        {% if product %}Update details for {{ product.name }}{% else %}Add a new product to inventory{% endif %}
+      </div>
+    </div>
+    <a href="{% url 'inventory-list' %}" style="color:var(--muted);font-size:0.875rem;">← Back to Inventory</a>
+  </div>
+
+  <div class="card" style="max-width:720px;">
+    <div class="card-body">
+      <form method="post" enctype="multipart/form-data" action="{% if product %}{% url 'product-edit' product.pk %}{% else %}{% url 'product-create' %}{% endif %}">
+        {% csrf_token %}
+
+        <!-- Identity -->
+        <div class="form-section">
+          <div class="form-section-title">Product Identity</div>
+          <div class="form-grid form-grid-2">
+
+            <div class="form-group">
+              <label class="form-label" for="id_sku">SKU <span class="req">*</span></label>
+              <input type="text" id="id_sku" name="sku"
+                class="form-control{% if errors.sku %} is-invalid{% endif %}"
+                value="{{ form_data.sku }}"
+                placeholder="e.g. SKU-0001" required>
+              {% if errors.sku %}<div class="invalid-feedback">{{ errors.sku }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_name">Product Name <span class="req">*</span></label>
+              <input type="text" id="id_name" name="name"
+                class="form-control{% if errors.name %} is-invalid{% endif %}"
+                value="{{ form_data.name }}"
+                placeholder="Product name" required>
+              {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <div style="display:flex;justify-content:space-between;align-items:baseline">
+                <label class="form-label" for="id_category">Category <span class="req">*</span></label>
+                <a href="#" id="btn-new-cat" style="font-size:0.8rem">+ New</a>
+              </div>
+              <select id="id_category" name="category"
+                class="form-control{% if errors.category %} is-invalid{% endif %}" required>
+                <option value="">— Select category —</option>
+                {% for cat in categories %}
+                <option value="{{ cat.pk }}"
+                  {% if form_data.category == cat.pk|stringformat:"s" %}selected{% endif %}>
+                  {{ cat.name }}
+                </option>
+                {% endfor %}
+              </select>
+              {% if errors.category %}<div class="invalid-feedback">{{ errors.category }}</div>{% endif %}
+            </div>
+
+            <!-- Inline category creation modal -->
+            <div id="modal-new-cat" style="display:none;position:fixed;inset:0;z-index:1000;
+                 background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
+              <div style="background:#fff;border-radius:10px;padding:24px;width:100%;max-width:440px;
+                          margin:16px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
+                <div style="font-weight:700;font-size:1rem;margin-bottom:16px">New Category</div>
+
+                <div class="form-group" style="margin-bottom:12px">
+                  <label class="form-label" for="nc-name">Name <span class="req">*</span></label>
+                  <input type="text" id="nc-name" class="form-control" placeholder="e.g. Electronics" maxlength="150">
+                  <div id="nc-error" style="color:var(--danger);font-size:.8rem;margin-top:4px;display:none"></div>
+                </div>
+
+                <div class="form-group" style="margin-bottom:12px">
+                  <label class="form-label" for="nc-desc">Description</label>
+                  <textarea id="nc-desc" class="form-control" rows="2" placeholder="Optional…"></textarea>
+                </div>
+
+                <div class="form-group" style="margin-bottom:20px">
+                  <label class="form-label" for="nc-parent">Parent Category</label>
+                  <select id="nc-parent" class="form-control">
+                    <option value="">— None (top-level) —</option>
+                    {% for cat in categories %}
+                    <option value="{{ cat.pk }}">{{ cat }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+
+                <div style="display:flex;gap:8px;justify-content:flex-end">
+                  <button type="button" id="nc-cancel" class="btn btn-secondary">Cancel</button>
+                  <button type="button" id="nc-submit" class="btn btn-primary">Create</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_unit_of_measure">Unit of Measure <span class="req">*</span></label>
+              <select id="id_unit_of_measure" name="unit_of_measure"
+                class="form-control{% if errors.unit_of_measure %} is-invalid{% endif %}" required>
+                {% for value, label in unit_choices %}
+                <option value="{{ value }}"
+                  {% if form_data.unit_of_measure == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+                {% endfor %}
+              </select>
+              {% if errors.unit_of_measure %}<div class="invalid-feedback">{{ errors.unit_of_measure }}</div>{% endif %}
+            </div>
+
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-label" for="id_description">Description</label>
+            <textarea id="id_description" name="description" class="form-control"
+              placeholder="Optional product description…">{{ form_data.description }}</textarea>
+          </div>
+        </div>
+
+        <!-- Product Image -->
+        <div class="form-section">
+          <div class="form-section-title">Product Image</div>
+          <div class="product-image-form">
+            <div class="product-image-preview">
+              {% if product and product.primary_image_url %}
+                <img src="{{ product.primary_image_url }}" alt="{{ product.name }}">
+              {% else %}
+                <div class="product-image-placeholder">No image</div>
+              {% endif %}
+            </div>
+
+            <div class="product-image-fields">
+              <div class="form-group">
+                <label class="form-label" for="id_image">Upload Image</label>
+                <input type="file" id="id_image" name="image"
+                  accept="image/jpeg,image/png,image/webp"
+                  class="form-control{% if errors.image %} is-invalid{% endif %}">
+                {% if errors.image %}<div class="invalid-feedback">{{ errors.image }}</div>{% endif %}
+                <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">
+                  JPEG, PNG, or WebP. Maximum size: 5 MB.
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="form-label" for="id_external_image_url">External Image URL</label>
+                <input type="url" id="id_external_image_url" name="external_image_url"
+                  class="form-control{% if errors.external_image_url %} is-invalid{% endif %}"
+                  value="{{ form_data.external_image_url }}"
+                  placeholder="https://example.com/product-image.jpg">
+                {% if errors.external_image_url %}<div class="invalid-feedback">{{ errors.external_image_url }}</div>{% endif %}
+              </div>
+
+              {% if product and product.image %}
+              <div class="form-group">
+                <label class="form-check">
+                  <input type="checkbox" name="remove_image" value="1">
+                  Remove uploaded image
+                </label>
+              </div>
+              {% endif %}
+
+              <div style="font-size:0.78rem;color:var(--muted);">
+                Active products require either an uploaded image or an external image URL.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pricing & Stock -->
+        <div class="form-section">
+          <div class="form-section-title">Pricing &amp; Stock</div>
+          <div class="form-grid form-grid-2">
+
+            <div class="form-group">
+              <label class="form-label" for="id_unit_price">Unit Price ($) <span class="req">*</span></label>
+              <input type="number" id="id_unit_price" name="unit_price"
+                class="form-control{% if errors.unit_price %} is-invalid{% endif %}"
+                value="{{ form_data.unit_price }}"
+                step="0.01" min="0" placeholder="0.00" required>
+              {% if errors.unit_price %}<div class="invalid-feedback">{{ errors.unit_price }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_low_stock_threshold">Low Stock Threshold <span class="req">*</span></label>
+              <input type="number" id="id_low_stock_threshold" name="low_stock_threshold"
+                class="form-control{% if errors.low_stock_threshold %} is-invalid{% endif %}"
+                value="{{ form_data.low_stock_threshold }}"
+                min="0" required>
+              {% if errors.low_stock_threshold %}<div class="invalid-feedback">{{ errors.low_stock_threshold }}</div>{% endif %}
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">Alert shown when stock falls at or below this number.</div>
+            </div>
+
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-check">
+              <input type="checkbox" name="is_active" value="1"
+                {% if form_data.is_active %}checked{% endif %}>
+              Product is active (visible and orderable)
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">
+            {% if product %}Save Changes{% else %}Add Product{% endif %}
+          </button>
+          <a href="{% url 'inventory-list' %}" class="btn btn-secondary">Cancel</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const modal    = document.getElementById('modal-new-cat');
+  const btnOpen  = document.getElementById('btn-new-cat');
+  const btnClose = document.getElementById('nc-cancel');
+  const btnSave  = document.getElementById('nc-submit');
+  const ncName   = document.getElementById('nc-name');
+  const ncDesc   = document.getElementById('nc-desc');
+  const ncParent = document.getElementById('nc-parent');
+  const ncError  = document.getElementById('nc-error');
+  const catSelect = document.getElementById('id_category');
+
+  function openModal(e) {
+    e.preventDefault();
+    ncName.value   = '';
+    ncDesc.value   = '';
+    ncParent.value = '';
+    ncError.style.display = 'none';
+    modal.style.display = 'flex';
+    ncName.focus();
+  }
+
+  function closeModal() {
+    modal.style.display = 'none';
+  }
+
+  btnOpen.addEventListener('click', openModal);
+  btnClose.addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  btnSave.addEventListener('click', async function () {
+    ncError.style.display = 'none';
+    const name = ncName.value.trim();
+    if (!name) {
+      ncError.textContent = 'Name is required.';
+      ncError.style.display = 'block';
+      ncName.focus();
+      return;
+    }
+
+    btnSave.disabled = true;
+    btnSave.textContent = 'Saving…';
+
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    formData.append('name', name);
+    formData.append('description', ncDesc.value.trim());
+    if (ncParent.value) formData.append('parent_id', ncParent.value);
+
+    try {
+      const resp = await fetch('{% url "category-create" %}', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await resp.json();
+
+      if (data.ok) {
+        // Append new option and select it in the main dropdown
+        const opt = document.createElement('option');
+        opt.value = data.id;
+        opt.textContent = data.display_name;
+        opt.selected = true;
+        Array.from(catSelect.options).forEach(o => { o.selected = false; });
+        catSelect.appendChild(opt);
+        catSelect.value = data.id;
+
+        // Also add to parent dropdown for future opens
+        const pOpt = document.createElement('option');
+        pOpt.value = data.id;
+        pOpt.textContent = data.display_name;
+        ncParent.appendChild(pOpt);
+
+        closeModal();
+      } else {
+        ncError.textContent = data.error || 'Error creating category.';
+        ncError.style.display = 'block';
+      }
+    } catch {
+      ncError.textContent = 'Network error. Please try again.';
+      ncError.style.display = 'block';
+    } finally {
+      btnSave.disabled = false;
+      btnSave.textContent = 'Create';
+    }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends "core/base.html" %}
+{% block title %}Edit {{ edited_user.get_full_name }} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Edit User</div>
+      <div class="page-subtitle">Update account details for {{ edited_user.get_full_name }}</div>
+    </div>
+    <a href="{% url 'user-list' %}" style="color:var(--muted);font-size:0.875rem;">← Back to Staff</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
+
+    <!-- Edit Form -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">Account Details</div></div>
+      <div class="card-body">
+        <form method="post" action="{% url 'user-edit' edited_user.pk %}">
+          {% csrf_token %}
+          <div class="form-grid" style="gap:16px;">
+
+            <div class="form-grid form-grid-2">
+              <div class="form-group">
+                <label class="form-label" for="id_first_name">First Name <span class="req">*</span></label>
+                <input type="text" id="id_first_name" name="first_name"
+                  class="form-control{% if errors.first_name %} is-invalid{% endif %}"
+                  value="{{ form_data.first_name|default:edited_user.first_name }}" required>
+                {% if errors.first_name %}<div class="invalid-feedback">{{ errors.first_name }}</div>{% endif %}
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="id_last_name">Last Name <span class="req">*</span></label>
+                <input type="text" id="id_last_name" name="last_name"
+                  class="form-control{% if errors.last_name %} is-invalid{% endif %}"
+                  value="{{ form_data.last_name|default:edited_user.last_name }}" required>
+                {% if errors.last_name %}<div class="invalid-feedback">{{ errors.last_name }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_email">Email Address <span class="req">*</span></label>
+              <input type="email" id="id_email" name="email"
+                class="form-control{% if errors.email %} is-invalid{% endif %}"
+                value="{{ form_data.email|default:edited_user.email }}" required>
+              {% if errors.email %}<div class="invalid-feedback">{{ errors.email }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_role">Role <span class="req">*</span></label>
+              <select id="id_role" name="role"
+                class="form-control{% if errors.role %} is-invalid{% endif %}" required>
+                <option value="">— Select role —</option>
+                {% for role in roles %}
+                <option value="{{ role.pk }}"
+                  {% if form_data.role == role.pk|stringformat:"s" or edited_user.role_id == role.pk %}selected{% endif %}>
+                  {{ role.name }}
+                </option>
+                {% endfor %}
+              </select>
+              {% if errors.role %}<div class="invalid-feedback">{{ errors.role }}</div>{% endif %}
+              {% if edited_user.role and edited_user != request.user %}
+              <div style="font-size:0.78rem;color:var(--warning);margin-top:4px;">
+                ⚠ Changing a user's role immediately updates their permissions.
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-check">
+                <input type="checkbox" name="is_active" value="1"
+                  {% if edited_user.is_active %}checked{% endif %}
+                  {% if edited_user == request.user %}disabled{% endif %}>
+                Account is active
+              </label>
+              {% if edited_user == request.user %}
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">You cannot deactivate your own account.</div>
+              {% endif %}
+            </div>
+
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{% url 'user-list' %}" class="btn btn-secondary">Cancel</a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="card">
+      <div class="card-header"><div class="card-title">Change Password</div></div>
+      <div class="card-body">
+        <form method="post" action="{% url 'user-edit' edited_user.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="change_password">
+          <div class="form-grid" style="gap:16px;">
+
+            <div class="form-group">
+              <label class="form-label" for="id_new_password">New Password <span class="req">*</span></label>
+              <input type="password" id="id_new_password" name="new_password"
+                class="form-control{% if errors.new_password %} is-invalid{% endif %}"
+                placeholder="Enter new password">
+              {% if errors.new_password %}<div class="invalid-feedback">{{ errors.new_password }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_confirm_password">Confirm Password <span class="req">*</span></label>
+              <input type="password" id="id_confirm_password" name="confirm_password"
+                class="form-control{% if errors.confirm_password %} is-invalid{% endif %}"
+                placeholder="Repeat new password">
+              {% if errors.confirm_password %}<div class="invalid-feedback">{{ errors.confirm_password }}</div>{% endif %}
+            </div>
+
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-warning">Set Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

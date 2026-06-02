@@ -1,0 +1,513 @@
+{% extends "core/base.html" %}
+{% load regional %}
+{% block title %}{% if order %}{{ order.order_number }}{% else %}New Order{% endif %} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div>
+      {% if order %}
+      <div class="page-title" style="font-family:monospace;">{{ order.order_number }}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
+        <span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span>
+        <span style="color:var(--muted);font-size:0.8rem;">
+          Created by {{ order.created_by.get_full_name }} · {{ order.created_at|date:"M j, Y" }}
+        </span>
+        {% if order.confirmed_by %}
+        <span style="color:var(--muted);font-size:0.8rem;">
+          · Confirmed by {{ order.confirmed_by.get_full_name }} {{ order.confirmed_at|date:"M j, Y" }}
+        </span>
+        {% endif %}
+      </div>
+      {% else %}
+      <div class="page-title">New Order</div>
+      <div class="page-subtitle">Create a new sales order</div>
+      {% endif %}
+    </div>
+
+    <!-- Role-gated action buttons -->
+    <div class="page-header-actions">
+      {% if not order or order.status == 'draft' or order.status == 'pending' %}
+      <button type="submit" form="order-form" class="btn btn-secondary">Save Draft</button>
+      {% endif %}
+
+      {% if order %}
+        {% if order.status == 'draft' and user.role.name in 'Staff,Manager,Admin' %}
+        <form method="post" action="{% url 'order-submit' order.pk %}" class="inline">
+          {% csrf_token %}<button class="btn btn-primary">Submit for Review</button>
+        </form>
+        {% endif %}
+
+        {% if order.status == 'pending' and user.role.name in 'Manager,Admin' %}
+        <form method="post" action="{% url 'order-confirm' order.pk %}" class="inline">
+          {% csrf_token %}<button class="btn btn-primary">Confirm Order</button>
+        </form>
+        {% endif %}
+
+        {% if order.status == 'confirmed' %}
+        <button class="btn btn-success" onclick="openModal('payment-modal')">Record Payment</button>
+        {% endif %}
+
+        {% if order.status == 'paid' and user.role.name in 'Staff,Manager,Admin' %}
+        <form method="post" action="{% url 'order-ship' order.pk %}" class="inline">
+          {% csrf_token %}<button class="btn btn-primary">Mark Shipped</button>
+        </form>
+        {% endif %}
+
+        {% if order.status == 'shipped' and user.role.name in 'Staff,Manager,Admin' %}
+        <form method="post" action="{% url 'order-deliver' order.pk %}" class="inline">
+          {% csrf_token %}<button class="btn btn-success">Mark Delivered</button>
+        </form>
+        {% endif %}
+
+        {% if order.status == 'confirmed' and user.role.name in 'Manager,Admin' %}
+        <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline"
+              onsubmit="return confirm('Cancel order {{ order.order_number|escapejs }}?')">
+          {% csrf_token %}<button class="btn btn-danger">Cancel Order</button>
+        </form>
+        {% endif %}
+
+        {% if order.status == 'paid' and user.role.name == 'Admin' %}
+        <form method="post" action="{% url 'order-refund' order.pk %}" class="inline"
+              onsubmit="return confirm('Issue refund for {{ order.order_number|escapejs }}?')">
+          {% csrf_token %}<button class="btn btn-warning">Issue Refund</button>
+        </form>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" action="{% if order %}{% url 'order-detail' order.pk %}{% else %}{% url 'order-create' %}{% endif %}" id="order-form">
+    {% csrf_token %}
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
+      <div style="display:flex;flex-direction:column;gap:24px;">
+
+        <!-- Customer -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Customer</div>
+            {% if not order or order.status == 'draft' %}
+            <span style="font-size:0.8rem;color:var(--muted);">Select a customer for this order</span>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            {% if order and order.status != 'draft' %}
+            <div class="info-panel">
+              <div class="info-row"><span class="info-label">Name</span><a href="{% url 'customer-detail' order.customer.pk %}"><strong>{{ order.customer.get_full_name }}</strong></a></div>
+              <div class="info-row"><span class="info-label">Email</span>{{ order.customer.email }}</div>
+              <div class="info-row"><span class="info-label">Phone</span>{{ order.customer.phone|default:"—" }}</div>
+              {% if order.customer.national_id %}<div class="info-row"><span class="info-label">ID Number</span>{{ order.customer.national_id }}</div>{% endif %}
+              <div class="info-row"><span class="info-label">Address</span>{{ order.customer.address_line1 }}, {{ order.customer.city }}, {{ order.customer.state }}</div>
+            </div>
+            {% else %}
+            <div class="form-group">
+              <label class="form-label" for="id_customer">Customer <span class="req">*</span></label>
+              <select id="id_customer" name="customer" class="form-control" required>
+                <option value="">— Select customer —</option>
+                {% for c in customers %}
+                <option value="{{ c.pk }}"
+                  {% if order and order.customer_id == c.pk %}selected
+                  {% elif request.GET.customer == c.pk|stringformat:"s" %}selected{% endif %}>
+                  {{ c.get_full_name }} ({{ c.email }})
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Line Items -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Line Items</div>
+            {% if not order or order.status == 'draft' or order.status == 'pending' %}
+            <button type="button" class="btn btn-primary btn-sm" onclick="addLineItem()">+ Add Item</button>
+            {% endif %}
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrap line-items-table" style="border:none;border-radius:0;box-shadow:none;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th style="width:80px;">Qty</th>
+                    <th style="width:130px;">Unit Price</th>
+                    <th style="width:120px;">Line Total</th>
+                    {% if not order or order.status == 'draft' or order.status == 'pending' %}
+                    <th style="width:40px;"></th>
+                    {% endif %}
+                  </tr>
+                </thead>
+                <tbody id="line-items-body">
+                  {% if order %}
+                    {% for item in order.items.all %}
+                    <tr data-line="{{ forloop.counter }}">
+                      <td>
+                        <div class="product-name-cell">
+                          <div class="product-thumb product-thumb-sm" id="line-thumb-{{ forloop.counter }}">
+                            {% if item.product.primary_image_url %}
+                              <img src="{{ item.product.primary_image_url }}" alt="{{ item.product.name }}">
+                            {% else %}
+                              IMG
+                            {% endif %}
+                          </div>
+                          <div class="product-name-text">
+                            {% if order.status == 'draft' or order.status == 'pending' %}
+                            <select name="product_{{ forloop.counter }}" class="form-control" style="font-size:0.82rem;" onchange="updateSku(this, {{ forloop.counter }})">
+                              {% for p in products %}
+                              <option value="{{ p.pk }}" data-sku="{{ p.sku }}" data-price="{{ p.unit_price }}" data-image-url="{{ p.primary_image_url }}"
+                                {% if item.product_id == p.pk %}selected{% endif %}>
+                                {{ p.name }}
+                              </option>
+                              {% endfor %}
+                            </select>
+                            {% else %}
+                            {{ item.product.name }}
+                            {% endif %}
+                          </div>
+                        </div>
+                      </td>
+                      <td class="td-mono" style="color:var(--muted);font-size:0.78rem;" id="sku-{{ forloop.counter }}">{{ item.product.sku }}</td>
+                      <td>
+                        {% if order.status == 'draft' or order.status == 'pending' %}
+                        <input type="number" name="quantity_{{ forloop.counter }}" class="form-control" value="{{ item.quantity }}" min="1" onchange="recalcRow({{ forloop.counter }})">
+                        {% else %}{{ item.quantity }}{% endif %}
+                      </td>
+                      <td>
+                        {% if order.status == 'draft' or order.status == 'pending' %}
+                        <input type="number" name="unit_price_{{ forloop.counter }}" class="form-control" value="{{ item.unit_price }}" step="0.01" min="0" onchange="recalcRow({{ forloop.counter }})">
+                        {% else %}{{ item.unit_price|currency }}{% endif %}
+                      </td>
+                      <td><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></td>
+                      {% if order.status == 'draft' or order.status == 'pending' %}
+                      <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>
+                      {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr id="empty-row"><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No items yet — click "+ Add Item" to begin.</td></tr>
+                    {% endfor %}
+                  {% else %}
+                  <tr id="empty-row"><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No items yet — click "+ Add Item" to begin.</td></tr>
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Totals -->
+            <div style="padding:16px 20px;border-top:1px solid var(--border);">
+              <div style="max-width:300px;margin-left:auto;">
+                <div class="totals-box">
+                  <div class="totals-row">
+                    <span>Subtotal</span>
+                    <span><span id="subtotal">{{ order.subtotal|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="subtotal-sec">{{ order.subtotal|default:"0.00"|currency_secondary }}</span></span>
+                  </div>
+                  <div class="totals-row">
+                    <span>Tax</span>
+                    <span>{{ order.tax_amount|default:"0.00"|currency }}</span>
+                  </div>
+                  <div class="totals-row">
+                    <span>Discount</span>
+                    {% if not order or order.status == 'draft' or order.status == 'pending' %}
+                    <input type="number" name="discount_amount" class="form-control"
+                      value="{{ order.discount_amount|default:'0.00' }}"
+                      step="0.01" min="0" style="width:100px;text-align:right;padding:4px 8px;"
+                      onchange="recalcTotals()">
+                    {% else %}
+                    <span>{{ order.discount_amount|currency }}</span>
+                    {% endif %}
+                  </div>
+                  <div class="totals-row total">
+                    <span>Grand Total</span>
+                    <span><span id="grand-total">{{ order.total_amount|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="grand-total-sec">{{ order.total_amount|default:"0.00"|currency_secondary }}</span></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">Order Notes</div></div>
+          <div class="card-body">
+            {% if not order or order.status == 'draft' or order.status == 'pending' %}
+            <textarea name="notes" class="form-control" placeholder="Internal notes about this order…">{{ order.notes|default:'' }}</textarea>
+            {% else %}
+            <p style="color:var(--muted);">{{ order.notes|default:"No notes." }}</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <input type="hidden" name="line_item_count" id="line-item-count" value="{{ order.items.count|default:'0' }}">
+
+      </div>
+
+      <!-- Sidebar -->
+      <div style="display:flex;flex-direction:column;gap:24px;">
+
+        <!-- Payment History -->
+        {% if order %}
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Payments</div>
+            {% if order.status == 'confirmed' or order.status == 'paid' %}
+            <button type="button" class="btn btn-success btn-sm" onclick="openModal('payment-modal')">+ Record</button>
+            {% endif %}
+          </div>
+          <div class="card-body">
+            {% if order.payments.all %}
+            {% for payment in order.payments.all %}
+            <div class="pay-hist-item">
+              <div style="display:flex;justify-content:space-between;">
+                <a href="{% url 'payment-detail' payment.pk %}" class="pay-hist-num">{{ payment.payment_number }}</a>
+                <strong>{{ payment.amount|currency }}</strong>
+              </div>
+              <div class="pay-hist-meta">
+                {{ payment.get_payment_method_display }} · {{ payment.created_at|date:"M j, Y" }} · {{ payment.recorded_by.get_full_name }}
+              </div>
+              {% if payment.reference_number %}
+              <div class="pay-hist-meta">Ref: {{ payment.reference_number }}</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            <div style="padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:0.875rem;">
+              <span style="color:var(--muted);">Outstanding</span>
+              <strong {% if order.amount_outstanding > 0 %}style="color:var(--danger);"{% endif %}>{{ order.amount_outstanding|currency }}</strong>
+            </div>
+            {% else %}
+            <p style="color:var(--muted);font-size:0.875rem;font-style:italic;">No payments recorded yet.</p>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Order Summary (read-only sidebar) -->
+        {% if order %}
+        <div class="card">
+          <div class="card-header"><div class="card-title">Order Info</div></div>
+          <div class="card-body">
+            <div class="info-panel">
+              <div class="info-row"><span class="info-label">Order #</span><span class="td-mono">{{ order.order_number }}</span></div>
+              <div class="info-row"><span class="info-label">Status</span><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></div>
+              <div class="info-row"><span class="info-label">Created</span>{{ order.created_at|date:"M j, Y" }}</div>
+              {% if order.paid_at %}<div class="info-row"><span class="info-label">Paid</span>{{ order.paid_at|date:"M j, Y" }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+      </div>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Payment Recording Modal -->
+{% if order and order.status == 'confirmed' or order.status == 'paid' %}
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Record Payment</div>
+      <button type="button" class="modal-close" onclick="closeModal('payment-modal')">✕</button>
+    </div>
+    <form method="post" action="{% url 'payment-create' %}">
+      {% csrf_token %}
+      {% if order %}<input type="hidden" name="sales_order" value="{{ order.pk }}">{% endif %}
+      <div class="modal-body">
+        <div class="form-grid" style="gap:18px;">
+          <div class="form-group">
+            <label class="form-label">Amount <span class="req">*</span></label>
+            <input type="number" name="amount" class="form-control"
+              value="{{ order.amount_outstanding|default:order.total_amount }}"
+              step="0.01" min="0.01" required>
+            {% if order %}
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+              Outstanding balance: {{ order.amount_outstanding|currency }}
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Payment Method <span class="req">*</span></label>
+            <div class="radio-group">
+              {% for value, label in payment_method_choices %}
+              <label class="radio-opt">
+                <input type="radio" name="payment_method" value="{{ value }}"
+                  {% if forloop.first %}checked{% endif %}
+                  onchange="toggleRefField(this.value)">
+                {{ label }}
+              </label>
+              {% endfor %}
+            </div>
+          </div>
+
+          <div class="form-group" id="ref-number-field">
+            <label class="form-label">Reference Number</label>
+            <input type="text" name="reference_number" class="form-control"
+              placeholder="Transaction ID, check #, etc.">
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+              Required for bank transfer, card, and check payments.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Notes</label>
+            <textarea name="notes" class="form-control" rows="3" placeholder="Optional notes…"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('payment-modal')">Cancel</button>
+        <button type="submit" class="btn btn-success">Record Payment</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Currency symbol from system settings (passed via context)
+  const CURRENCY_SYMBOL = "{{ currency_symbol|escapejs }}";
+  const CURRENCY_DECIMALS = {{ currency_decimals }};
+  const SECONDARY_ENABLED  = {{ secondary_currency_enabled|yesno:"true,false" }};
+  const SECONDARY_SYMBOL   = "{{ secondary_currency_symbol|escapejs }}";
+  const SECONDARY_DECIMALS = {{ secondary_decimal_places }};
+  const SECONDARY_RATE     = parseFloat("{{ secondary_exchange_rate|escapejs }}") || 0;
+
+  function fmtCurrency(value) {
+    return CURRENCY_SYMBOL + value.toFixed(CURRENCY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function fmtSecondary(value) {
+    if (!SECONDARY_ENABLED) return '';
+    const converted = value * SECONDARY_RATE;
+    return ' \u2248 ' + SECONDARY_SYMBOL + converted.toFixed(SECONDARY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  function setCurrencyCell(primaryId, value) {
+    const p = document.getElementById(primaryId);
+    if (p) p.textContent = fmtCurrency(value);
+    const s = document.getElementById(primaryId + '-sec');
+    if (s) s.textContent = fmtSecondary(value);
+  }
+
+  // Products data for line item JS
+  const PRODUCTS = [
+    {% for p in products %}
+    { id: {{ p.pk }}, name: "{{ p.name|escapejs }}", sku: "{{ p.sku|escapejs }}", price: "{{ p.unit_price }}", imageUrl: "{{ p.primary_image_url|escapejs }}" },
+    {% endfor %}
+  ];
+
+  let lineCount = parseInt(document.getElementById('line-item-count')?.value || '0');
+
+  function escHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function productThumbInnerHtml(imageUrl, name) {
+    if (imageUrl) {
+      return `<img src="${escHtml(imageUrl)}" alt="${escHtml(name)}">`;
+    }
+    return 'IMG';
+  }
+
+  function addLineItem() {
+    const tbody = document.getElementById('line-items-body');
+    const emptyRow = document.getElementById('empty-row');
+    if (emptyRow) emptyRow.remove();
+    lineCount++;
+    const options = PRODUCTS.map(p =>
+      `<option value="${p.id}" data-sku="${escHtml(p.sku)}" data-price="${escHtml(p.price)}" data-image-url="${escHtml(p.imageUrl)}">${escHtml(p.name)}</option>`
+    ).join('');
+    const firstProduct = PRODUCTS[0] || {};
+    const row = document.createElement('tr');
+    row.dataset.line = lineCount;
+    row.innerHTML = `
+      <td>
+        <div class="product-name-cell">
+          <div class="product-thumb product-thumb-sm" id="line-thumb-${lineCount}">
+            ${productThumbInnerHtml(firstProduct.imageUrl, firstProduct.name)}
+          </div>
+          <div class="product-name-text">
+            <select name="product_${lineCount}" class="form-control" style="font-size:0.82rem;"
+              onchange="updateSku(this,${lineCount})">${options}</select>
+          </div>
+        </div>
+      </td>
+      <td class="td-mono" style="color:var(--muted);font-size:0.78rem;" id="sku-${lineCount}">
+        ${PRODUCTS[0]?.sku || '—'}
+      </td>
+      <td><input type="number" name="quantity_${lineCount}" class="form-control" value="1" min="1"
+            onchange="recalcRow(${lineCount})"></td>
+      <td><input type="number" name="unit_price_${lineCount}" class="form-control"
+            value="${PRODUCTS[0]?.price || '0.00'}" step="0.01" min="0"
+            onchange="recalcRow(${lineCount})"></td>
+      <td><strong id="line-total-${lineCount}">${fmtCurrency(parseFloat(PRODUCTS[0]?.price || 0))}</strong><span class="currency-secondary" id="line-total-${lineCount}-sec">${fmtSecondary(parseFloat(PRODUCTS[0]?.price || 0))}</span></td>
+      <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>`;
+    tbody.appendChild(row);
+    document.getElementById('line-item-count').value = lineCount;
+  }
+
+  function removeLineItem(btn) {
+    const rows = document.querySelectorAll('#line-items-body tr:not(#empty-row)');
+    if (rows.length <= 1) { showToast('An order must have at least one line item.', 'warning'); return; }
+    btn.closest('tr').remove();
+    recalcTotals();
+  }
+
+  function updateSku(select, idx) {
+    const opt = select.options[select.selectedIndex];
+    document.getElementById(`sku-${idx}`).textContent = opt.dataset.sku || '—';
+    const thumb = document.getElementById(`line-thumb-${idx}`);
+    if (thumb) thumb.innerHTML = productThumbInnerHtml(opt.dataset.imageUrl || '', opt.textContent.trim());
+    const priceInput = select.closest('tr').querySelector(`[name="unit_price_${idx}"]`);
+    if (priceInput) { priceInput.value = opt.dataset.price || '0.00'; }
+    recalcRow(idx);
+  }
+
+  function recalcRow(idx) {
+    const qty   = parseFloat(document.querySelector(`[name="quantity_${idx}"]`)?.value || 0);
+    const price = parseFloat(document.querySelector(`[name="unit_price_${idx}"]`)?.value || 0);
+    setCurrencyCell(`line-total-${idx}`, qty * price);
+    recalcTotals();
+  }
+
+  function recalcTotals() {
+    let subtotal = 0;
+    document.querySelectorAll('#line-items-body tr[data-line]').forEach(row => {
+      const idx = row.dataset.line;
+      const qty   = parseFloat(row.querySelector(`[name="quantity_${idx}"]`)?.value || 0);
+      const price = parseFloat(row.querySelector(`[name="unit_price_${idx}"]`)?.value || 0);
+      subtotal += qty * price;
+    });
+    const discount = parseFloat(document.querySelector('[name="discount_amount"]')?.value || 0);
+    const grand = subtotal - discount;
+    setCurrencyCell('subtotal', subtotal);
+    setCurrencyCell('grand-total', Math.max(0, grand));
+  }
+
+  // Payment method — show/hide reference field
+  function toggleRefField(value) {
+    const show = ['bank_transfer', 'card', 'check'].includes(value);
+    const field = document.getElementById('ref-number-field');
+    if (field) field.style.display = show ? '' : 'none';
+  }
+  // Init: hide ref field if cash/other is default
+  document.addEventListener('DOMContentLoaded', () => {
+    const checked = document.querySelector('[name="payment_method"]:checked');
+    if (checked) toggleRefField(checked.value);
+  });
+</script>
+{% endblock %}

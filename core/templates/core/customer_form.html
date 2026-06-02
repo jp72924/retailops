@@ -1,0 +1,177 @@
+{% extends "core/base.html" %}
+{% block title %}{% if customer %}Edit {{ customer.get_full_name }}{% else %}Register Customer{% endif %} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">{% if customer %}Edit Customer{% else %}Register Customer{% endif %}</div>
+      <div class="page-subtitle">
+        {% if customer %}Update details for {{ customer.get_full_name }}{% else %}Add a new customer to the system{% endif %}
+      </div>
+    </div>
+    <a href="{% if customer %}{% url 'customer-detail' customer.pk %}{% else %}{% url 'customer-list' %}{% endif %}"
+       style="color:var(--muted);font-size:0.875rem;">← Back</a>
+  </div>
+
+  <div class="card" style="max-width:800px;">
+    <div class="card-body">
+      <form method="post" action="{% if customer %}{% url 'customer-edit' customer.pk %}{% else %}{% url 'customer-create' %}{% endif %}">
+        {% csrf_token %}
+
+        <!-- Personal Information -->
+        <div class="form-section">
+          <div class="form-section-title">Personal Information</div>
+          <div class="form-grid form-grid-2">
+
+            <div class="form-group">
+              <label class="form-label" for="id_first_name">First Name <span class="req">*</span></label>
+              <input type="text" id="id_first_name" name="first_name"
+                class="form-control{% if errors.first_name %} is-invalid{% endif %}"
+                value="{{ form_data.first_name|default:'' }}"
+                placeholder="First name" required>
+              {% if errors.first_name %}<div class="invalid-feedback">{{ errors.first_name }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_last_name">Last Name <span class="req">*</span></label>
+              <input type="text" id="id_last_name" name="last_name"
+                class="form-control{% if errors.last_name %} is-invalid{% endif %}"
+                value="{{ form_data.last_name|default:'' }}"
+                placeholder="Last name" required>
+              {% if errors.last_name %}<div class="invalid-feedback">{{ errors.last_name }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_email">Email Address <span class="req">*</span></label>
+              <input type="email" id="id_email" name="email"
+                class="form-control{% if errors.email %} is-invalid{% endif %}"
+                value="{{ form_data.email|default:'' }}"
+                placeholder="email@example.com" required>
+              {% if errors.email %}<div class="invalid-feedback">{{ errors.email }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_phone">Phone Number</label>
+              <input type="tel" id="id_phone" name="phone"
+                class="form-control{% if errors.phone %} is-invalid{% endif %}"
+                value="{{ form_data.phone|default:'' }}"
+                placeholder="04XX-XXXXXXX">
+              {% if errors.phone %}<div class="invalid-feedback">{{ errors.phone }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_national_id">ID Number</label>
+              <input type="text" id="id_national_id" name="national_id"
+                class="form-control{% if errors.national_id %} is-invalid{% endif %}"
+                value="{{ form_data.national_id|default:'' }}"
+                placeholder="Ej: V12345678" maxlength="20">
+              {% if errors.national_id %}<div class="invalid-feedback">{{ errors.national_id }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_date_of_birth">Date of Birth</label>
+              <input type="date" id="id_date_of_birth" name="date_of_birth"
+                class="form-control{% if errors.date_of_birth %} is-invalid{% endif %}"
+                value="{{ form_data.date_of_birth|default:'' }}">
+              {% if errors.date_of_birth %}<div class="invalid-feedback">{{ errors.date_of_birth }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_gender">Gender</label>
+              <select id="id_gender" name="gender"
+                class="form-control{% if errors.gender %} is-invalid{% endif %}">
+                <option value=""{% if not form_data.gender %} selected{% endif %}>— Not specified —</option>
+                <option value="M"{% if form_data.gender == 'M' %} selected{% endif %}>Masculino</option>
+                <option value="F"{% if form_data.gender == 'F' %} selected{% endif %}>Femenino</option>
+              </select>
+              {% if errors.gender %}<div class="invalid-feedback">{{ errors.gender }}</div>{% endif %}
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Address -->
+        <div class="form-section">
+          <div class="form-section-title">Address</div>
+          <div class="form-grid">
+
+            <div class="form-group">
+              <label class="form-label" for="id_address_line1">Address Line 1 <span class="req">*</span></label>
+              <input type="text" id="id_address_line1" name="address_line1"
+                class="form-control{% if errors.address_line1 %} is-invalid{% endif %}"
+                value="{{ form_data.address_line1|default:'' }}"
+                placeholder="Street address" required>
+              {% if errors.address_line1 %}<div class="invalid-feedback">{{ errors.address_line1 }}</div>{% endif %}
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_address_line2">Address Line 2</label>
+              <input type="text" id="id_address_line2" name="address_line2"
+                class="form-control"
+                value="{{ form_data.address_line2|default:'' }}"
+                placeholder="Apartment, suite, unit, etc.">
+            </div>
+
+            <div class="form-grid form-grid-3">
+              <div class="form-group">
+                <label class="form-label" for="id_city">City <span class="req">*</span></label>
+                <input type="text" id="id_city" name="city"
+                  class="form-control{% if errors.city %} is-invalid{% endif %}"
+                  value="{{ form_data.city|default:'' }}"
+                  placeholder="City" required>
+                {% if errors.city %}<div class="invalid-feedback">{{ errors.city }}</div>{% endif %}
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="id_state">State <span class="req">*</span></label>
+                <input type="text" id="id_state" name="state"
+                  class="form-control{% if errors.state %} is-invalid{% endif %}"
+                  value="{{ form_data.state|default:'' }}"
+                  placeholder="State" required>
+                {% if errors.state %}<div class="invalid-feedback">{{ errors.state }}</div>{% endif %}
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="id_postal_code">Postal Code <span class="req">*</span></label>
+                <input type="text" id="id_postal_code" name="postal_code"
+                  class="form-control{% if errors.postal_code %} is-invalid{% endif %}"
+                  value="{{ form_data.postal_code|default:'' }}"
+                  placeholder="ZIP / Postal" required>
+                {% if errors.postal_code %}<div class="invalid-feedback">{{ errors.postal_code }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="id_country">Country <span class="req">*</span></label>
+              <input type="text" id="id_country" name="country"
+                class="form-control{% if errors.country %} is-invalid{% endif %}"
+                value="{{ form_data.country|default:'United States' }}"
+                placeholder="Country" required>
+              {% if errors.country %}<div class="invalid-feedback">{{ errors.country }}</div>{% endif %}
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="form-section">
+          <div class="form-section-title">Notes</div>
+          <div class="form-group">
+            <label class="form-label" for="id_notes">Internal Notes</label>
+            <textarea id="id_notes" name="notes" class="form-control"
+              placeholder="Any additional notes about this customer…">{{ form_data.notes|default:'' }}</textarea>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">
+            {% if customer %}Save Changes{% else %}Register Customer{% endif %}
+          </button>
+          <a href="{% if customer %}{% url 'customer-detail' customer.pk %}{% else %}{% url 'customer-list' %}{% endif %}"
+             class="btn btn-secondary">Cancel</a>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

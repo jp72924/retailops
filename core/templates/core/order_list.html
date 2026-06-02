@@ -1,0 +1,119 @@
+{% extends "core/base.html" %}
+{% load regional %}
+{% block title %}Sales Orders | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Sales Orders</div>
+      <div class="page-subtitle">Manage and track all sales orders</div>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'order-create' %}" class="btn btn-primary">+ New Order</a>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <form method="get" action="{% url 'order-list' %}">
+    <div class="filter-bar">
+      <input type="text" name="q" class="form-control"
+        placeholder="&#128269; Search order # or customer…" value="{{ query|default:'' }}">
+      <select name="status" class="form-control">
+        <option value="">All Statuses</option>
+        {% for value, label in status_choices %}
+        <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="From date">
+      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="To date">
+      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+      {% if query or status_filter or date_from or date_to %}
+        <a href="{% url 'order-list' %}" class="btn btn-secondary btn-sm">Clear</a>
+        <span class="filter-active">Filters active</span>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Order #</th>
+          <th>Customer</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for order in page_obj %}
+        <tr>
+          <td class="td-mono"><a href="{% url 'order-detail' order.pk %}">{{ order.order_number }}</a></td>
+          <td><a href="{% url 'customer-detail' order.customer.pk %}">{{ order.customer.get_full_name }}</a></td>
+          <td>{{ order.created_at|date:"M j, Y" }}</td>
+          <td><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
+          <td>{{ order.items.count }}</td>
+          <td><strong>{{ order.total_amount|currency }}</strong></td>
+          <td class="td-actions">
+            <a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">View</a>
+            {% if order.status == 'draft' or order.status == 'pending' %}
+            <a href="{% url 'order-detail' order.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+            {% endif %}
+            {% if order.status == 'draft' %}
+            <form method="post" action="{% url 'order-delete' order.pk %}" class="inline"
+                  onsubmit="return confirm('Delete order {{ order.order_number|escapejs }}?')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">Delete</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    <span class="pg-info">
+      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+    </span>
+    {% if page_obj.has_previous %}
+      <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
+    {% else %}
+      <span class="pg-btn disabled">‹</span>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="pg-btn active">{{ num }}</span>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ num }}" class="pg-btn">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.next_page_number }}" class="pg-btn">›</a>
+    {% else %}
+      <span class="pg-btn disabled">›</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="table-wrap">
+    <div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <div class="empty-title">No orders found</div>
+      {% if query or status_filter or date_from or date_to %}
+        <div>No orders match your filters. <a href="{% url 'order-list' %}">Clear filters</a></div>
+      {% else %}
+        <div><a href="{% url 'order-create' %}">Create your first order</a></div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

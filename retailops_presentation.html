@@ -1,0 +1,818 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --slide-bg: #0d1117;
+    --slide-surface: #161b22;
+    --slide-surface2: #1c2333;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --accent4: #ffa657;
+    --accent5: #ff7b72;
+    --text: #e6edf3;
+    --text2: #8b949e;
+    --border: rgba(255,255,255,0.1);
+  }
+  #pres-root {
+    background: var(--slide-bg);
+    color: var(--text);
+    font-family: var(--font-sans, 'Anthropic Sans', sans-serif);
+    min-height: 520px;
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--border-radius-lg, 12px);
+    border: 0.5px solid var(--border);
+  }
+  .slide { display: none; padding: 32px; min-height: 520px; flex-direction: column; justify-content: center; animation: fadeIn 0.35s ease; }
+  .slide.active { display: flex; }
+  @keyframes fadeIn { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+  @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.6} }
+  @keyframes slideIn { from { opacity:0; transform: translateX(-16px); } to { opacity:1; transform: translateX(0); } }
+  @keyframes fillBar { from { width:0; } to { width: var(--tw); } }
+  .nav-bar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 20px;
+    background: rgba(13,17,23,0.85);
+    border-top: 0.5px solid var(--border);
+    z-index: 10;
+  }
+  .nav-btn {
+    background: var(--slide-surface2); border: 0.5px solid var(--border);
+    color: var(--text); padding: 6px 16px; border-radius: 6px;
+    cursor: pointer; font-size: 13px; transition: background 0.2s;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .nav-btn:hover { background: var(--slide-surface); }
+  .nav-btn:disabled { opacity: 0.3; cursor: default; }
+  .slide-counter { font-size: 12px; color: var(--text2); }
+  .slide-dots { display: flex; gap: 5px; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--border); cursor: pointer; transition: background 0.2s; }
+  .dot.active { background: var(--accent); }
+  .tag { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+  .tag-staff { background: rgba(58,166,255,0.15); color: var(--accent); border: 0.5px solid rgba(58,166,255,0.3); }
+  .tag-mgr { background: rgba(63,185,80,0.15); color: var(--accent2); border: 0.5px solid rgba(63,185,80,0.3); }
+  .tag-admin { background: rgba(210,168,255,0.15); color: var(--accent3); border: 0.5px solid rgba(210,168,255,0.3); }
+  .card {
+    background: var(--slide-surface);
+    border: 0.5px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--slide-surface2); border: 0.5px solid var(--border);
+    border-radius: 6px; padding: 6px 12px; font-size: 13px;
+  }
+  .dot-ind { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Slide 1 */
+  .s1-title { font-size: 36px; font-weight: 500; line-height: 1.2; margin-bottom: 12px; }
+  .s1-sub { font-size: 16px; color: var(--text2); }
+  .s1-accent { color: var(--accent); }
+  .s1-badge { display: inline-block; padding: 4px 14px; border-radius: 20px; background: rgba(58,166,255,0.1); border: 0.5px solid rgba(58,166,255,0.3); font-size: 12px; color: var(--accent); margin-bottom: 20px; }
+  .s1-icons { display: flex; gap: 16px; margin-top: 28px; }
+  .s1-icon-box { width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; animation: float 3s ease-in-out infinite; }
+  .s1-icon-box:nth-child(2) { animation-delay: 0.5s; }
+  .s1-icon-box:nth-child(3) { animation-delay: 1s; }
+  .s1-icon-box:nth-child(4) { animation-delay: 1.5s; }
+
+  /* Slide 2 */
+  .feature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .feature-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px; background: var(--slide-surface); border-radius: 8px; border: 0.5px solid var(--border); }
+  .fi-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; flex-shrink: 0; }
+
+  /* Slide 3 */
+  .role-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .role-tab { padding: 6px 14px; border-radius: 6px; border: 0.5px solid var(--border); background: var(--slide-surface); cursor: pointer; font-size: 13px; transition: all 0.2s; }
+  .role-tab.sel-staff { background: rgba(58,166,255,0.15); border-color: var(--accent); color: var(--accent); }
+  .role-tab.sel-mgr { background: rgba(63,185,80,0.15); border-color: var(--accent2); color: var(--accent2); }
+  .role-tab.sel-admin { background: rgba(210,168,255,0.15); border-color: var(--accent3); color: var(--accent3); }
+  .perm-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 13px; }
+  .perm-row:last-child { border-bottom: none; }
+  .check { font-size: 14px; }
+
+  /* Slide 4 */
+  .mock-dash { background: var(--slide-surface2); border-radius: 8px; border: 0.5px solid var(--border); padding: 12px; }
+  .mock-nav { display: flex; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
+  .mock-nav-item { font-size: 11px; color: var(--text2); padding: 3px 8px; border-radius: 4px; cursor: default; }
+  .mock-nav-item.active { background: rgba(58,166,255,0.15); color: var(--accent); }
+  .mock-cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; margin-bottom: 10px; }
+  .mock-card { background: var(--slide-surface); border-radius: 6px; padding: 8px; border: 0.5px solid var(--border); }
+  .mock-card-val { font-size: 18px; font-weight: 500; }
+  .mock-card-label { font-size: 10px; color: var(--text2); }
+  .annot { position: relative; }
+  .annot-line { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .annot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent4); flex-shrink: 0; }
+  .annot-text { font-size: 12px; color: var(--text2); }
+
+  /* Slide 5 */
+  .flow-step { display: flex; align-items: center; gap: 0; }
+  .fs-box { background: var(--slide-surface); border: 0.5px solid var(--border); border-radius: 8px; padding: 10px 14px; font-size: 13px; flex-shrink: 0; }
+  .fs-arrow { color: var(--text2); margin: 0 8px; font-size: 18px; }
+  .fs-active { border-color: var(--accent); background: rgba(58,166,255,0.08); }
+
+  /* Slide 6 */
+  .order-states { display: flex; flex-direction: column; gap: 8px; }
+  .state-row { display: flex; align-items: center; gap: 10px; }
+  .state-pill {
+    padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    min-width: 90px; text-align: center; cursor: pointer; transition: transform 0.15s;
+  }
+  .state-pill:hover { transform: scale(1.04); }
+  .state-arrow { font-size: 16px; color: var(--text2); }
+  .state-info { font-size: 12px; color: var(--text2); }
+
+  /* Slide 7 */
+  .step-cards { display: flex; flex-direction: column; gap: 8px; }
+  .step-card { display: flex; gap: 12px; align-items: flex-start; padding: 12px; background: var(--slide-surface); border-radius: 8px; border: 0.5px solid var(--border); cursor: pointer; transition: border-color 0.2s; }
+  .step-card:hover { border-color: rgba(58,166,255,0.4); }
+  .step-num { width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; flex-shrink: 0; }
+  .step-content { flex: 1; }
+  .step-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .step-desc { font-size: 12px; color: var(--text2); display: none; }
+  .step-card.open .step-desc { display: block; }
+  .step-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+
+  /* Slide 8 */
+  .pay-split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .pay-panel { background: var(--slide-surface); border-radius: 10px; padding: 16px; border: 0.5px solid var(--border); }
+  .pay-panel-title { font-size: 14px; font-weight: 500; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .pay-field { margin-bottom: 8px; }
+  .pay-field label { font-size: 11px; color: var(--text2); display: block; margin-bottom: 3px; }
+  .pay-field-val { background: var(--slide-surface2); border: 0.5px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 13px; }
+
+  /* Slide 9 */
+  .inv-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .inv-sku { font-size: 11px; color: var(--text2); min-width: 90px; }
+  .inv-bar-bg { flex: 1; height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+  .inv-bar { height: 8px; border-radius: 4px; }
+  .inv-qty { font-size: 12px; min-width: 36px; text-align: right; }
+  .inv-status { font-size: 10px; padding: 2px 7px; border-radius: 4px; }
+
+  /* Slide 10 */
+  .user-lifecycle { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .ulc-step { background: var(--slide-surface); border: 0.5px solid var(--border); border-radius: 8px; padding: 12px 16px; font-size: 13px; text-align: center; min-width: 100px; }
+  .ulc-arrow { color: var(--text2); margin: 0 6px; font-size: 18px; }
+  .ulc-icon { font-size: 20px; margin-bottom: 4px; }
+
+  /* Slide 11 */
+  .status-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .status-table th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 500; color: var(--text2); border-bottom: 0.5px solid var(--border); }
+  .status-table td { padding: 8px 10px; border-bottom: 0.5px solid rgba(255,255,255,0.05); }
+  .status-table tr:last-child td { border-bottom: none; }
+  .status-table tr:hover td { background: rgba(255,255,255,0.02); }
+  .st-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; }
+
+  /* Slide 12 */
+  .kta-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+  .kta-card { background: var(--slide-surface); border-radius: 10px; border: 0.5px solid var(--border); padding: 16px; text-align: center; }
+  .kta-icon { font-size: 26px; margin-bottom: 8px; }
+  .kta-title { font-size: 13px; font-weight: 500; margin-bottom: 4px; }
+  .kta-sub { font-size: 12px; color: var(--text2); }
+
+  .slide-header { margin-bottom: 24px; }
+  .slide-label { font-size: 11px; font-weight: 500; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .slide-title { font-size: 22px; font-weight: 500; }
+  .slide-sub { font-size: 14px; color: var(--text2); margin-top: 4px; }
+  .spacer { flex: 1; }
+</style>
+
+<div id="pres-root" role="region" aria-label="RetailOps interactive slide presentation">
+  <h2 class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)">RetailOps interactive presentation — 12 slides covering roles, orders, inventory, and staff management</h2>
+
+  <!-- Slide 1: Title -->
+  <div class="slide active" id="slide-1">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:60px;">
+      <div class="s1-badge">Retail Operations Software</div>
+      <div class="s1-title">
+        <span class="s1-accent">RetailOps</span><br>
+        Run Your Retail Business Like a Pro
+      </div>
+      <div class="s1-sub" style="max-width:460px;line-height:1.6;">A complete guide to managing customers, orders, payments, inventory, and your team — all in one platform.</div>
+      <div class="s1-icons">
+        <div class="s1-icon-box" style="background:rgba(58,166,255,0.12);border:0.5px solid rgba(58,166,255,0.3);">🛒</div>
+        <div class="s1-icon-box" style="background:rgba(63,185,80,0.12);border:0.5px solid rgba(63,185,80,0.3);">💳</div>
+        <div class="s1-icon-box" style="background:rgba(210,168,255,0.12);border:0.5px solid rgba(210,168,255,0.3);">📦</div>
+        <div class="s1-icon-box" style="background:rgba(255,166,87,0.12);border:0.5px solid rgba(255,166,87,0.3);">👥</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 2: What is RetailOps -->
+  <div class="slide" id="slide-2">
+    <div class="slide-header">
+      <div class="slide-label">Overview</div>
+      <div class="slide-title">What is RetailOps?</div>
+      <div class="slide-sub">One platform. Every operation your store needs.</div>
+    </div>
+    <div class="feature-grid" style="padding-bottom:60px;">
+      <div class="feature-item">
+        <div class="fi-icon" style="background:rgba(58,166,255,0.12);">👥</div>
+        <div><div style="font-size:14px;font-weight:500;margin-bottom:3px;">Customer Management</div><div style="font-size:12px;color:var(--text2);">Register, search, and track every customer and their full order history.</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="fi-icon" style="background:rgba(63,185,80,0.12);">🛒</div>
+        <div><div style="font-size:14px;font-weight:500;margin-bottom:3px;">Sales Orders</div><div style="font-size:12px;color:var(--text2);">Create, review, and fulfill orders through a structured approval workflow.</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="fi-icon" style="background:rgba(255,166,87,0.12);">💳</div>
+        <div><div style="font-size:14px;font-weight:500;margin-bottom:3px;">Payments</div><div style="font-size:12px;color:var(--text2);">Record full or partial payments. Automatic status updates when paid.</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="fi-icon" style="background:rgba(210,168,255,0.12);">📦</div>
+        <div><div style="font-size:14px;font-weight:500;margin-bottom:3px;">Inventory</div><div style="font-size:12px;color:var(--text2);">Live stock levels with low-stock alerts and full movement history.</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="fi-icon" style="background:rgba(255,123,114,0.12);">🔒</div>
+        <div><div style="font-size:14px;font-weight:500;margin-bottom:3px;">Role-Based Access</div><div style="font-size:12px;color:var(--text2);">Three roles — Staff, Manager, Admin — with layered permissions.</div></div>
+      </div>
+      <div class="feature-item">
+        <div class="fi-icon" style="background:rgba(58,166,255,0.12);">📊</div>
+        <div><div style="font-size:14px;font-weight:500;margin-bottom:3px;">Live Dashboard</div><div style="font-size:12px;color:var(--text2);">At-a-glance summary cards, recent orders, and inventory alerts.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 3: Three Roles -->
+  <div class="slide" id="slide-3">
+    <div class="slide-header">
+      <div class="slide-label">Access Control</div>
+      <div class="slide-title">The Three Roles</div>
+      <div class="slide-sub">Click a role to see what it can do.</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <div class="role-tabs" id="role-tabs">
+        <div class="role-tab sel-staff" onclick="setRole('staff')">👤 Staff</div>
+        <div class="role-tab" onclick="setRole('mgr')">🏷 Manager</div>
+        <div class="role-tab" onclick="setRole('admin')">⚙️ Admin</div>
+      </div>
+      <div class="card" id="role-panel">
+        <div id="role-desc" style="font-size:13px;color:var(--text2);margin-bottom:12px;"></div>
+        <div id="role-perms"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 4: Dashboard -->
+  <div class="slide" id="slide-4">
+    <div class="slide-header">
+      <div class="slide-label">Navigation</div>
+      <div class="slide-title">Your Home Base: The Dashboard</div>
+      <div class="slide-sub">Your real-time business snapshot.</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <div class="mock-dash">
+        <div class="mock-nav">
+          <span class="mock-nav-item active">Dashboard</span>
+          <span class="mock-nav-item">Customers</span>
+          <span class="mock-nav-item">Orders</span>
+          <span class="mock-nav-item">Payments</span>
+          <span class="mock-nav-item">Inventory</span>
+          <span class="mock-nav-item">Users</span>
+        </div>
+        <div class="mock-cards">
+          <div class="mock-card"><div class="mock-card-val" style="color:var(--accent);">48</div><div class="mock-card-label">Orders this month</div></div>
+          <div class="mock-card"><div class="mock-card-val" style="color:var(--accent2);">$12,840</div><div class="mock-card-label">Total revenue</div></div>
+          <div class="mock-card"><div class="mock-card-val" style="color:var(--accent4);">$2,100</div><div class="mock-card-label">Outstanding</div></div>
+          <div class="mock-card"><div class="mock-card-val" style="color:var(--accent5);">7</div><div class="mock-card-label">Low stock items</div></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div style="background:var(--slide-surface);border-radius:6px;border:0.5px solid var(--border);padding:8px;">
+            <div style="font-size:10px;color:var(--text2);margin-bottom:6px;font-weight:500;">RECENT ORDERS</div>
+            <div style="font-size:11px;color:var(--text2);border-bottom:0.5px solid var(--border);padding-bottom:4px;margin-bottom:4px;">SO-20260408-0042 • <span style="color:var(--accent2);">Delivered</span></div>
+            <div style="font-size:11px;color:var(--text2);border-bottom:0.5px solid var(--border);padding-bottom:4px;margin-bottom:4px;">SO-20260408-0041 • <span style="color:var(--accent4);">Shipped</span></div>
+            <div style="font-size:11px;color:var(--text2);">SO-20260407-0039 • <span style="color:var(--accent);">Confirmed</span></div>
+          </div>
+          <div style="background:var(--slide-surface);border-radius:6px;border:0.5px solid var(--border);padding:8px;">
+            <div style="font-size:10px;color:var(--text2);margin-bottom:6px;font-weight:500;">INVENTORY ALERTS</div>
+            <div style="font-size:11px;padding:4px 6px;border-radius:4px;background:rgba(255,166,87,0.1);color:var(--accent4);margin-bottom:4px;">SHOE-RED-42 — 3 left</div>
+            <div style="font-size:11px;padding:4px 6px;border-radius:4px;background:rgba(255,123,114,0.1);color:var(--accent5);margin-bottom:4px;">SHIRT-BLU-M — Out of stock</div>
+            <div style="font-size:11px;padding:4px 6px;border-radius:4px;background:rgba(255,166,87,0.1);color:var(--accent4);">JEANS-32 — 6 left</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:4px;">
+        <div class="annot-line"><span class="annot-dot"></span><span class="annot-text">Summary cards show live KPIs: orders, revenue, outstanding payments, and stock alerts</span></div>
+        <div class="annot-line"><span class="annot-dot" style="background:var(--accent2)"></span><span class="annot-text">Recent Orders tab — last 5 orders with current status color-coded</span></div>
+        <div class="annot-line"><span class="annot-dot" style="background:var(--accent5)"></span><span class="annot-text">Inventory Alerts tab — products below low-stock threshold, flagged instantly</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 5: Customers -->
+  <div class="slide" id="slide-5">
+    <div class="slide-header">
+      <div class="slide-label">Module 1</div>
+      <div class="slide-title">Customers: Your Business Foundation</div>
+      <div class="slide-sub">Every order requires a registered customer. Click each step to explore.</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <div class="step-cards" id="cust-steps">
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-num" style="background:rgba(58,166,255,0.15);color:var(--accent);">1</div>
+          <div class="step-content">
+            <div class="step-title">Navigate to Customers → New Customer</div>
+            <div class="step-desc">Click "Customers" in the nav bar, then "New Customer" (top-right button). The registration form opens.</div>
+          </div>
+        </div>
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-num" style="background:rgba(58,166,255,0.15);color:var(--accent);">2</div>
+          <div class="step-content">
+            <div class="step-title">Fill in the required fields</div>
+            <div class="step-desc">First name, last name, and email are required (email must be unique). Phone is optional. Full address including city, state, postal code, and country is required.</div>
+          </div>
+        </div>
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-num" style="background:rgba(58,166,255,0.15);color:var(--accent);">3</div>
+          <div class="step-content">
+            <div class="step-title">Add optional notes</div>
+            <div class="step-desc">Use the Notes field for special instructions, preferred contact methods, or anything your team should know about this customer.</div>
+          </div>
+        </div>
+        <div class="step-card" onclick="toggleStep(this)">
+          <div class="step-num" style="background:rgba(58,166,255,0.15);color:var(--accent);">4</div>
+          <div class="step-content">
+            <div class="step-title">Click Save Customer</div>
+            <div class="step-desc">You're taken to the customer's profile page showing their contact details and full order history. The customer is now available when creating orders.</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="chip"><span>🔍</span> Search by name or email</div>
+        <div class="chip"><span>✏️</span> Edit anytime</div>
+        <div class="chip"><span>🗑️</span> Delete only if no orders</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 6: Order Lifecycle -->
+  <div class="slide" id="slide-6">
+    <div class="slide-header">
+      <div class="slide-label">Core Workflow</div>
+      <div class="slide-title">The Order Lifecycle</div>
+      <div class="slide-sub">Click any state to see who triggers it and what happens.</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <div class="order-states" id="order-states">
+      </div>
+      <div class="card" id="state-detail" style="margin-top:12px;font-size:13px;">
+        <span style="color:var(--text2);">Select a state above to learn more.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 7: Order Deep Dive -->
+  <div class="slide" id="slide-7">
+    <div class="slide-header">
+      <div class="slide-label">Step by Step</div>
+      <div class="slide-title">Order Deep Dive: Draft to Delivered</div>
+      <div class="slide-sub">Click each step to expand details and see role requirements.</div>
+    </div>
+    <div style="padding-bottom:60px;overflow-y:auto;max-height:360px;">
+      <div class="step-cards" id="order-steps"></div>
+    </div>
+  </div>
+
+  <!-- Slide 8: Payments & Refunds -->
+  <div class="slide" id="slide-8">
+    <div class="slide-header">
+      <div class="slide-label">Module 3</div>
+      <div class="slide-title">Payments &amp; Refunds</div>
+      <div class="slide-sub">Manual recording. Multiple partials supported.</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <div class="pay-split">
+        <div class="pay-panel">
+          <div class="pay-panel-title"><span style="background:rgba(63,185,80,0.15);padding:4px 8px;border-radius:6px;font-size:12px;color:var(--accent2);">💳 Record Payment</span></div>
+          <div class="pay-field"><label>Amount</label><div class="pay-field-val">$350.00</div></div>
+          <div class="pay-field"><label>Method</label><div class="pay-field-val">Bank Transfer</div></div>
+          <div class="pay-field"><label>Reference #</label><div class="pay-field-val">TRF-2026-00842</div></div>
+          <div class="pay-field"><label>Notes</label><div class="pay-field-val" style="color:var(--text2);font-size:12px;">Partial payment — remainder next week</div></div>
+          <div style="font-size:11px;color:var(--text2);margin-top:8px;padding-top:8px;border-top:0.5px solid var(--border);">Assigned ID: <span style="color:var(--accent);">PAY-20260408-0031</span></div>
+        </div>
+        <div class="pay-panel">
+          <div class="pay-panel-title"><span style="background:rgba(255,123,114,0.15);padding:4px 8px;border-radius:6px;font-size:12px;color:var(--accent5);">↩ Refund Flow</span></div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">Only available on Paid orders. Admin role required.</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span style="width:20px;height:20px;border-radius:50%;background:rgba(255,123,114,0.15);color:var(--accent5);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">1</span>
+              Open the Paid order
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span style="width:20px;height:20px;border-radius:50%;background:rgba(255,123,114,0.15);color:var(--accent5);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">2</span>
+              Click <strong>Issue Refund</strong>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span style="width:20px;height:20px;border-radius:50%;background:rgba(255,123,114,0.15);color:var(--accent5);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">3</span>
+              Status → Refunded; stock restored
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;">
+              <span style="width:20px;height:20px;border-radius:50%;background:rgba(255,123,114,0.15);color:var(--accent5);display:flex;align-items:center;justify-content:center;font-size:10px;flex-shrink:0;">4</span>
+              Return money to customer outside system
+            </div>
+          </div>
+          <div style="margin-top:12px;padding:8px;background:rgba(255,123,114,0.07);border-radius:6px;font-size:11px;color:var(--accent5);">Payments cannot be deleted — only refunded.</div>
+        </div>
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+        <div class="chip"><span>🔢</span> Partial payments supported</div>
+        <div class="chip"><span>📋</span> Auto-assigned PAY numbers</div>
+        <div class="chip"><span>✅</span> Auto-status update when paid</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 9: Inventory -->
+  <div class="slide" id="slide-9">
+    <div class="slide-header">
+      <div class="slide-label">Module 4</div>
+      <div class="slide-title">Inventory Management</div>
+      <div class="slide-sub">Real-time stock levels with color-coded alerts. Click items to toggle status.</div>
+    </div>
+    <div style="padding-bottom:60px;" id="inv-panel"></div>
+  </div>
+
+  <!-- Slide 10: Staff Management -->
+  <div class="slide" id="slide-10">
+    <div class="slide-header">
+      <div class="slide-label">Admin Only</div>
+      <div class="slide-title">Staff Management</div>
+      <div class="slide-sub">Full user lifecycle — from invitation to deactivation.</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <div class="user-lifecycle" style="justify-content:center;margin-bottom:20px;">
+        <div class="ulc-step"><div class="ulc-icon">✉️</div><div>Invite</div></div>
+        <div class="ulc-arrow">→</div>
+        <div class="ulc-step"><div class="ulc-icon">✅</div><div>Active</div></div>
+        <div class="ulc-arrow">→</div>
+        <div class="ulc-step"><div class="ulc-icon">✏️</div><div>Edit</div></div>
+        <div class="ulc-arrow">→</div>
+        <div class="ulc-step"><div class="ulc-icon">⏸️</div><div>Deactivate</div></div>
+        <div class="ulc-arrow" style="color:var(--accent2);">⤴</div>
+        <div class="ulc-step" style="border-color:rgba(63,185,80,0.4);"><div class="ulc-icon">🔄</div><div style="color:var(--accent2);">Reactivate</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div class="card">
+          <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:var(--accent);">Inviting a New User</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">
+            Go to <strong style="color:var(--text);">Users</strong> → Invite User.<br>
+            Set name, email, role, and initial password.<br>
+            User can log in immediately with those credentials.<br>
+            <span style="color:var(--accent4);">Ask them to change their password after first login.</span>
+          </div>
+        </div>
+        <div class="card">
+          <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:var(--accent3);">Deactivating vs Deleting</div>
+          <div style="font-size:12px;color:var(--text2);line-height:1.6;">
+            Always <strong style="color:var(--text);">deactivate</strong>, never delete staff who leave.<br>
+            Deactivated users' historical actions are preserved.<br>
+            They cannot log in but their audit trail remains.<br>
+            <span style="color:var(--accent2);">Reactivate instantly — access restored immediately.</span>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px 14px;background:rgba(210,168,255,0.07);border:0.5px solid rgba(210,168,255,0.2);border-radius:8px;font-size:12px;color:var(--accent3);">
+        ⚙️ Only Admins can see the Users page. You cannot deactivate your own account.
+      </div>
+    </div>
+  </div>
+
+  <!-- Slide 11: Cheatsheet -->
+  <div class="slide" id="slide-11">
+    <div class="slide-header">
+      <div class="slide-label">Reference</div>
+      <div class="slide-title">Quick Reference: Order Status Cheatsheet</div>
+    </div>
+    <div style="padding-bottom:60px;">
+      <table class="status-table">
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>What it means</th>
+            <th>Next action</th>
+            <th>Who</th>
+          </tr>
+        </thead>
+        <tbody id="status-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Slide 12: Closing -->
+  <div class="slide" id="slide-12">
+    <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding-bottom:60px;">
+      <div class="slide-label" style="margin-bottom:12px;">You're ready</div>
+      <div class="slide-title" style="font-size:28px;margin-bottom:20px;">Key Takeaways</div>
+      <div class="kta-grid">
+        <div class="kta-card">
+          <div class="kta-icon">🔐</div>
+          <div class="kta-title">Know Your Role</div>
+          <div class="kta-sub">Staff, Manager, Admin — each unlocks more capability</div>
+        </div>
+        <div class="kta-card">
+          <div class="kta-icon">🔄</div>
+          <div class="kta-title">Orders Flow Forward</div>
+          <div class="kta-sub">Draft → Pending → Confirmed → Paid → Shipped → Delivered</div>
+        </div>
+        <div class="kta-card">
+          <div class="kta-icon">📦</div>
+          <div class="kta-title">Stock is Automatic</div>
+          <div class="kta-sub">Deducted on Confirm. Restored on Cancel or Refund.</div>
+        </div>
+        <div class="kta-card">
+          <div class="kta-icon">💳</div>
+          <div class="kta-title">Partial Payments OK</div>
+          <div class="kta-sub">Record multiple payments. Auto-Paid when total covered.</div>
+        </div>
+        <div class="kta-card">
+          <div class="kta-icon">👤</div>
+          <div class="kta-title">Customer First</div>
+          <div class="kta-sub">Every order needs a registered customer to proceed.</div>
+        </div>
+        <div class="kta-card">
+          <div class="kta-icon">⏸️</div>
+          <div class="kta-title">Deactivate, Don't Delete</div>
+          <div class="kta-sub">Preserve history. Reactivate whenever needed.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Nav Bar -->
+  <div class="nav-bar">
+    <button class="nav-btn" id="btn-prev" onclick="navigate(-1)" disabled>← Prev</button>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+      <div class="slide-dots" id="slide-dots"></div>
+      <div class="slide-counter" id="slide-counter">1 / 12</div>
+    </div>
+    <button class="nav-btn" id="btn-next" onclick="navigate(1)">Next →</button>
+  </div>
+</div>
+
+<script>
+const TOTAL = 12;
+let cur = 1;
+
+function navigate(dir) {
+  const next = cur + dir;
+  if (next < 1 || next > TOTAL) return;
+  document.getElementById('slide-' + cur).classList.remove('active');
+  cur = next;
+  document.getElementById('slide-' + cur).classList.add('active');
+  updateNav();
+}
+
+function goTo(n) {
+  document.getElementById('slide-' + cur).classList.remove('active');
+  cur = n;
+  document.getElementById('slide-' + cur).classList.add('active');
+  updateNav();
+}
+
+function updateNav() {
+  document.getElementById('btn-prev').disabled = cur === 1;
+  document.getElementById('btn-next').disabled = cur === TOTAL;
+  document.getElementById('slide-counter').textContent = cur + ' / ' + TOTAL;
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i + 1 === cur);
+  });
+}
+
+// Build dots
+const dotsEl = document.getElementById('slide-dots');
+for (let i = 1; i <= TOTAL; i++) {
+  const d = document.createElement('div');
+  d.className = 'dot' + (i === 1 ? ' active' : '');
+  d.onclick = () => goTo(i);
+  dotsEl.appendChild(d);
+}
+
+// Keyboard nav
+document.addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') navigate(1);
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') navigate(-1);
+});
+
+// Slide 3: Roles
+const roles = {
+  staff: {
+    desc: 'Front-line team members. Can create and manage orders end-to-end except approval steps.',
+    color: 'accent',
+    perms: [
+      ['View dashboard, customers, orders', true],
+      ['Register and edit customers', true],
+      ['Create a new sales order', true],
+      ['Submit order for review (Draft → Pending)', true],
+      ['Approve/confirm order (Pending → Confirmed)', false],
+      ['Mark as Shipped / Delivered', true],
+      ['Cancel a confirmed order', false],
+      ['Issue a refund', false],
+      ['Add or edit products', false],
+      ['Manage staff accounts', false],
+    ]
+  },
+  mgr: {
+    desc: 'Supervisory role. Can approve orders, cancel confirmed orders, and manage products.',
+    color: 'accent2',
+    perms: [
+      ['View dashboard, customers, orders', true],
+      ['Register and edit customers', true],
+      ['Create a new sales order', true],
+      ['Submit order for review (Draft → Pending)', true],
+      ['Approve/confirm order (Pending → Confirmed)', true],
+      ['Mark as Shipped / Delivered', true],
+      ['Cancel a confirmed order', true],
+      ['Issue a refund', false],
+      ['Add or edit products', true],
+      ['Manage staff accounts', false],
+    ]
+  },
+  admin: {
+    desc: 'Full access. The only role that can issue refunds and manage staff accounts.',
+    color: 'accent3',
+    perms: [
+      ['View dashboard, customers, orders', true],
+      ['Register and edit customers', true],
+      ['Create a new sales order', true],
+      ['Submit order for review (Draft → Pending)', true],
+      ['Approve/confirm order (Pending → Confirmed)', true],
+      ['Mark as Shipped / Delivered', true],
+      ['Cancel a confirmed order', true],
+      ['Issue a refund', true],
+      ['Add or edit products', true],
+      ['Manage staff accounts', true],
+    ]
+  }
+};
+
+function setRole(r) {
+  const tabs = document.querySelectorAll('.role-tab');
+  tabs.forEach(t => { t.className = 'role-tab'; });
+  const map = { staff: 0, mgr: 1, admin: 2 };
+  tabs[map[r]].className = 'role-tab sel-' + r;
+  const data = roles[r];
+  const col = 'var(--' + data.color + ')';
+  document.getElementById('role-desc').textContent = data.desc;
+  document.getElementById('role-perms').innerHTML = data.perms.map(([label, ok]) =>
+    `<div class="perm-row"><span>${label}</span><span class="check" style="color:${ok ? 'var(--accent2)' : 'var(--accent5)'}">${ok ? '✓' : '✗'}</span></div>`
+  ).join('');
+}
+setRole('staff');
+
+// Slide 6: Order states
+const states = [
+  { name: 'Draft', color: '#58a6ff', who: 'Staff / Manager / Admin', desc: 'Order created but not yet reviewed. Still editable. No stock touched.', next: 'Submit for Review' },
+  { name: 'Pending', color: '#ffa657', who: 'Manager / Admin', desc: 'Awaiting approval. Order is locked — no edits. Can be deleted at this stage.', next: 'Confirm Order' },
+  { name: 'Confirmed', color: '#d2a8ff', who: 'Staff / Manager / Admin', desc: 'Approved! Stock is automatically deducted from inventory here.', next: 'Record Payment' },
+  { name: 'Paid', color: '#3fb950', who: 'Staff / Manager / Admin', desc: 'Payment received in full. Cumulative payments equal or exceed order total.', next: 'Mark as Shipped' },
+  { name: 'Shipped', color: '#79c0ff', who: 'Staff / Manager / Admin', desc: 'Goods have left the warehouse or store. Tracking can be noted.', next: 'Mark as Delivered' },
+  { name: 'Delivered', color: '#56d364', who: '—', desc: 'Order complete. Final state for a normal fulfilled order.', next: '—' },
+];
+const cancelState = { name: 'Cancelled', color: '#ff7b72', who: 'Manager / Admin', desc: 'Cancelled after Confirmed, before payment. Stock is automatically restored.', next: '—' };
+const refundState = { name: 'Refunded', color: '#f0883e', who: 'Admin only', desc: 'Paid order reversed. Stock restored. Money returned outside the system.', next: '—' };
+
+const osEl = document.getElementById('order-states');
+const allStates = [...states, cancelState, refundState];
+
+// Main row
+const mainRow = document.createElement('div');
+mainRow.style.cssText = 'display:flex;align-items:center;gap:4px;flex-wrap:wrap;';
+states.forEach((s, i) => {
+  const pill = document.createElement('div');
+  pill.className = 'state-pill';
+  pill.style.background = s.color + '22';
+  pill.style.color = s.color;
+  pill.style.border = '0.5px solid ' + s.color + '55';
+  pill.textContent = s.name;
+  pill.onclick = () => showState(s);
+  mainRow.appendChild(pill);
+  if (i < states.length - 1) {
+    const arr = document.createElement('span');
+    arr.className = 'state-arrow';
+    arr.textContent = '→';
+    mainRow.appendChild(arr);
+  }
+});
+osEl.appendChild(mainRow);
+
+// Side states
+const sideRow = document.createElement('div');
+sideRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-top:4px;';
+[cancelState, refundState].forEach(s => {
+  const pill = document.createElement('div');
+  pill.className = 'state-pill';
+  pill.style.background = s.color + '22';
+  pill.style.color = s.color;
+  pill.style.border = '0.5px solid ' + s.color + '55';
+  pill.style.opacity = '0.85';
+  pill.textContent = s.name;
+  pill.onclick = () => showState(s);
+  sideRow.appendChild(pill);
+});
+const sideNote = document.createElement('span');
+sideNote.style.cssText = 'font-size:11px;color:var(--text2);';
+sideNote.textContent = '← Terminal exception states';
+sideRow.appendChild(sideNote);
+osEl.appendChild(sideRow);
+
+function showState(s) {
+  document.getElementById('state-detail').innerHTML =
+    `<strong style="color:${s.color}">${s.name}</strong>
+     <span style="color:var(--text2);font-size:12px;margin-left:8px;">Triggered by: ${s.who}</span>
+     <div style="margin-top:6px;font-size:13px;color:var(--text);">${s.desc}</div>
+     ${s.next !== '—' ? `<div style="margin-top:6px;font-size:12px;color:var(--text2);">Next action: <span style="color:var(--accent);">${s.next}</span></div>` : ''}`;
+}
+
+// Slide 7: Order steps
+const orderSteps = [
+  { num: 1, title: 'Create the order (Draft)', tags: ['staff','mgr','admin'], color: '#58a6ff', desc: 'Click Orders → New Order. Select customer, add line items (product + quantity), set optional discount/tax/notes. Click Save Order. A unique SO-YYYYMMDD-XXXX number is assigned. Editable until submitted.' },
+  { num: 2, title: 'Submit for review (Draft → Pending)', tags: ['staff','mgr','admin'], color: '#ffa657', desc: 'Open the Draft order. Click Submit for Review. Status changes to Pending. Order is now locked — no further edits are possible.' },
+  { num: 3, title: 'Confirm the order (Pending → Confirmed)', tags: ['mgr','admin'], color: '#d2a8ff', desc: 'Manager or Admin reviews the Pending order. Verify customer, products, quantities, and totals. Click Confirm Order. Stock is automatically deducted from inventory.' },
+  { num: 4, title: 'Record payment (Confirmed → Paid)', tags: ['staff','mgr','admin'], color: '#3fb950', desc: 'Open the Confirmed order. Click Record Payment. Enter amount, method, optional reference and notes. Partial payments supported — status moves to Paid once cumulative total is covered.' },
+  { num: 5, title: 'Mark as Shipped (Paid → Shipped)', tags: ['staff','mgr','admin'], color: '#79c0ff', desc: 'When goods leave the store or warehouse, open the Paid order and click Mark as Shipped. Status updates immediately.' },
+  { num: 6, title: 'Mark as Delivered (Shipped → Delivered)', tags: ['staff','mgr','admin'], color: '#56d364', desc: 'Once delivery is confirmed, open the Shipped order and click Mark as Delivered. This is the final completed state.' },
+];
+const stepsEl = document.getElementById('order-steps');
+orderSteps.forEach(s => {
+  const div = document.createElement('div');
+  div.className = 'step-card';
+  div.innerHTML = `
+    <div class="step-num" style="background:${s.color}22;color:${s.color};">${s.num}</div>
+    <div class="step-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <div class="step-title">${s.title}</div>
+        <div class="step-badges">${s.tags.map(t => `<span class="tag tag-${t === 'staff' ? 'staff' : t === 'mgr' ? 'mgr' : 'admin'}">${t === 'staff' ? 'Staff' : t === 'mgr' ? 'Manager' : 'Admin'}</span>`).join('')}</div>
+      </div>
+      <div class="step-desc">${s.desc}</div>
+    </div>`;
+  div.onclick = () => toggleStep(div);
+  stepsEl.appendChild(div);
+});
+
+function toggleStep(el) {
+  el.classList.toggle('open');
+}
+
+// Slide 9: Inventory
+const invItems = [
+  { sku: 'SHOE-RED-42', name: 'Red Sneaker 42', qty: 3, max: 50, threshold: 10 },
+  { sku: 'SHIRT-BLU-M', name: 'Blue Shirt M', qty: 0, max: 50, threshold: 10 },
+  { sku: 'JEANS-32', name: 'Slim Jeans 32', qty: 6, max: 50, threshold: 10 },
+  { sku: 'HAT-BLK-OS', name: 'Black Hat OS', qty: 24, max: 50, threshold: 10 },
+  { sku: 'SOCK-WHT-L', name: 'White Socks L', qty: 42, max: 50, threshold: 10 },
+  { sku: 'BAG-GRN-MD', name: 'Green Tote Bag', qty: 15, max: 50, threshold: 10 },
+];
+const invPanel = document.getElementById('inv-panel');
+invPanel.innerHTML = `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;font-size:12px;color:var(--text2);">
+    <span>6 products shown</span>
+    <div style="display:flex;gap:8px;">
+      <span class="chip" style="padding:3px 8px;font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent5);display:inline-block;"></span> Out</span>
+      <span class="chip" style="padding:3px 8px;font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent4);display:inline-block;"></span> Low</span>
+      <span class="chip" style="padding:3px 8px;font-size:11px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--accent2);display:inline-block;"></span> OK</span>
+    </div>
+  </div>
+  ${invItems.map(item => {
+    const pct = Math.round((item.qty / item.max) * 100);
+    let color, status, statusColor;
+    if (item.qty === 0) { color = '#ff7b72'; status = 'Out of stock'; statusColor = 'rgba(255,123,114,0.15)'; }
+    else if (item.qty < item.threshold) { color = '#ffa657'; status = 'Low stock'; statusColor = 'rgba(255,166,87,0.15)'; }
+    else { color = '#3fb950'; status = 'In stock'; statusColor = 'rgba(63,185,80,0.15)'; }
+    return `<div class="inv-row">
+      <div style="min-width:140px;">
+        <div style="font-size:13px;font-weight:500;">${item.name}</div>
+        <div class="inv-sku">${item.sku}</div>
+      </div>
+      <div class="inv-bar-bg"><div class="inv-bar" style="width:${pct}%;background:${color};--tw:${pct}%;animation:fillBar 0.8s ease-out;"></div></div>
+      <div class="inv-qty" style="color:${color};font-weight:500;">${item.qty}</div>
+      <div class="inv-status" style="background:${statusColor};color:${color};border:0.5px solid ${color}44;">${status}</div>
+    </div>`;
+  }).join('')}
+  <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+    <div class="chip"><span>📈</span> View last 50 movements</div>
+    <div class="chip"><span>🔍</span> Filter by category or status</div>
+    <div class="chip"><span>➕</span> Add products (Manager+)</div>
+  </div>`;
+
+// Slide 11: Status table
+const statusRows = [
+  { status: 'Draft', color: '#58a6ff', meaning: 'Created, not yet reviewed', next: 'Submit for Review', who: 'Any' },
+  { status: 'Pending', color: '#ffa657', meaning: 'Awaiting manager approval', next: 'Confirm or Delete', who: 'Mgr / Admin' },
+  { status: 'Confirmed', color: '#d2a8ff', meaning: 'Approved; stock reserved', next: 'Record Payment', who: 'Any' },
+  { status: 'Paid', color: '#3fb950', meaning: 'Full payment received', next: 'Mark as Shipped', who: 'Any' },
+  { status: 'Shipped', color: '#79c0ff', meaning: 'Goods dispatched', next: 'Mark as Delivered', who: 'Any' },
+  { status: 'Delivered', color: '#56d364', meaning: 'Order complete ✓', next: '—', who: '—' },
+  { status: 'Cancelled', color: '#ff7b72', meaning: 'Cancelled before payment', next: '—', who: 'Mgr / Admin' },
+  { status: 'Refunded', color: '#f0883e', meaning: 'Paid order reversed', next: '—', who: 'Admin only' },
+];
+document.getElementById('status-table-body').innerHTML = statusRows.map(r => `
+  <tr>
+    <td><span class="st-badge" style="background:${r.color}22;color:${r.color};border:0.5px solid ${r.color}44;">${r.status}</span></td>
+    <td style="font-size:12px;color:var(--text2);">${r.meaning}</td>
+    <td style="font-size:12px;color:var(--accent);">${r.next}</td>
+    <td style="font-size:12px;color:var(--text2);">${r.who}</td>
+  </tr>`).join('');
+</script>

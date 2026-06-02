@@ -1,0 +1,295 @@
+{% extends "core/base.html" %}
+{% load regional %}
+{% block title %}Inventory | RetailOps{% endblock %}
+
+{% block content %}
+
+<!-- Movement History Side Panel -->
+<div class="side-panel" id="movement-panel">
+  <div class="sp-header">
+    <div class="sp-title" id="panel-title">Movement History</div>
+    <button type="button" onclick="closePanel('movement-panel')"
+      style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);">✕</button>
+  </div>
+  <div class="sp-body" id="panel-body">
+    <div style="color:var(--muted);font-size:0.875rem;">Select a product to view movements.</div>
+  </div>
+</div>
+
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Inventory</div>
+      <div class="page-subtitle">Track stock levels and product movements</div>
+    </div>
+    <div class="page-header-actions">
+      {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
+      <button type="button" class="btn btn-secondary" onclick="openAdjustModal(null, null)">Adjust Stock</button>
+      <a href="{% url 'product-create' %}" class="btn btn-primary">+ Add Product</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Low-stock banner -->
+  {% if low_stock_count %}
+  <div class="alert-banner alert-warning" id="low-stock-banner">
+    <span>⚠</span>
+    <strong>{{ low_stock_count }} product{{ low_stock_count|pluralize }}</strong>&nbsp;
+    {% if low_stock_count == 1 %}is{% else %}are{% endif %} below the low-stock threshold — restock soon.
+    <button type="button" class="alert-close"
+      onclick="document.getElementById('low-stock-banner').style.display='none'">✕</button>
+  </div>
+  {% endif %}
+
+  <!-- Filter Bar -->
+  <form method="get" action="{% url 'inventory-list' %}">
+    <div class="filter-bar">
+      <input type="text" name="q" class="form-control"
+        placeholder="&#128269; Search SKU or product name…" value="{{ query|default:'' }}">
+      <select name="category" class="form-control">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        <option value="{{ cat.pk }}" {% if category_filter == cat.pk|stringformat:"s" %}selected{% endif %}>
+          {{ cat.name }}
+        </option>
+        {% endfor %}
+      </select>
+      <select name="stock" class="form-control">
+        <option value=""        {% if not stock_filter %}selected{% endif %}>All Stock Status</option>
+        <option value="ok"      {% if stock_filter == 'ok'  %}selected{% endif %}>In Stock</option>
+        <option value="low"     {% if stock_filter == 'low' %}selected{% endif %}>Low Stock</option>
+        <option value="out"     {% if stock_filter == 'out' %}selected{% endif %}>Out of Stock</option>
+      </select>
+      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+      {% if query or category_filter or stock_filter %}
+        <a href="{% url 'inventory-list' %}" class="btn btn-secondary btn-sm">Clear</a>
+        <span class="filter-active">Filters active</span>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if products %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>SKU</th>
+          <th>Product Name</th>
+          <th>Category</th>
+          <th>Unit</th>
+          <th>Unit Price</th>
+          <th>Stock Level</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for product in products %}
+        <tr>
+          <td class="td-mono">{{ product.sku }}</td>
+          <td>
+            <div class="product-name-cell">
+              <div class="product-thumb">
+                {% if product.primary_image_url %}
+                  <img src="{{ product.primary_image_url }}" alt="{{ product.name }}">
+                {% else %}
+                  IMG
+                {% endif %}
+              </div>
+              <div class="product-name-text">
+                <strong>{{ product.name }}</strong>
+                {% if not product.is_active %}
+                  <span class="badge badge-inactive" style="margin-left:6px;">Inactive</span>
+                {% elif not product.has_image_source %}
+                  <span class="badge badge-pending" style="margin-left:6px;">Missing image</span>
+                {% endif %}
+              </div>
+            </div>
+          </td>
+          <td>{{ product.category.name }}</td>
+          <td style="color:var(--muted);">{{ product.get_unit_of_measure_display }}</td>
+          <td>{{ product.unit_price|currency }}</td>
+          <td>
+            {% if product.current_stock <= 0 %}
+              <span class="stock-out">{{ product.current_stock }}</span>
+            {% elif product.is_low_stock %}
+              <span class="stock-low">{{ product.current_stock }}</span>
+            {% else %}
+              <span class="stock-ok">{{ product.current_stock }}</span>
+            {% endif %}
+            <span style="font-size:0.75rem;color:var(--muted);">(min: {{ product.low_stock_threshold }})</span>
+          </td>
+          <td class="td-actions">
+            {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
+            <a href="{% url 'product-edit' product.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+            <button type="button" class="btn btn-secondary btn-sm"
+              onclick="openAdjustModal({{ product.pk }}, '{{ product.sku|escapejs }} — {{ product.name|escapejs }}')">
+              Adjust
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-ghost btn-sm"
+              onclick="loadMovements({{ product.pk }}, '{{ product.sku|escapejs }} — {{ product.name|escapejs }}')">
+              Movements
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="table-wrap">
+    <div class="empty-state">
+      <div class="empty-icon">📦</div>
+      <div class="empty-title">No products found</div>
+      {% if query or category_filter or stock_filter %}
+        <div>No products match your filters. <a href="{% url 'inventory-list' %}">Clear filters</a></div>
+      {% else %}
+        {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
+        <div><a href="{% url 'product-create' %}">Add your first product</a></div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- ── Adjust Stock Modal ──────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="adjust-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Adjust Stock</div>
+      <button type="button" class="modal-close" onclick="closeModal('adjust-modal')">&#x2715;</button>
+    </div>
+    <form method="post" action="{% url 'inventory-adjust' %}">
+      {% csrf_token %}
+      <input type="hidden" name="product_id" id="adjust-product-id">
+      <div class="modal-body">
+
+        <!-- Product selector (shown when opened from the header button) -->
+        <div class="form-group" id="adjust-product-select-row" style="display:none;">
+          <label class="form-label" for="adjust-product-select">Product <span style="color:var(--danger)">*</span></label>
+          <select id="adjust-product-select" class="form-control" required>
+            <option value="">— Select product —</option>
+            {% for product in products %}
+            <option value="{{ product.pk }}">{{ product.sku }} — {{ product.name }}</option>
+            {% endfor %}
+          </select>
+          <div id="adjust-product-name" style="font-size:0.85rem;color:var(--muted);margin-top:6px;"></div>
+        </div>
+
+        <!-- Product label (shown when opened from a per-row button) -->
+        <div class="form-group" id="adjust-product-label-row">
+          <label class="form-label">Product</label>
+          <div id="adjust-product-label" style="font-weight:600;font-size:0.9rem;padding:8px 0;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="adjust-movement-type">Movement Type <span style="color:var(--danger)">*</span></label>
+          <select name="movement_type" id="adjust-movement-type" class="form-control" required>
+            <option value="purchase">Purchase — add stock received from supplier</option>
+            <option value="adjustment">Adjustment — correct a counting error</option>
+            <option value="return">Return — stock returned from a customer</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="adjust-quantity">
+            Quantity <span style="color:var(--danger)">*</span>
+            <span style="font-weight:400;color:var(--muted);font-size:0.8rem;">(positive = add, negative = deduct)</span>
+          </label>
+          <input type="number" name="quantity" id="adjust-quantity" class="form-control"
+            placeholder="e.g. 50 or -10" step="1" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="adjust-notes">Notes <span style="font-weight:400;color:var(--muted);font-size:0.8rem;">(optional)</span></label>
+          <textarea name="notes" id="adjust-notes" class="form-control" rows="2"
+            placeholder="Reason for adjustment, PO number, etc."></textarea>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('adjust-modal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Record Adjustment</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function openAdjustModal(productId, productLabel) {
+    // Reset form
+    document.getElementById('adjust-quantity').value = '';
+    document.getElementById('adjust-notes').value = '';
+    document.getElementById('adjust-movement-type').value = 'purchase';
+
+    if (productId) {
+      // Opened from a specific product row
+      document.getElementById('adjust-product-id').value = productId;
+      document.getElementById('adjust-product-label').textContent = productLabel;
+      document.getElementById('adjust-product-label-row').style.display = 'block';
+      document.getElementById('adjust-product-select-row').style.display = 'none';
+      // Remove required from select so the hidden input drives submission
+      document.getElementById('adjust-product-select').removeAttribute('required');
+    } else {
+      // Opened from the header — show product dropdown
+      document.getElementById('adjust-product-id').value = '';
+      document.getElementById('adjust-product-label').textContent = '';
+      document.getElementById('adjust-product-label-row').style.display = 'none';
+      document.getElementById('adjust-product-select-row').style.display = 'block';
+      document.getElementById('adjust-product-select').setAttribute('required', '');
+      document.getElementById('adjust-product-select').value = '';
+    }
+    openModal('adjust-modal');
+  }
+
+  // When product is chosen from the dropdown, keep hidden input in sync
+  document.getElementById('adjust-product-select').addEventListener('change', function() {
+    document.getElementById('adjust-product-id').value = this.value;
+  });
+
+  function loadMovements(productId, label) {
+    document.getElementById('panel-title').textContent = label;
+    document.getElementById('panel-body').innerHTML =
+      '<div style="color:var(--muted);font-size:0.875rem;text-align:center;padding:24px;">Loading…</div>';
+    openPanel('movement-panel');
+
+    fetch(`/inventory/products/${productId}/movements/`)
+      .then(r => r.json())
+      .then(data => {
+        const { product, movements } = data;
+        let html = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">
+          Current stock: <strong style="color:${product.current_stock <= 0 ? 'var(--danger)' : product.current_stock <= 10 ? 'var(--warning)' : 'var(--success)'}">
+            ${product.current_stock}
+          </strong></div>`;
+        if (movements.length === 0) {
+          html += '<div style="color:var(--muted);font-style:italic;">No movements recorded.</div>';
+        } else {
+          movements.forEach(m => {
+            const isPos = m.quantity >= 0;
+            const sign  = isPos ? '+' : '';
+            const cls   = isPos ? 'movement-qty-pos' : 'movement-qty-neg';
+            const date  = new Date(m.date).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' });
+            html += `<div class="movement-item">
+              <div style="display:flex;justify-content:space-between;">
+                <span><strong>${m.type}</strong> · ${m.reference_type} #${m.reference_id}</span>
+                <span class="${cls}">${sign}${m.quantity}</span>
+              </div>
+              <div class="pay-hist-meta">${date} · ${m.created_by}</div>
+              ${m.notes ? `<div class="pay-hist-meta">${m.notes}</div>` : ''}
+            </div>`;
+          });
+        }
+        document.getElementById('panel-body').innerHTML = html;
+      })
+      .catch(() => {
+        document.getElementById('panel-body').innerHTML =
+          '<div class="alert-banner alert-danger">Failed to load movements.</div>';
+      });
+  }
+</script>
+{% endblock %}

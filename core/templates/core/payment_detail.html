@@ -1,0 +1,104 @@
+{% extends "core/base.html" %}
+{% load regional %}
+{% block title %}{{ payment.payment_number }} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title" style="font-family:monospace;">{{ payment.payment_number }}</div>
+      <div class="page-subtitle">Recorded on {{ payment.created_at|date:"M j, Y" }} by {{ payment.recorded_by.get_full_name }}</div>
+    </div>
+    <a href="{% url 'order-detail' payment.sales_order.pk %}" class="btn btn-secondary">← Back to Order</a>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
+
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      <!-- Payment Details -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">Payment Details</div></div>
+        <div class="card-body">
+          <div class="info-panel">
+            <div class="info-row">
+              <span class="info-label">Payment #</span>
+              <span class="td-mono">{{ payment.payment_number }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Amount</span>
+              <strong style="font-size:1.1rem;">{{ payment.amount|currency }}</strong>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Method</span>
+              {{ payment.get_payment_method_display }}
+            </div>
+            {% if payment.reference_number %}
+            <div class="info-row">
+              <span class="info-label">Reference</span>
+              <span class="td-mono">{{ payment.reference_number }}</span>
+            </div>
+            {% endif %}
+            <div class="info-row">
+              <span class="info-label">Date</span>
+              {{ payment.created_at|date:"M j, Y g:i A" }}
+            </div>
+            <div class="info-row">
+              <span class="info-label">Recorded By</span>
+              {{ payment.recorded_by.get_full_name }}
+            </div>
+            {% if payment.notes %}
+            <div class="info-row">
+              <span class="info-label">Notes</span>
+              {{ payment.notes }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:24px;">
+      <!-- Linked Order -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Linked Order</div>
+          <a href="{% url 'order-detail' payment.sales_order.pk %}" class="btn btn-ghost btn-sm">View Order →</a>
+        </div>
+        <div class="card-body">
+          <div class="info-panel">
+            <div class="info-row">
+              <span class="info-label">Order #</span>
+              <a href="{% url 'order-detail' payment.sales_order.pk %}" class="td-mono">{{ payment.sales_order.order_number }}</a>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Status</span>
+              <span class="badge badge-{{ payment.sales_order.status }}">{{ payment.sales_order.get_status_display }}</span>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Customer</span>
+              <a href="{% url 'customer-detail' payment.sales_order.customer.pk %}">
+                {{ payment.sales_order.customer.get_full_name }}
+              </a>
+            </div>
+            <div class="info-row">
+              <span class="info-label">Order Total</span>
+              {{ payment.sales_order.total_amount|currency }}
+            </div>
+            <div class="info-row">
+              <span class="info-label">Amount Paid</span>
+              {{ payment.sales_order.amount_paid|currency }}
+            </div>
+            <div class="info-row">
+              <span class="info-label">Outstanding</span>
+              <strong {% if payment.sales_order.amount_outstanding > 0 %}style="color:var(--danger);"{% else %}style="color:var(--success);"{% endif %}>
+                {{ payment.sales_order.amount_outstanding|currency }}
+              </strong>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
