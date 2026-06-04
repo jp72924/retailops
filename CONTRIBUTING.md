@@ -10,9 +10,13 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python manage.py migrate
-python manage.py bootstrap_local --seed
+python manage.py init
 python manage.py runserver
 ```
+
+Use `python manage.py init --demo --seed` only when you explicitly need demo
+catalog, customers, orders, payments, and inventory for presentation or manual
+testing.
 
 On Windows, activate the virtual environment with
 `.\.venv\Scripts\Activate.ps1`.

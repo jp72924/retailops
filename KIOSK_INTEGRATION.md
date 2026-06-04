@@ -17,29 +17,34 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 python manage.py migrate
-python manage.py bootstrap_local --seed
+python manage.py init
 python manage.py runserver
 ```
 
 Or use the Linux/macOS setup helper:
 
 ```bash
-bash scripts/setup-retailops-local.sh --seed --provision-kiosk
+bash scripts/setup-retailops-local.sh --admin-email owner@example.com --store MAIN --station-count 1
 python manage.py runserver
 ```
 
 ## Provision A Station
 
-Create a station and copy the API key immediately:
+For a new establishment, create one or more stations during site
+initialization:
 
 ```bash
-python manage.py provision_kiosk --store DEV-LOCAL --station 1 --by admin@retailops.local
+python manage.py init \
+  --admin-email owner@example.com \
+  --store MAIN \
+  --station-count 2
 ```
 
-Or during local bootstrap:
+For an already initialized backend, create an individual station and copy the
+API key immediately:
 
 ```bash
-python manage.py bootstrap_local --provision-kiosk
+python manage.py provision_kiosk --store MAIN --station 1 --by owner@example.com
 ```
 
 The raw key is shown only once. The database stores only a hash and a short

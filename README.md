@@ -24,9 +24,13 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 python manage.py migrate
-python manage.py bootstrap_local --seed --provision-kiosk
+python manage.py init
 python manage.py runserver
 ```
+
+`init` prompts for the first admin email and a strong password, then creates
+only the operational minimum: roles, system settings, and the first admin user.
+It does not create demo customers, products, orders, payments, or inventory.
 
 On Windows, use `.\.venv\Scripts\Activate.ps1` after creating the virtual
 environment, or follow the PowerShell examples in `INSTALL.md`.
@@ -37,13 +41,8 @@ Open:
 - Admin: http://127.0.0.1:8000/admin/
 - API schema: http://127.0.0.1:8000/api/v1/schema/swagger/
 
-Local demo accounts:
-
-| Email | Password | Role |
-| --- | --- | --- |
-| `admin@retailops.local` | `AdminPassword123!` | Admin |
-| `manager@retailops.local` | `ManagerPass123!` | Manager |
-| `staff@retailops.local` | `StaffPass123!` | Staff |
+For a one-command local demo with sample data and documented demo accounts, see
+`INSTALL.md`.
 
 ## What Is Included
 
@@ -57,8 +56,9 @@ Local demo accounts:
 - Configurable local, Google Cloud Storage, and S3-compatible media storage
 - MCP server for AI/agent integrations
 
-Use `python manage.py provision_kiosk` or `bootstrap_local --provision-kiosk`
-to create station credentials for an external Kiosk project.
+Use `python manage.py init --store <STORE_ID> --station-count <N>` or
+`python manage.py provision_kiosk` to create station credentials for an external
+Kiosk project.
 
 ## Documentation
 
