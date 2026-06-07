@@ -175,7 +175,7 @@
           <div class="form-group">
             <label class="form-label" for="id_ocr_base_url">VEPay Base URL</label>
             <input type="url" id="id_ocr_base_url" name="ocr_base_url" class="form-control {% if errors.ocr_base_url %}is-invalid{% endif %}"
-              value="{{ sys_settings.ocr_base_url }}" placeholder="https://vepay-api-5bja335wiq-pv.a.run.app">
+              value="{{ sys_settings.ocr_base_url }}" placeholder="https://your-vepay-instance.example.com">
             {% if errors.ocr_base_url %}
             <div class="invalid-feedback">{{ errors.ocr_base_url }}</div>
             {% endif %}

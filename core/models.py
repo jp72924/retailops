@@ -547,7 +547,7 @@ class SystemSettings(models.Model):
         default='vepay',
         choices=[('vepay', 'VEPay')],
     )
-    ocr_base_url = models.URLField(default='https://vepay-api-5bja335wiq-pv.a.run.app')
+    ocr_base_url = models.URLField(blank=True, default='')
     ocr_api_key = models.CharField(max_length=256, blank=True)
     ocr_timeout_seconds = models.PositiveIntegerField(default=30)
     ocr_max_file_mb = models.PositiveIntegerField(default=8)
