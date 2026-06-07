@@ -1,5 +1,5 @@
-<!DOCTYPE html>
-<html lang="en">
+{% load i18n %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -111,6 +111,13 @@
     text-transform: uppercase;
   }
   .nav-fx-value { font-variant-numeric: tabular-nums; }
+  .nav-lang select {
+    background: #334155; color: #E2E8F0;
+    border: 1px solid #475569; border-radius: var(--radius-sm);
+    padding: 5px 8px; font-size: 0.78rem; font-family: var(--font);
+    cursor: pointer;
+  }
+  .nav-lang select:focus { outline: none; border-color: var(--primary); }
 
   /* ─── Page Layout ────────────────────────────────────────────────────────── */
   .page { max-width: 1280px; margin: 0 auto; padding: 24px; }
@@ -369,20 +376,30 @@
 <nav class="app-nav">
   <a href="{% url 'dashboard' %}" class="logo">&#9632;<span class="dot">R</span>etailOps</a>
   <div class="nav-links">
-    <a href="{% url 'dashboard' %}"      class="nav-link {% if url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
-    <a href="{% url 'order-list' %}"     class="nav-link {% if 'order' in url_name %}active{% endif %}">Orders</a>
-    <a href="{% url 'customer-list' %}"  class="nav-link {% if 'customer' in url_name %}active{% endif %}">Customers</a>
-    <a href="{% url 'inventory-list' %}" class="nav-link {% if 'inventory' in url_name or 'product' in url_name %}active{% endif %}">Inventory</a>
-    <a href="{% url 'category-list' %}"  class="nav-link {% if 'category' in url_name %}active{% endif %}">Categories</a>
-    <a href="{% url 'payment-list' %}"   class="nav-link {% if 'payment' in url_name %}active{% endif %}">Payments</a>
+    <a href="{% url 'dashboard' %}"      class="nav-link {% if url_name == 'dashboard' %}active{% endif %}">{% trans "Dashboard" %}</a>
+    <a href="{% url 'order-list' %}"     class="nav-link {% if 'order' in url_name %}active{% endif %}">{% trans "Orders" %}</a>
+    <a href="{% url 'customer-list' %}"  class="nav-link {% if 'customer' in url_name %}active{% endif %}">{% trans "Customers" %}</a>
+    <a href="{% url 'inventory-list' %}" class="nav-link {% if 'inventory' in url_name or 'product' in url_name %}active{% endif %}">{% trans "Inventory" %}</a>
+    <a href="{% url 'category-list' %}"  class="nav-link {% if 'category' in url_name %}active{% endif %}">{% trans "Categories" %}</a>
+    <a href="{% url 'payment-list' %}"   class="nav-link {% if 'payment' in url_name %}active{% endif %}">{% trans "Payments" %}</a>
     {% if user.role.name == 'Admin' %}
-    <a href="{% url 'user-list' %}"      class="nav-link {% if 'user' in url_name %}active{% endif %}">Users</a>
+    <a href="{% url 'user-list' %}"      class="nav-link {% if 'user' in url_name %}active{% endif %}">{% trans "Users" %}</a>
     {% endif %}
-    <a href="{% url 'settings' %}"       class="nav-link {% if url_name == 'settings' %}active{% endif %}">Settings</a>
+    <a href="{% url 'settings' %}"       class="nav-link {% if url_name == 'settings' %}active{% endif %}">{% trans "Settings" %}</a>
   </div>
   <div class="nav-right">
+    <form method="post" action="{% url 'set-language' %}" class="nav-lang" id="lang-form">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="language" onchange="document.getElementById('lang-form').submit()" aria-label="{% trans 'Language' %}">
+        {% get_current_language as CUR_LANG %}
+        {% for code, label in LANGUAGES %}
+        <option value="{{ code }}" {% if code == CUR_LANG %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
     {% if system_settings.secondary_currency_enabled %}
-    <div class="nav-fx" title="Tasa de cambio actual">
+    <div class="nav-fx" title="{% trans 'Current exchange rate' %}">
       <span class="nav-fx-label">FX</span>
       <span class="nav-fx-value">
         {{ system_settings.currency_symbol }}1 &asymp; {{ system_settings.secondary_currency_symbol }}{{ system_settings.secondary_exchange_rate|floatformat:system_settings.secondary_decimal_places }}
@@ -402,7 +419,7 @@
     </div>
     <form method="post" action="{% url 'logout' %}" class="inline">
       {% csrf_token %}
-      <button type="submit" class="btn-logout">Logout</button>
+      <button type="submit" class="btn-logout">{% trans "Logout" %}</button>
     </form>
   </div>
 </nav>

@@ -1,16 +1,17 @@
 {% extends "core/base.html" %}
-{% block title %}{% if category %}Edit {{ category.name }}{% else %}New Category{% endif %} | RetailOps{% endblock %}
+{% load i18n %}
+{% block title %}{% if category %}{% blocktrans with name=category.name %}Edit {{ name }}{% endblocktrans %}{% else %}{% trans "New Category" %}{% endif %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">{% if category %}Edit Category{% else %}New Category{% endif %}</div>
+      <div class="page-title">{% if category %}{% trans "Edit Category" %}{% else %}{% trans "New Category" %}{% endif %}</div>
       <div class="page-subtitle">
-        {% if category %}Update details for {{ category.name }}{% else %}Add a new product category{% endif %}
+        {% if category %}{% blocktrans with name=category.name %}Update details for {{ name }}{% endblocktrans %}{% else %}{% trans "Add a new product category" %}{% endif %}
       </div>
     </div>
-    <a href="{% url 'category-list' %}" style="color:var(--muted);font-size:0.875rem;">← Back</a>
+    <a href="{% url 'category-list' %}" style="color:var(--muted);font-size:0.875rem;">← {% trans "Back" %}</a>
   </div>
 
   <div class="card" style="max-width:640px;">
@@ -19,31 +20,31 @@
         {% csrf_token %}
 
         <div class="form-section">
-          <div class="form-section-title">Category Details</div>
+          <div class="form-section-title">{% trans "Category Details" %}</div>
 
           <!-- Name (required) -->
           <div class="form-group">
-            <label class="form-label" for="id_name">Name <span class="req">*</span></label>
+            <label class="form-label" for="id_name">{% trans "Name" %} <span class="req">*</span></label>
             <input type="text" id="id_name" name="name" maxlength="150" required
               class="form-control{% if errors.name %} is-invalid{% endif %}"
               value="{{ form_data.name|default:'' }}"
-              placeholder="e.g. Electronics">
+              placeholder="{% trans 'e.g. Electronics' %}">
             {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
           </div>
 
           <!-- Description (optional) -->
           <div class="form-group">
-            <label class="form-label" for="id_description">Description</label>
+            <label class="form-label" for="id_description">{% trans "Description" %}</label>
             <textarea id="id_description" name="description" class="form-control"
-              placeholder="Optional description…">{{ form_data.description|default:'' }}</textarea>
+              placeholder="{% trans 'Optional description…' %}">{{ form_data.description|default:'' }}</textarea>
           </div>
 
           <!-- Parent Category (optional) -->
           <div class="form-group">
-            <label class="form-label" for="id_parent_category">Parent Category</label>
+            <label class="form-label" for="id_parent_category">{% trans "Parent Category" %}</label>
             <select id="id_parent_category" name="parent_category"
               class="form-control{% if errors.parent_category %} is-invalid{% endif %}">
-              <option value="">— None (top-level category) —</option>
+              <option value="">{% trans "— None (top-level category) —" %}</option>
               {% for cat in all_categories %}
                 {% if not category or cat.pk != category.pk %}
                   <option value="{{ cat.pk }}"
@@ -59,9 +60,9 @@
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">
-            {% if category %}Save Changes{% else %}Create Category{% endif %}
+            {% if category %}{% trans "Save Changes" %}{% else %}{% trans "Create Category" %}{% endif %}
           </button>
-          <a href="{% url 'category-list' %}" class="btn btn-secondary">Cancel</a>
+          <a href="{% url 'category-list' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
         </div>
       </form>
     </div>

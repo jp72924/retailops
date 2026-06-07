@@ -1,37 +1,37 @@
 {% extends "core/base.html" %}
-{% load regional %}
-{% block title %}Dashboard | RetailOps{% endblock %}
+{% load regional i18n %}
+{% block title %}{% trans "Dashboard" %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">Dashboard</div>
-      <div class="page-subtitle">Welcome back, {{ user.first_name }}. Here's what's happening today.</div>
+      <div class="page-title">{% trans "Dashboard" %}</div>
+      <div class="page-subtitle">{% blocktrans with name=user.first_name %}Welcome back, {{ name }}. Here's what's happening today.{% endblocktrans %}</div>
     </div>
   </div>
 
   <!-- Stat Cards -->
   <div class="stat-grid">
     <div class="stat-card primary">
-      <div class="stat-label">Orders This Month</div>
+      <div class="stat-label">{% trans "Orders This Month" %}</div>
       <div class="stat-value">{{ stats.orders_this_month|default:"0" }}</div>
-      <div class="stat-sub">Sales orders created</div>
+      <div class="stat-sub">{% trans "Sales orders created" %}</div>
     </div>
     <div class="stat-card success">
-      <div class="stat-label">Revenue This Month</div>
+      <div class="stat-label">{% trans "Revenue This Month" %}</div>
       <div class="stat-value">{{ stats.revenue_this_month|default:"0.00"|currency }}</div>
-      <div class="stat-sub">From paid orders</div>
+      <div class="stat-sub">{% trans "From paid orders" %}</div>
     </div>
     <div class="stat-card warning">
-      <div class="stat-label">Pending Payments</div>
+      <div class="stat-label">{% trans "Pending Payments" %}</div>
       <div class="stat-value">{{ stats.pending_payments_count|default:"0" }}</div>
-      <div class="stat-sub">Orders awaiting payment</div>
+      <div class="stat-sub">{% trans "Orders awaiting payment" %}</div>
     </div>
     <div class="stat-card danger">
-      <div class="stat-label">Low Stock Items</div>
+      <div class="stat-label">{% trans "Low Stock Items" %}</div>
       <div class="stat-value">{{ stats.low_stock_count|default:"0" }}</div>
-      <div class="stat-sub">Below threshold</div>
+      <div class="stat-sub">{% trans "Below threshold" %}</div>
     </div>
   </div>
 
@@ -44,14 +44,14 @@
           <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
             <button class="btn btn-sm" id="tab-btn-orders" onclick="dashTab('orders')"
               style="border-radius:0;border:none;background:var(--primary);color:#fff;">
-              Recent Orders
+              {% trans "Recent Orders" %}
             </button>
             <button class="btn btn-sm" id="tab-btn-alerts" onclick="dashTab('alerts')"
               style="border-radius:0;border:none;">
-              Inventory Alerts
+              {% trans "Inventory Alerts" %}
             </button>
           </div>
-          <a href="{% url 'order-list' %}" class="btn btn-ghost btn-sm">View all →</a>
+          <a href="{% url 'order-list' %}" class="btn btn-ghost btn-sm">{% trans "View all →" %}</a>
         </div>
 
         <!-- Recent Orders Tab -->
@@ -61,11 +61,11 @@
             <table>
               <thead>
                 <tr>
-                  <th>Order #</th>
-                  <th>Customer</th>
-                  <th>Date</th>
-                  <th>Status</th>
-                  <th>Total</th>
+                  <th>{% trans "Order #" %}</th>
+                  <th>{% trans "Customer" %}</th>
+                  <th>{% trans "Date" %}</th>
+                  <th>{% trans "Status" %}</th>
+                  <th>{% trans "Total" %}</th>
                 </tr>
               </thead>
               <tbody>
@@ -86,8 +86,8 @@
           {% else %}
           <div class="empty-state">
             <div class="empty-icon">📋</div>
-            <div class="empty-title">No orders yet</div>
-            <div><a href="{% url 'order-create' %}">Create your first order</a></div>
+            <div class="empty-title">{% trans "No orders yet" %}</div>
+            <div><a href="{% url 'order-create' %}">{% trans "Create your first order" %}</a></div>
           </div>
           {% endif %}
         </div>
@@ -106,16 +106,16 @@
                   <span style="color:var(--muted);font-size:0.8rem;">({{ product.category.name }})</span>
                 </div>
                 {% if product.current_stock == 0 %}
-                  <span class="badge badge-cancelled">Out of stock</span>
+                  <span class="badge badge-cancelled">{% trans "Out of stock" %}</span>
                 {% else %}
-                  <span class="badge badge-pending">{{ product.current_stock }} left</span>
+                  <span class="badge badge-pending">{% blocktrans count counter=product.current_stock %}{{ counter }} left{% plural %}{{ counter }} left{% endblocktrans %}</span>
                 {% endif %}
               </div>
               {% endfor %}
             </div>
             {% else %}
             <div class="empty-state" style="padding:24px;">
-              <div class="empty-title" style="color:var(--success);">✓ All stock levels are healthy</div>
+              <div class="empty-title" style="color:var(--success);">{% trans "✓ All stock levels are healthy" %}</div>
             </div>
             {% endif %}
           </div>
@@ -127,20 +127,20 @@
     <!-- Sidebar: Quick Actions -->
     <div class="dash-side">
       <div class="card">
-        <div class="card-header"><div class="card-title">Quick Actions</div></div>
+        <div class="card-header"><div class="card-title">{% trans "Quick Actions" %}</div></div>
         <div class="card-body" style="padding:12px;">
           <div class="quick-actions">
             <a href="{% url 'order-create' %}" class="qa-btn">
-              <span class="qa-icon">+</span> New Order
+              <span class="qa-icon">+</span> {% trans "New Order" %}
             </a>
             <a href="{% url 'customer-create' %}" class="qa-btn">
-              <span class="qa-icon">👤</span> Register Customer
+              <span class="qa-icon">👤</span> {% trans "Register Customer" %}
             </a>
             <a href="{% url 'payment-list' %}" class="qa-btn">
-              <span class="qa-icon">💳</span> View Payments
+              <span class="qa-icon">💳</span> {% trans "View Payments" %}
             </a>
             <a href="{% url 'inventory-list' %}" class="qa-btn">
-              <span class="qa-icon">📦</span> Inventory
+              <span class="qa-icon">📦</span> {% trans "Inventory" %}
             </a>
           </div>
         </div>

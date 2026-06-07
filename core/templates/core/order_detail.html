@@ -1,6 +1,6 @@
 {% extends "core/base.html" %}
-{% load regional %}
-{% block title %}{% if order %}{{ order.order_number }}{% else %}New Order{% endif %} | RetailOps{% endblock %}
+{% load regional i18n %}
+{% block title %}{% if order %}{{ order.order_number }}{% else %}{% trans "New Order" %}{% endif %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
@@ -13,66 +13,66 @@
       <div style="display:flex;align-items:center;gap:10px;margin-top:6px;">
         <span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span>
         <span style="color:var(--muted);font-size:0.8rem;">
-          Created by {{ order.created_by.get_full_name }} · {{ order.created_at|date:"M j, Y" }}
+          {% blocktrans with by=order.created_by.get_full_name date=order.created_at|date:"M j, Y" %}Created by {{ by }} · {{ date }}{% endblocktrans %}
         </span>
         {% if order.confirmed_by %}
         <span style="color:var(--muted);font-size:0.8rem;">
-          · Confirmed by {{ order.confirmed_by.get_full_name }} {{ order.confirmed_at|date:"M j, Y" }}
+          · {% blocktrans with by=order.confirmed_by.get_full_name date=order.confirmed_at|date:"M j, Y" %}Confirmed by {{ by }} {{ date }}{% endblocktrans %}
         </span>
         {% endif %}
       </div>
       {% else %}
-      <div class="page-title">New Order</div>
-      <div class="page-subtitle">Create a new sales order</div>
+      <div class="page-title">{% trans "New Order" %}</div>
+      <div class="page-subtitle">{% trans "Create a new sales order" %}</div>
       {% endif %}
     </div>
 
     <!-- Role-gated action buttons -->
     <div class="page-header-actions">
       {% if not order or order.status == 'draft' or order.status == 'pending' %}
-      <button type="submit" form="order-form" class="btn btn-secondary">Save Draft</button>
+      <button type="submit" form="order-form" class="btn btn-secondary">{% trans "Save Draft" %}</button>
       {% endif %}
 
       {% if order %}
         {% if order.status == 'draft' and user.role.name in 'Staff,Manager,Admin' %}
         <form method="post" action="{% url 'order-submit' order.pk %}" class="inline">
-          {% csrf_token %}<button class="btn btn-primary">Submit for Review</button>
+          {% csrf_token %}<button class="btn btn-primary">{% trans "Submit for Review" %}</button>
         </form>
         {% endif %}
 
         {% if order.status == 'pending' and user.role.name in 'Manager,Admin' %}
         <form method="post" action="{% url 'order-confirm' order.pk %}" class="inline">
-          {% csrf_token %}<button class="btn btn-primary">Confirm Order</button>
+          {% csrf_token %}<button class="btn btn-primary">{% trans "Confirm Order" %}</button>
         </form>
         {% endif %}
 
         {% if order.status == 'confirmed' %}
-        <button class="btn btn-success" onclick="openModal('payment-modal')">Record Payment</button>
+        <button class="btn btn-success" onclick="openModal('payment-modal')">{% trans "Record Payment" %}</button>
         {% endif %}
 
         {% if order.status == 'paid' and user.role.name in 'Staff,Manager,Admin' %}
         <form method="post" action="{% url 'order-ship' order.pk %}" class="inline">
-          {% csrf_token %}<button class="btn btn-primary">Mark Shipped</button>
+          {% csrf_token %}<button class="btn btn-primary">{% trans "Mark Shipped" %}</button>
         </form>
         {% endif %}
 
         {% if order.status == 'shipped' and user.role.name in 'Staff,Manager,Admin' %}
         <form method="post" action="{% url 'order-deliver' order.pk %}" class="inline">
-          {% csrf_token %}<button class="btn btn-success">Mark Delivered</button>
+          {% csrf_token %}<button class="btn btn-success">{% trans "Mark Delivered" %}</button>
         </form>
         {% endif %}
 
         {% if order.status == 'confirmed' and user.role.name in 'Manager,Admin' %}
         <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline"
-              onsubmit="return confirm('Cancel order {{ order.order_number|escapejs }}?')">
-          {% csrf_token %}<button class="btn btn-danger">Cancel Order</button>
+              onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Cancel order {{ number }}?{% endblocktrans %}')">
+          {% csrf_token %}<button class="btn btn-danger">{% trans "Cancel Order" %}</button>
         </form>
         {% endif %}
 
         {% if order.status == 'paid' and user.role.name == 'Admin' %}
         <form method="post" action="{% url 'order-refund' order.pk %}" class="inline"
-              onsubmit="return confirm('Issue refund for {{ order.order_number|escapejs }}?')">
-          {% csrf_token %}<button class="btn btn-warning">Issue Refund</button>
+              onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Issue refund for {{ number }}?{% endblocktrans %}')">
+          {% csrf_token %}<button class="btn btn-warning">{% trans "Issue Refund" %}</button>
         </form>
         {% endif %}
       {% endif %}
@@ -87,25 +87,25 @@
         <!-- Customer -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Customer</div>
+            <div class="card-title">{% trans "Customer" %}</div>
             {% if not order or order.status == 'draft' %}
-            <span style="font-size:0.8rem;color:var(--muted);">Select a customer for this order</span>
+            <span style="font-size:0.8rem;color:var(--muted);">{% trans "Select a customer for this order" %}</span>
             {% endif %}
           </div>
           <div class="card-body">
             {% if order and order.status != 'draft' %}
             <div class="info-panel">
-              <div class="info-row"><span class="info-label">Name</span><a href="{% url 'customer-detail' order.customer.pk %}"><strong>{{ order.customer.get_full_name }}</strong></a></div>
-              <div class="info-row"><span class="info-label">Email</span>{{ order.customer.email }}</div>
-              <div class="info-row"><span class="info-label">Phone</span>{{ order.customer.phone|default:"—" }}</div>
-              {% if order.customer.national_id %}<div class="info-row"><span class="info-label">ID Number</span>{{ order.customer.national_id }}</div>{% endif %}
-              <div class="info-row"><span class="info-label">Address</span>{{ order.customer.address_line1 }}, {{ order.customer.city }}, {{ order.customer.state }}</div>
+              <div class="info-row"><span class="info-label">{% trans "Name" %}</span><a href="{% url 'customer-detail' order.customer.pk %}"><strong>{{ order.customer.get_full_name }}</strong></a></div>
+              <div class="info-row"><span class="info-label">{% trans "Email" %}</span>{{ order.customer.email }}</div>
+              <div class="info-row"><span class="info-label">{% trans "Phone" %}</span>{{ order.customer.phone|default:"—" }}</div>
+              {% if order.customer.national_id %}<div class="info-row"><span class="info-label">{% trans "ID Number" %}</span>{{ order.customer.national_id }}</div>{% endif %}
+              <div class="info-row"><span class="info-label">{% trans "Address" %}</span>{{ order.customer.address_line1 }}, {{ order.customer.city }}, {{ order.customer.state }}</div>
             </div>
             {% else %}
             <div class="form-group">
-              <label class="form-label" for="id_customer">Customer <span class="req">*</span></label>
+              <label class="form-label" for="id_customer">{% trans "Customer" %} <span class="req">*</span></label>
               <select id="id_customer" name="customer" class="form-control" required>
-                <option value="">— Select customer —</option>
+                <option value="">{% trans "— Select customer —" %}</option>
                 {% for c in customers %}
                 <option value="{{ c.pk }}"
                   {% if order and order.customer_id == c.pk %}selected
@@ -122,9 +122,9 @@
         <!-- Line Items -->
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Line Items</div>
+            <div class="card-title">{% trans "Line Items" %}</div>
             {% if not order or order.status == 'draft' or order.status == 'pending' %}
-            <button type="button" class="btn btn-primary btn-sm" onclick="addLineItem()">+ Add Item</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addLineItem()">{% trans "+ Add Item" %}</button>
             {% endif %}
           </div>
           <div class="card-body" style="padding:0;">
@@ -132,11 +132,11 @@
               <table>
                 <thead>
                   <tr>
-                    <th>Product</th>
-                    <th>SKU</th>
-                    <th style="width:80px;">Qty</th>
-                    <th style="width:130px;">Unit Price</th>
-                    <th style="width:120px;">Line Total</th>
+                    <th>{% trans "Product" %}</th>
+                    <th>{% trans "SKU" %}</th>
+                    <th style="width:80px;">{% trans "Qty" %}</th>
+                    <th style="width:130px;">{% trans "Unit Price" %}</th>
+                    <th style="width:120px;">{% trans "Line Total" %}</th>
                     {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <th style="width:40px;"></th>
                     {% endif %}
@@ -188,10 +188,10 @@
                       {% endif %}
                     </tr>
                     {% empty %}
-                    <tr id="empty-row"><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No items yet — click "+ Add Item" to begin.</td></tr>
+                    <tr id="empty-row"><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">{% trans 'No items yet — click "+ Add Item" to begin.' %}</td></tr>
                     {% endfor %}
                   {% else %}
-                  <tr id="empty-row"><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">No items yet — click "+ Add Item" to begin.</td></tr>
+                  <tr id="empty-row"><td colspan="6" style="text-align:center;color:var(--muted);padding:24px;">{% trans 'No items yet — click "+ Add Item" to begin.' %}</td></tr>
                   {% endif %}
                 </tbody>
               </table>
@@ -202,15 +202,15 @@
               <div style="max-width:300px;margin-left:auto;">
                 <div class="totals-box">
                   <div class="totals-row">
-                    <span>Subtotal</span>
+                    <span>{% trans "Subtotal" %}</span>
                     <span><span id="subtotal">{{ order.subtotal|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="subtotal-sec">{{ order.subtotal|default:"0.00"|currency_secondary }}</span></span>
                   </div>
                   <div class="totals-row">
-                    <span>Tax</span>
+                    <span>{% trans "Tax" %}</span>
                     <span>{{ order.tax_amount|default:"0.00"|currency }}</span>
                   </div>
                   <div class="totals-row">
-                    <span>Discount</span>
+                    <span>{% trans "Discount" %}</span>
                     {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <input type="number" name="discount_amount" class="form-control"
                       value="{{ order.discount_amount|default:'0.00' }}"
@@ -221,7 +221,7 @@
                     {% endif %}
                   </div>
                   <div class="totals-row total">
-                    <span>Grand Total</span>
+                    <span>{% trans "Grand Total" %}</span>
                     <span><span id="grand-total">{{ order.total_amount|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="grand-total-sec">{{ order.total_amount|default:"0.00"|currency_secondary }}</span></span>
                   </div>
                 </div>
@@ -232,12 +232,12 @@
 
         <!-- Notes -->
         <div class="card">
-          <div class="card-header"><div class="card-title">Order Notes</div></div>
+          <div class="card-header"><div class="card-title">{% trans "Order Notes" %}</div></div>
           <div class="card-body">
             {% if not order or order.status == 'draft' or order.status == 'pending' %}
-            <textarea name="notes" class="form-control" placeholder="Internal notes about this order…">{{ order.notes|default:'' }}</textarea>
+            <textarea name="notes" class="form-control" placeholder="{% trans 'Internal notes about this order…' %}">{{ order.notes|default:'' }}</textarea>
             {% else %}
-            <p style="color:var(--muted);">{{ order.notes|default:"No notes." }}</p>
+            <p style="color:var(--muted);">{% if order.notes %}{{ order.notes }}{% else %}{% trans "No notes." %}{% endif %}</p>
             {% endif %}
           </div>
         </div>
@@ -253,9 +253,9 @@
         {% if order %}
         <div class="card">
           <div class="card-header">
-            <div class="card-title">Payments</div>
+            <div class="card-title">{% trans "Payments" %}</div>
             {% if order.status == 'confirmed' or order.status == 'paid' %}
-            <button type="button" class="btn btn-success btn-sm" onclick="openModal('payment-modal')">+ Record</button>
+            <button type="button" class="btn btn-success btn-sm" onclick="openModal('payment-modal')">{% trans "+ Record" %}</button>
             {% endif %}
           </div>
           <div class="card-body">
@@ -270,16 +270,16 @@
                 {{ payment.get_payment_method_display }} · {{ payment.created_at|date:"M j, Y" }} · {{ payment.recorded_by.get_full_name }}
               </div>
               {% if payment.reference_number %}
-              <div class="pay-hist-meta">Ref: {{ payment.reference_number }}</div>
+              <div class="pay-hist-meta">{% blocktrans with ref=payment.reference_number %}Ref: {{ ref }}{% endblocktrans %}</div>
               {% endif %}
             </div>
             {% endfor %}
             <div style="padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:0.875rem;">
-              <span style="color:var(--muted);">Outstanding</span>
+              <span style="color:var(--muted);">{% trans "Outstanding" %}</span>
               <strong {% if order.amount_outstanding > 0 %}style="color:var(--danger);"{% endif %}>{{ order.amount_outstanding|currency }}</strong>
             </div>
             {% else %}
-            <p style="color:var(--muted);font-size:0.875rem;font-style:italic;">No payments recorded yet.</p>
+            <p style="color:var(--muted);font-size:0.875rem;font-style:italic;">{% trans "No payments recorded yet." %}</p>
             {% endif %}
           </div>
         </div>
@@ -288,13 +288,13 @@
         <!-- Order Summary (read-only sidebar) -->
         {% if order %}
         <div class="card">
-          <div class="card-header"><div class="card-title">Order Info</div></div>
+          <div class="card-header"><div class="card-title">{% trans "Order Info" %}</div></div>
           <div class="card-body">
             <div class="info-panel">
-              <div class="info-row"><span class="info-label">Order #</span><span class="td-mono">{{ order.order_number }}</span></div>
-              <div class="info-row"><span class="info-label">Status</span><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></div>
-              <div class="info-row"><span class="info-label">Created</span>{{ order.created_at|date:"M j, Y" }}</div>
-              {% if order.paid_at %}<div class="info-row"><span class="info-label">Paid</span>{{ order.paid_at|date:"M j, Y" }}</div>{% endif %}
+              <div class="info-row"><span class="info-label">{% trans "Order #" %}</span><span class="td-mono">{{ order.order_number }}</span></div>
+              <div class="info-row"><span class="info-label">{% trans "Status" %}</span><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></div>
+              <div class="info-row"><span class="info-label">{% trans "Created" %}</span>{{ order.created_at|date:"M j, Y" }}</div>
+              {% if order.paid_at %}<div class="info-row"><span class="info-label">{% trans "Paid" %}</span>{{ order.paid_at|date:"M j, Y" }}</div>{% endif %}
             </div>
           </div>
         </div>
@@ -312,7 +312,7 @@
 <div class="modal-overlay" id="payment-modal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title">Record Payment</div>
+      <div class="modal-title">{% trans "Record Payment" %}</div>
       <button type="button" class="modal-close" onclick="closeModal('payment-modal')">✕</button>
     </div>
     <form method="post" action="{% url 'payment-create' %}">
@@ -321,19 +321,19 @@
       <div class="modal-body">
         <div class="form-grid" style="gap:18px;">
           <div class="form-group">
-            <label class="form-label">Amount <span class="req">*</span></label>
+            <label class="form-label">{% trans "Amount" %} <span class="req">*</span></label>
             <input type="number" name="amount" class="form-control"
               value="{{ order.amount_outstanding|default:order.total_amount }}"
               step="0.01" min="0.01" required>
             {% if order %}
             <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-              Outstanding balance: {{ order.amount_outstanding|currency }}
+              {% blocktrans with balance=order.amount_outstanding|currency %}Outstanding balance: {{ balance }}{% endblocktrans %}
             </div>
             {% endif %}
           </div>
 
           <div class="form-group">
-            <label class="form-label">Payment Method <span class="req">*</span></label>
+            <label class="form-label">{% trans "Payment Method" %} <span class="req">*</span></label>
             <div class="radio-group">
               {% for value, label in payment_method_choices %}
               <label class="radio-opt">
@@ -347,23 +347,23 @@
           </div>
 
           <div class="form-group" id="ref-number-field">
-            <label class="form-label">Reference Number</label>
+            <label class="form-label">{% trans "Reference Number" %}</label>
             <input type="text" name="reference_number" class="form-control"
-              placeholder="Transaction ID, check #, etc.">
+              placeholder="{% trans 'Transaction ID, check #, etc.' %}">
             <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-              Required for bank transfer, card, and check payments.
+              {% trans "Required for bank transfer, card, and check payments." %}
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label">Notes</label>
-            <textarea name="notes" class="form-control" rows="3" placeholder="Optional notes…"></textarea>
+            <label class="form-label">{% trans "Notes" %}</label>
+            <textarea name="notes" class="form-control" rows="3" placeholder="{% trans 'Optional notes…' %}"></textarea>
           </div>
         </div>
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('payment-modal')">Cancel</button>
-        <button type="submit" class="btn btn-success">Record Payment</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('payment-modal')">{% trans "Cancel" %}</button>
+        <button type="submit" class="btn btn-success">{% trans "Record Payment" %}</button>
       </div>
     </form>
   </div>
@@ -388,7 +388,7 @@
   function fmtSecondary(value) {
     if (!SECONDARY_ENABLED) return '';
     const converted = value * SECONDARY_RATE;
-    return ' \u2248 ' + SECONDARY_SYMBOL + converted.toFixed(SECONDARY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return ' ≈ ' + SECONDARY_SYMBOL + converted.toFixed(SECONDARY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
   function setCurrencyCell(primaryId, value) {
@@ -462,7 +462,7 @@
 
   function removeLineItem(btn) {
     const rows = document.querySelectorAll('#line-items-body tr:not(#empty-row)');
-    if (rows.length <= 1) { showToast('An order must have at least one line item.', 'warning'); return; }
+    if (rows.length <= 1) { showToast('{% trans "An order must have at least one line item." %}', 'warning'); return; }
     btn.closest('tr').remove();
     recalcTotals();
   }

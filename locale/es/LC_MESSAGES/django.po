@@ -1,0 +1,1123 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: RetailOps\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: es\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Dashboard"
+msgstr "Panel"
+
+msgid "Orders"
+msgstr "Pedidos"
+
+msgid "Customers"
+msgstr "Clientes"
+
+msgid "Inventory"
+msgstr "Inventario"
+
+msgid "Categories"
+msgstr "Categorías"
+
+msgid "Payments"
+msgstr "Pagos"
+
+msgid "Users"
+msgstr "Usuarios"
+
+msgid "Settings"
+msgstr "Configuración"
+
+msgid "Logout"
+msgstr "Cerrar sesión"
+
+msgid "Language"
+msgstr "Idioma"
+
+msgid "Current exchange rate"
+msgstr "Tasa de cambio actual"
+
+msgid "Sign In"
+msgstr "Iniciar sesión"
+
+msgid "Unified Retail & Order Management"
+msgstr "Gestión unificada de ventas y pedidos"
+
+msgid "Email Address"
+msgstr "Correo electrónico"
+
+msgid "Password"
+msgstr "Contraseña"
+
+msgid "Remember me"
+msgstr "Recordarme"
+
+msgid "Forgot password?"
+msgstr "¿Olvidó su contraseña?"
+
+msgid "Invalid email or password."
+msgstr "Correo o contraseña inválidos."
+
+msgid "Reset Password"
+msgstr "Restablecer contraseña"
+
+msgid "Reset your password"
+msgstr "Restablezca su contraseña"
+
+msgid "Enter your email address and we'll send you a link to reset your password."
+msgstr "Ingrese su correo electrónico y le enviaremos un enlace para restablecer su contraseña."
+
+msgid "Send Reset Link"
+msgstr "Enviar enlace de restablecimiento"
+
+msgid "Back to Sign In"
+msgstr "Volver a iniciar sesión"
+
+msgid "Check Your Email"
+msgstr "Revise su correo"
+
+msgid "Check your email"
+msgstr "Revise su correo"
+
+msgid "Development — console email backend"
+msgstr "Desarrollo — backend de correo por consola"
+
+msgid "Production — send real emails"
+msgstr "Producción — enviar correos reales"
+
+msgid "Set New Password"
+msgstr "Establecer nueva contraseña"
+
+msgid "Set a new password"
+msgstr "Establezca una nueva contraseña"
+
+msgid "Choose a strong password for your account."
+msgstr "Elija una contraseña segura para su cuenta."
+
+msgid "New Password"
+msgstr "Nueva contraseña"
+
+msgid "Confirm Password"
+msgstr "Confirmar contraseña"
+
+msgid "At least 8 characters."
+msgstr "Al menos 8 caracteres."
+
+msgid "This reset link is invalid or has expired."
+msgstr "Este enlace de restablecimiento es inválido o ha expirado."
+
+msgid "Request a new reset link"
+msgstr "Solicitar un nuevo enlace"
+
+msgid "Password Reset Complete"
+msgstr "Restablecimiento completado"
+
+msgid "Password reset successfully"
+msgstr "Contraseña restablecida con éxito"
+
+msgid "Your password has been updated. You can now sign in with your new password."
+msgstr "Su contraseña ha sido actualizada. Ya puede iniciar sesión con su nueva contraseña."
+
+msgid "Name"
+msgstr "Nombre"
+
+msgid "Type"
+msgstr "Tipo"
+
+msgid "Parent"
+msgstr "Principal"
+
+msgid "Products"
+msgstr "Productos"
+
+msgid "Created"
+msgstr "Creado"
+
+msgid "Actions"
+msgstr "Acciones"
+
+msgid "Search"
+msgstr "Buscar"
+
+msgid "Clear"
+msgstr "Limpiar"
+
+msgid "Clear search"
+msgstr "Limpiar búsqueda"
+
+msgid "Clear filters"
+msgstr "Limpiar filtros"
+
+msgid "Filter"
+msgstr "Filtrar"
+
+msgid "Filters active"
+msgstr "Filtros activos"
+
+msgid "Edit"
+msgstr "Editar"
+
+msgid "Delete"
+msgstr "Eliminar"
+
+msgid "View"
+msgstr "Ver"
+
+msgid "Cancel"
+msgstr "Cancelar"
+
+msgid "Save Changes"
+msgstr "Guardar cambios"
+
+msgid "Back"
+msgstr "Volver"
+
+msgid "Email"
+msgstr "Correo"
+
+msgid "Phone"
+msgstr "Teléfono"
+
+msgid "City"
+msgstr "Ciudad"
+
+msgid "Country"
+msgstr "País"
+
+msgid "State"
+msgstr "Estado"
+
+msgid "Registered"
+msgstr "Registrado"
+
+msgid "Status"
+msgstr "Estado"
+
+msgid "Date"
+msgstr "Fecha"
+
+msgid "Total"
+msgstr "Total"
+
+msgid "Items"
+msgstr "Artículos"
+
+msgid "Customer"
+msgstr "Cliente"
+
+msgid "Product Categories"
+msgstr "Categorías de productos"
+
+msgid "+ New Category"
+msgstr "+ Nueva categoría"
+
+msgid "Subcategory"
+msgstr "Subcategoría"
+
+msgid "No categories found"
+msgstr "No se encontraron categorías"
+
+msgid "Add your first product category"
+msgstr "Agregue su primera categoría de productos"
+
+msgid "New Category"
+msgstr "Nueva categoría"
+
+msgid "Edit Category"
+msgstr "Editar categoría"
+
+msgid "Add a new product category"
+msgstr "Agregue una nueva categoría de productos"
+
+msgid "Category Details"
+msgstr "Detalles de la categoría"
+
+msgid "e.g. Electronics"
+msgstr "ej. Electrónica"
+
+msgid "Description"
+msgstr "Descripción"
+
+msgid "Optional description…"
+msgstr "Descripción opcional…"
+
+msgid "Parent Category"
+msgstr "Categoría principal"
+
+msgid "— None (top-level category) —"
+msgstr "— Ninguna (categoría de nivel superior) —"
+
+msgid "Create Category"
+msgstr "Crear categoría"
+
+msgid "+ Register Customer"
+msgstr "+ Registrar cliente"
+
+msgid "ID Number"
+msgstr "Cédula / ID"
+
+msgid "No customers found"
+msgstr "No se encontraron clientes"
+
+msgid "Register your first customer"
+msgstr "Registre su primer cliente"
+
+msgid "Edit Customer"
+msgstr "Editar cliente"
+
+msgid "Register Customer"
+msgstr "Registrar cliente"
+
+msgid "Add a new customer to the system"
+msgstr "Agregue un nuevo cliente al sistema"
+
+msgid "Personal Information"
+msgstr "Información personal"
+
+msgid "First Name"
+msgstr "Nombre"
+
+msgid "First name"
+msgstr "Nombre"
+
+msgid "Last Name"
+msgstr "Apellido"
+
+msgid "Last name"
+msgstr "Apellido"
+
+msgid "Phone Number"
+msgstr "Número de teléfono"
+
+msgid "e.g. V12345678"
+msgstr "ej. V12345678"
+
+msgid "Date of Birth"
+msgstr "Fecha de nacimiento"
+
+msgid "Gender"
+msgstr "Género"
+
+msgid "Male"
+msgstr "Masculino"
+
+msgid "Female"
+msgstr "Femenino"
+
+msgid "— Not specified —"
+msgstr "— No especificado —"
+
+msgid "Address"
+msgstr "Dirección"
+
+msgid "Address Line 1"
+msgstr "Dirección línea 1"
+
+msgid "Address Line 2"
+msgstr "Dirección línea 2"
+
+msgid "Street address"
+msgstr "Dirección"
+
+msgid "Apartment, suite, unit, etc."
+msgstr "Apartamento, suite, unidad, etc."
+
+msgid "Postal Code"
+msgstr "Código postal"
+
+msgid "ZIP / Postal"
+msgstr "Código postal"
+
+msgid "Internal Notes"
+msgstr "Notas internas"
+
+msgid "Notes"
+msgstr "Notas"
+
+msgid "Any additional notes about this customer…"
+msgstr "Notas adicionales sobre este cliente…"
+
+msgid "Contact Details"
+msgstr "Datos de contacto"
+
+msgid "System User"
+msgstr "Usuario del sistema"
+
+msgid "Linked"
+msgstr "Vinculado"
+
+msgid "Line 1"
+msgstr "Línea 1"
+
+msgid "Line 2"
+msgstr "Línea 2"
+
+msgid "Order History"
+msgstr "Historial de pedidos"
+
+msgid "No orders yet"
+msgstr "Aún no hay pedidos"
+
+msgid "Create first order for this customer"
+msgstr "Crear el primer pedido para este cliente"
+
+msgid "+ New Order"
+msgstr "+ Nuevo pedido"
+
+msgid "Staff Management"
+msgstr "Gestión de personal"
+
+msgid "Manage user accounts and roles — Admin only"
+msgstr "Gestione cuentas de usuario y roles — solo Admin"
+
+msgid "+ Invite New User"
+msgstr "+ Invitar nuevo usuario"
+
+msgid "Role"
+msgstr "Rol"
+
+msgid "Last Login"
+msgstr "Último acceso"
+
+msgid "(you)"
+msgstr "(usted)"
+
+msgid "Active"
+msgstr "Activo"
+
+msgid "Inactive"
+msgstr "Inactivo"
+
+msgid "Never"
+msgstr "Nunca"
+
+msgid "Deactivate"
+msgstr "Desactivar"
+
+msgid "Reactivate"
+msgstr "Reactivar"
+
+msgid "No users found"
+msgstr "No se encontraron usuarios"
+
+msgid "Invite New Staff Member"
+msgstr "Invitar nuevo miembro del personal"
+
+msgid "— Select role —"
+msgstr "— Seleccione un rol —"
+
+msgid "Temporary Password"
+msgstr "Contraseña temporal"
+
+msgid "Set a temporary password"
+msgstr "Establezca una contraseña temporal"
+
+msgid "Create User"
+msgstr "Crear usuario"
+
+msgid "Edit User"
+msgstr "Editar usuario"
+
+msgid "Back to Staff"
+msgstr "Volver al personal"
+
+msgid "Account Details"
+msgstr "Detalles de la cuenta"
+
+msgid "Changing a user's role immediately updates their permissions."
+msgstr "Cambiar el rol de un usuario actualiza sus permisos de inmediato."
+
+msgid "Account is active"
+msgstr "La cuenta está activa"
+
+msgid "You cannot deactivate your own account."
+msgstr "No puede desactivar su propia cuenta."
+
+msgid "Change Password"
+msgstr "Cambiar contraseña"
+
+msgid "Enter new password"
+msgstr "Ingrese la nueva contraseña"
+
+msgid "Repeat new password"
+msgstr "Repita la nueva contraseña"
+
+msgid "Set Password"
+msgstr "Establecer contraseña"
+
+msgid "All recorded payments"
+msgstr "Todos los pagos registrados"
+
+msgid "All Methods"
+msgstr "Todos los métodos"
+
+msgid "All Statuses"
+msgstr "Todos los estados"
+
+msgid "From date"
+msgstr "Desde la fecha"
+
+msgid "To date"
+msgstr "Hasta la fecha"
+
+msgid "Payment #"
+msgstr "Pago #"
+
+msgid "Order #"
+msgstr "Pedido #"
+
+msgid "Amount"
+msgstr "Monto"
+
+msgid "Method"
+msgstr "Método"
+
+msgid "Reference"
+msgstr "Referencia"
+
+msgid "Receipt"
+msgstr "Comprobante"
+
+msgid "Recorded By"
+msgstr "Registrado por"
+
+msgid "No payments found"
+msgstr "No se encontraron pagos"
+
+msgid "No results match your filters."
+msgstr "Ningún resultado coincide con sus filtros."
+
+msgid "Payment Details"
+msgstr "Detalles del pago"
+
+msgid "Linked Order"
+msgstr "Pedido vinculado"
+
+msgid "View Order →"
+msgstr "Ver pedido →"
+
+msgid "Order Total"
+msgstr "Total del pedido"
+
+msgid "Amount Paid"
+msgstr "Monto pagado"
+
+msgid "Outstanding"
+msgstr "Pendiente"
+
+msgid "Back to Order"
+msgstr "Volver al pedido"
+
+msgid "Sales Orders"
+msgstr "Pedidos de venta"
+
+msgid "Manage and track all sales orders"
+msgstr "Gestione y siga todos los pedidos de venta"
+
+msgid "No orders found"
+msgstr "No se encontraron pedidos"
+
+msgid "No orders match your filters."
+msgstr "Ningún pedido coincide con sus filtros."
+
+msgid "Create your first order"
+msgstr "Cree su primer pedido"
+
+msgid "New Order"
+msgstr "Nuevo pedido"
+
+msgid "Create a new sales order"
+msgstr "Cree un nuevo pedido de venta"
+
+msgid "Save Draft"
+msgstr "Guardar borrador"
+
+msgid "Submit for Review"
+msgstr "Enviar a revisión"
+
+msgid "Confirm Order"
+msgstr "Confirmar pedido"
+
+msgid "Record Payment"
+msgstr "Registrar pago"
+
+msgid "Mark Shipped"
+msgstr "Marcar como enviado"
+
+msgid "Mark Delivered"
+msgstr "Marcar como entregado"
+
+msgid "Cancel Order"
+msgstr "Cancelar pedido"
+
+msgid "Issue Refund"
+msgstr "Emitir reembolso"
+
+msgid "Select a customer for this order"
+msgstr "Seleccione un cliente para este pedido"
+
+msgid "— Select customer —"
+msgstr "— Seleccione un cliente —"
+
+msgid "Line Items"
+msgstr "Líneas del pedido"
+
+msgid "+ Add Item"
+msgstr "+ Agregar artículo"
+
+msgid "Product"
+msgstr "Producto"
+
+msgid "SKU"
+msgstr "SKU"
+
+msgid "Qty"
+msgstr "Cant."
+
+msgid "Unit Price"
+msgstr "Precio unitario"
+
+msgid "Line Total"
+msgstr "Total línea"
+
+msgid "No items yet — click \"+ Add Item\" to begin."
+msgstr "Aún no hay artículos — haga clic en \"+ Agregar artículo\" para comenzar."
+
+msgid "Subtotal"
+msgstr "Subtotal"
+
+msgid "Tax"
+msgstr "Impuesto"
+
+msgid "Discount"
+msgstr "Descuento"
+
+msgid "Grand Total"
+msgstr "Total general"
+
+msgid "Order Notes"
+msgstr "Notas del pedido"
+
+msgid "Internal notes about this order…"
+msgstr "Notas internas sobre este pedido…"
+
+msgid "No notes."
+msgstr "Sin notas."
+
+msgid "+ Record"
+msgstr "+ Registrar"
+
+msgid "No payments recorded yet."
+msgstr "Aún no hay pagos registrados."
+
+msgid "Order Info"
+msgstr "Información del pedido"
+
+msgid "Paid"
+msgstr "Pagado"
+
+msgid "Payment Method"
+msgstr "Método de pago"
+
+msgid "Reference Number"
+msgstr "Número de referencia"
+
+msgid "Transaction ID, check #, etc."
+msgstr "ID de transacción, n.° de cheque, etc."
+
+msgid "Required for bank transfer, card, and check payments."
+msgstr "Requerido para transferencias, tarjetas y cheques."
+
+msgid "Optional notes…"
+msgstr "Notas opcionales…"
+
+msgid "An order must have at least one line item."
+msgstr "Un pedido debe tener al menos una línea."
+
+msgid "Movement History"
+msgstr "Historial de movimientos"
+
+msgid "Select a product to view movements."
+msgstr "Seleccione un producto para ver los movimientos."
+
+msgid "Track stock levels and product movements"
+msgstr "Controle niveles de stock y movimientos de productos"
+
+msgid "Adjust Stock"
+msgstr "Ajustar stock"
+
+msgid "+ Add Product"
+msgstr "+ Agregar producto"
+
+msgid "All Categories"
+msgstr "Todas las categorías"
+
+msgid "All Stock Status"
+msgstr "Todo el estado de stock"
+
+msgid "In Stock"
+msgstr "En stock"
+
+msgid "Low Stock"
+msgstr "Stock bajo"
+
+msgid "Out of Stock"
+msgstr "Sin stock"
+
+msgid "Product Name"
+msgstr "Nombre del producto"
+
+msgid "Category"
+msgstr "Categoría"
+
+msgid "Unit"
+msgstr "Unidad"
+
+msgid "Stock Level"
+msgstr "Nivel de stock"
+
+msgid "Missing image"
+msgstr "Sin imagen"
+
+msgid "Adjust"
+msgstr "Ajustar"
+
+msgid "Movements"
+msgstr "Movimientos"
+
+msgid "No products found"
+msgstr "No se encontraron productos"
+
+msgid "No products match your filters."
+msgstr "Ningún producto coincide con sus filtros."
+
+msgid "Add your first product"
+msgstr "Agregue su primer producto"
+
+msgid "— Select product —"
+msgstr "— Seleccione un producto —"
+
+msgid "Movement Type"
+msgstr "Tipo de movimiento"
+
+msgid "Purchase — add stock received from supplier"
+msgstr "Compra — agregar stock recibido del proveedor"
+
+msgid "Adjustment — correct a counting error"
+msgstr "Ajuste — corregir un error de conteo"
+
+msgid "Return — stock returned from a customer"
+msgstr "Devolución — stock devuelto por un cliente"
+
+msgid "Quantity"
+msgstr "Cantidad"
+
+msgid "(positive = add, negative = deduct)"
+msgstr "(positivo = agregar, negativo = restar)"
+
+msgid "e.g. 50 or -10"
+msgstr "ej. 50 o -10"
+
+msgid "(optional)"
+msgstr "(opcional)"
+
+msgid "Reason for adjustment, PO number, etc."
+msgstr "Motivo del ajuste, n.° de orden de compra, etc."
+
+msgid "Record Adjustment"
+msgstr "Registrar ajuste"
+
+msgid "Loading…"
+msgstr "Cargando…"
+
+msgid "Current stock:"
+msgstr "Stock actual:"
+
+msgid "No movements recorded."
+msgstr "No hay movimientos registrados."
+
+msgid "Failed to load movements."
+msgstr "Error al cargar los movimientos."
+
+msgid "Out of stock"
+msgstr "Sin stock"
+
+msgid "Add Product"
+msgstr "Agregar producto"
+
+msgid "Edit Product"
+msgstr "Editar producto"
+
+msgid "Add a new product to inventory"
+msgstr "Agregue un nuevo producto al inventario"
+
+msgid "Back to Inventory"
+msgstr "Volver al inventario"
+
+msgid "Product Identity"
+msgstr "Identidad del producto"
+
+msgid "e.g. SKU-0001"
+msgstr "ej. SKU-0001"
+
+msgid "Product name"
+msgstr "Nombre del producto"
+
+msgid "+ New"
+msgstr "+ Nueva"
+
+msgid "— Select category —"
+msgstr "— Seleccione una categoría —"
+
+msgid "Name is required."
+msgstr "El nombre es obligatorio."
+
+msgid "Saving…"
+msgstr "Guardando…"
+
+msgid "Error creating category."
+msgstr "Error al crear la categoría."
+
+msgid "Network error. Please try again."
+msgstr "Error de red. Inténtelo de nuevo."
+
+msgid "Create"
+msgstr "Crear"
+
+msgid "Optional…"
+msgstr "Opcional…"
+
+msgid "— None (top-level) —"
+msgstr "— Ninguna (nivel superior) —"
+
+msgid "Unit of Measure"
+msgstr "Unidad de medida"
+
+msgid "Optional product description…"
+msgstr "Descripción opcional del producto…"
+
+msgid "Product Image"
+msgstr "Imagen del producto"
+
+msgid "No image"
+msgstr "Sin imagen"
+
+msgid "Upload Image"
+msgstr "Subir imagen"
+
+msgid "JPEG, PNG, or WebP. Maximum size: 5 MB."
+msgstr "JPEG, PNG o WebP. Tamaño máximo: 5 MB."
+
+msgid "External Image URL"
+msgstr "URL de imagen externa"
+
+msgid "Remove uploaded image"
+msgstr "Eliminar imagen subida"
+
+msgid "Active products require either an uploaded image or an external image URL."
+msgstr "Los productos activos requieren una imagen subida o una URL de imagen externa."
+
+msgid "Pricing & Stock"
+msgstr "Precio y stock"
+
+msgid "Unit Price ($)"
+msgstr "Precio unitario ($)"
+
+msgid "Low Stock Threshold"
+msgstr "Umbral de stock bajo"
+
+msgid "Alert shown when stock falls at or below this number."
+msgstr "Se muestra una alerta cuando el stock cae a este número o por debajo."
+
+msgid "Product is active (visible and orderable)"
+msgstr "Producto activo (visible y disponible para pedidos)"
+
+msgid "Orders This Month"
+msgstr "Pedidos este mes"
+
+msgid "Sales orders created"
+msgstr "Pedidos de venta creados"
+
+msgid "Revenue This Month"
+msgstr "Ingresos este mes"
+
+msgid "From paid orders"
+msgstr "De pedidos pagados"
+
+msgid "Pending Payments"
+msgstr "Pagos pendientes"
+
+msgid "Orders awaiting payment"
+msgstr "Pedidos en espera de pago"
+
+msgid "Low Stock Items"
+msgstr "Artículos con stock bajo"
+
+msgid "Below threshold"
+msgstr "Bajo el umbral"
+
+msgid "Recent Orders"
+msgstr "Pedidos recientes"
+
+msgid "Inventory Alerts"
+msgstr "Alertas de inventario"
+
+msgid "View all →"
+msgstr "Ver todo →"
+
+msgid "✓ All stock levels are healthy"
+msgstr "✓ Todos los niveles de stock están saludables"
+
+msgid "Quick Actions"
+msgstr "Acciones rápidas"
+
+msgid "View Payments"
+msgstr "Ver pagos"
+
+msgid "Manage your personal preferences and regional settings"
+msgstr "Gestione sus preferencias personales y la configuración regional"
+
+msgid "Regional Preferences"
+msgstr "Preferencias regionales"
+
+msgid "Time Zone"
+msgstr "Zona horaria"
+
+msgid "All dates and times will display in this timezone."
+msgstr "Todas las fechas y horas se mostrarán en esta zona horaria."
+
+msgid "Currency Settings"
+msgstr "Configuración de moneda"
+
+msgid "System-wide — applies to all users"
+msgstr "A nivel de sistema — aplica a todos los usuarios"
+
+msgid "Currency Code"
+msgstr "Código de moneda"
+
+msgid "(ISO 4217)"
+msgstr "(ISO 4217)"
+
+msgid "Symbol"
+msgstr "Símbolo"
+
+msgid "Decimal Places"
+msgstr "Decimales"
+
+msgid "Preview: amounts will display as"
+msgstr "Vista previa: los montos se mostrarán como"
+
+msgid "e.g."
+msgstr "ej."
+
+msgid "Show a secondary currency alongside the primary"
+msgstr "Mostrar una moneda secundaria junto a la principal"
+
+msgid "When enabled, every monetary amount gets an approximate conversion displayed in smaller muted text."
+msgstr "Si se activa, cada monto recibe una conversión aproximada mostrada en texto pequeño y atenuado."
+
+msgid "Secondary Code"
+msgstr "Código secundario"
+
+msgid "Secondary Symbol"
+msgstr "Símbolo secundario"
+
+msgid "Secondary Decimals"
+msgstr "Decimales secundarios"
+
+msgid "Exchange Rate"
+msgstr "Tasa de cambio"
+
+msgid "Units of secondary per 1 primary."
+msgstr "Unidades de moneda secundaria por 1 principal."
+
+msgid "Preview:"
+msgstr "Vista previa:"
+
+msgid "Automatically update the exchange rate from an external source"
+msgstr "Actualizar automáticamente la tasa de cambio desde una fuente externa"
+
+msgid "Rate Source URL"
+msgstr "URL de la fuente de la tasa"
+
+msgid "Rate JSON Field"
+msgstr "Campo JSON de la tasa"
+
+msgid "Update now"
+msgstr "Actualizar ahora"
+
+msgid "Receipt OCR Settings"
+msgstr "Configuración de OCR de comprobantes"
+
+msgid "VEPay verification for kiosk receipts"
+msgstr "Verificación VEPay para comprobantes del kiosco"
+
+msgid "Enable receipt OCR verification"
+msgstr "Habilitar verificación OCR de comprobantes"
+
+msgid "When enabled, mobile payment and bank transfer receipts can be verified through the server-side VEPay proxy."
+msgstr "Si se activa, los comprobantes de pago móvil y transferencia se pueden verificar mediante el proxy VEPay del servidor."
+
+msgid "Provider"
+msgstr "Proveedor"
+
+msgid "VEPay Base URL"
+msgstr "URL base de VEPay"
+
+msgid "API Key"
+msgstr "Clave API"
+
+msgid "No key configured"
+msgstr "Sin clave configurada"
+
+msgid "Replace key"
+msgstr "Reemplazar clave"
+
+msgid "Paste new VEPay API key"
+msgstr "Pegue la nueva clave API de VEPay"
+
+msgid "Leave blank after choosing replace to clear the stored key."
+msgstr "Deje en blanco tras elegir reemplazar para borrar la clave guardada."
+
+msgid "Timeout Seconds"
+msgstr "Segundos de espera"
+
+msgid "Max File Size MB"
+msgstr "Tamaño máx. de archivo (MB)"
+
+msgid "Receipt Image Retention Days"
+msgstr "Días de retención de imágenes"
+
+msgid "Payment Methods"
+msgstr "Métodos de pago"
+
+msgid "Mobile Payment"
+msgstr "Pago móvil"
+
+msgid "Bank Transfer"
+msgstr "Transferencia bancaria"
+
+msgid "Require amount to match outstanding balance"
+msgstr "Exigir que el monto coincida con el saldo pendiente"
+
+msgid "Require VEPay complete validation"
+msgstr "Exigir validación completa de VEPay"
+
+msgid "Require receipt image for kiosk mobile payment and bank transfer"
+msgstr "Exigir imagen de comprobante para pago móvil y transferencia en el kiosco"
+
+msgid "When enabled, kiosk customers must upload a receipt image before these payments can be submitted."
+msgstr "Si se activa, los clientes del kiosco deben subir una imagen del comprobante antes de enviar estos pagos."
+
+msgid "Test connection"
+msgstr "Probar conexión"
+
+msgid "Not tested"
+msgstr "Sin probar"
+
+msgid "Checking..."
+msgstr "Comprobando..."
+
+msgid "Connected"
+msgstr "Conectado"
+
+msgid "Connection failed"
+msgstr "Conexión fallida"
+
+msgid "Save Settings"
+msgstr "Guardar configuración"
+
+msgid "Please select a valid timezone."
+msgstr "Seleccione una zona horaria válida."
+
+msgid "Please select a valid language."
+msgstr "Seleccione un idioma válido."
+
+msgid "Settings saved."
+msgstr "Configuración guardada."
+
+msgid "Filtered by \"%(query)s\""
+msgstr "Filtrado por \"%(query)s\""
+
+msgid "No results for \"%(query)s\"."
+msgstr "No hay resultados para \"%(query)s\"."
+
+msgid "Showing %(start)s–%(end)s of %(total)s"
+msgstr "Mostrando %(start)s–%(end)s de %(total)s"
+
+msgid "Edit %(name)s"
+msgstr "Editar %(name)s"
+
+msgid "Update details for %(name)s"
+msgstr "Actualizar datos de %(name)s"
+
+msgid "Customer since %(since)s"
+msgstr "Cliente desde %(since)s"
+
+msgid "Welcome back, %(name)s. Here's what's happening today."
+msgstr "Bienvenido de nuevo, %(name)s. Esto es lo que ocurre hoy."
+
+msgid "Delete %(name)s? This cannot be undone."
+msgstr "¿Eliminar a %(name)s? Esto no se puede deshacer."
+
+msgid "Deactivate %(name)s?"
+msgstr "¿Desactivar a %(name)s?"
+
+msgid "Delete order %(number)s?"
+msgstr "¿Eliminar el pedido %(number)s?"
+
+msgid "Cancel order %(number)s?"
+msgstr "¿Cancelar el pedido %(number)s?"
+
+msgid "Issue refund for %(number)s?"
+msgstr "¿Emitir reembolso para %(number)s?"
+
+msgid "Created by %(by)s · %(date)s"
+msgstr "Creado por %(by)s · %(date)s"
+
+msgid "Confirmed by %(by)s %(date)s"
+msgstr "Confirmado por %(by)s %(date)s"
+
+msgid "Recorded on %(date)s by %(by)s"
+msgstr "Registrado el %(date)s por %(by)s"
+
+msgid "Ref: %(ref)s"
+msgstr "Ref: %(ref)s"
+
+msgid "Outstanding balance: %(balance)s"
+msgstr "Saldo pendiente: %(balance)s"
+
+msgid "(min: %(threshold)s)"
+msgstr "(mín: %(threshold)s)"
+
+msgid "Last updated: %(updated)s"
+msgstr "Última actualización: %(updated)s"
+
+msgid "Rate update failed: %(error)s"
+msgstr "Error al actualizar la tasa: %(error)s"
+
+msgid "Secondary exchange rate updated to %(rate)s."
+msgstr "Tasa de cambio secundaria actualizada a %(rate)s."
+
+msgid "%(counter)s category registered"
+msgid_plural "%(counter)s categories registered"
+msgstr[0] "%(counter)s categoría registrada"
+msgstr[1] "%(counter)s categorías registradas"
+
+msgid "%(counter)s customer registered"
+msgid_plural "%(counter)s customers registered"
+msgstr[0] "%(counter)s cliente registrado"
+msgstr[1] "%(counter)s clientes registrados"
+
+msgid "%(counter)s left"
+msgid_plural "%(counter)s left"
+msgstr[0] "quedan %(counter)s"
+msgstr[1] "quedan %(counter)s"
+
+msgid "<strong>%(counter)s product</strong> is below the low-stock threshold — restock soon."
+msgid_plural "<strong>%(counter)s products</strong> are below the low-stock threshold — restock soon."
+msgstr[0] "<strong>%(counter)s producto</strong> está por debajo del umbral de stock bajo — reponga pronto."
+msgstr[1] "<strong>%(counter)s productos</strong> están por debajo del umbral de stock bajo — reponga pronto."

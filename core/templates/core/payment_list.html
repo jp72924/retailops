@@ -1,13 +1,13 @@
 {% extends "core/base.html" %}
-{% load regional %}
-{% block title %}Payments | RetailOps{% endblock %}
+{% load regional i18n %}
+{% block title %}{% trans "Payments" %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">Payments</div>
-      <div class="page-subtitle">All recorded payments</div>
+      <div class="page-title">{% trans "Payments" %}</div>
+      <div class="page-subtitle">{% trans "All recorded payments" %}</div>
     </div>
   </div>
 
@@ -15,25 +15,25 @@
   <form method="get" action="{% url 'payment-list' %}">
     <div class="filter-bar">
       <input type="text" name="q" class="form-control"
-        placeholder="&#128269; Search payment # or order #…" value="{{ query|default:'' }}">
+        placeholder="{% trans '🔍 Search payment # or order #…' %}" value="{{ query|default:'' }}">
       <select name="method" class="form-control">
-        <option value="">All Methods</option>
+        <option value="">{% trans "All Methods" %}</option>
         {% for value, label in method_choices %}
         <option value="{{ value }}" {% if method_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
       <select name="status" class="form-control">
-        <option value="">All Statuses</option>
+        <option value="">{% trans "All Statuses" %}</option>
         {% for value, label in status_choices %}
         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="From date">
-      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="To date">
-      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="{% trans 'From date' %}">
+      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="{% trans 'To date' %}">
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Filter" %}</button>
       {% if query or method_filter or status_filter or date_from or date_to %}
-        <a href="{% url 'payment-list' %}" class="btn btn-secondary btn-sm">Clear</a>
-        <span class="filter-active">Filters active</span>
+        <a href="{% url 'payment-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <span class="filter-active">{% trans "Filters active" %}</span>
       {% endif %}
     </div>
   </form>
@@ -43,17 +43,17 @@
     <table>
       <thead>
         <tr>
-          <th>Payment #</th>
-          <th>Order #</th>
-          <th>Customer</th>
-          <th>Amount</th>
-          <th>Method</th>
-          <th>Status</th>
-          <th>Reference</th>
-          <th>Receipt</th>
-          <th>Recorded By</th>
-          <th>Date</th>
-          <th>Actions</th>
+          <th>{% trans "Payment #" %}</th>
+          <th>{% trans "Order #" %}</th>
+          <th>{% trans "Customer" %}</th>
+          <th>{% trans "Amount" %}</th>
+          <th>{% trans "Method" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Reference" %}</th>
+          <th>{% trans "Receipt" %}</th>
+          <th>{% trans "Recorded By" %}</th>
+          <th>{% trans "Date" %}</th>
+          <th>{% trans "Actions" %}</th>
         </tr>
       </thead>
       <tbody>
@@ -76,7 +76,7 @@
           <td style="color:var(--muted);">{{ payment.reference_number|default:"—" }}</td>
           <td>
             {% if payment.receipt_image %}
-            <a href="{{ payment.receipt_image.url }}" class="btn btn-ghost btn-sm">Receipt</a>
+            <a href="{{ payment.receipt_image.url }}" class="btn btn-ghost btn-sm">{% trans "Receipt" %}</a>
             {% else %}
             <span style="color:var(--muted);">-</span>
             {% endif %}
@@ -84,7 +84,7 @@
           <td>{{ payment.recorded_by.get_full_name }}</td>
           <td>{{ payment.created_at|date:"M j, Y" }}</td>
           <td>
-            <a href="{% url 'payment-detail' payment.pk %}" class="btn btn-ghost btn-sm">View</a>
+            <a href="{% url 'payment-detail' payment.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
           </td>
         </tr>
         {% endfor %}
@@ -95,7 +95,7 @@
   {% if page_obj.has_other_pages %}
   <div class="pagination">
     <span class="pg-info">
-      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+      {% blocktrans with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktrans %}
     </span>
     {% if page_obj.has_previous %}
       <a href="?page={{ page_obj.previous_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">‹</a>
@@ -121,11 +121,11 @@
   <div class="table-wrap">
     <div class="empty-state">
       <div class="empty-icon">💳</div>
-      <div class="empty-title">No payments found</div>
+      <div class="empty-title">{% trans "No payments found" %}</div>
       {% if query or method_filter or status_filter %}
-        <div>No results match your filters. <a href="{% url 'payment-list' %}">Clear filters</a></div>
+        <div>{% trans "No results match your filters." %} <a href="{% url 'payment-list' %}">{% trans "Clear filters" %}</a></div>
       {% else %}
-        <div>Payments are recorded from the <a href="{% url 'order-list' %}">order detail</a> view.</div>
+        <div>{% url 'order-list' as order_list_url %}{% blocktrans %}Payments are recorded from the <a href="{{ order_list_url }}">order detail</a> view.{% endblocktrans %}</div>
       {% endif %}
     </div>
   </div>
