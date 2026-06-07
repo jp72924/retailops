@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.models import Payment, SystemSettings
+from core.services.bcv import BCVRateError, update_secondary_exchange_rate
 from api.kiosk.authentication import KioskTokenAuthentication
 from api.permissions import IsManagerOrAdmin
 
@@ -23,12 +24,15 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             'secondary_currency_enabled', 'secondary_currency_code',
             'secondary_currency_symbol', 'secondary_decimal_places',
             'secondary_exchange_rate',
+            'secondary_rate_auto_update_enabled', 'secondary_rate_source_url',
+            'secondary_rate_source_field', 'secondary_rate_updated_at',
             'ocr_enabled', 'ocr_provider', 'ocr_base_url', 'ocr_api_key',
             'ocr_timeout_seconds', 'ocr_max_file_mb',
             'ocr_strict_amount', 'ocr_require_complete',
             'ocr_enabled_methods', 'receipt_image_required_for_receipt_methods',
             'delete_receipt_image_after_days',
         ]
+        read_only_fields = ['secondary_rate_updated_at']
 
     def validate_secondary_exchange_rate(self, value):
         if value is not None and value <= 0:
@@ -80,6 +84,28 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({
                 'ocr_base_url': 'Required when OCR is enabled.'
             })
+
+        auto_update = attrs.get(
+            'secondary_rate_auto_update_enabled',
+            self.instance.secondary_rate_auto_update_enabled if self.instance else False,
+        )
+        source_url = attrs.get(
+            'secondary_rate_source_url',
+            self.instance.secondary_rate_source_url if self.instance else '',
+        )
+        source_field = attrs.get(
+            'secondary_rate_source_field',
+            self.instance.secondary_rate_source_field if self.instance else '',
+        )
+        if auto_update:
+            if not (source_url or '').strip():
+                raise serializers.ValidationError({
+                    'secondary_rate_source_url': 'Required when automatic rate update is enabled.'
+                })
+            if not (source_field or '').strip():
+                raise serializers.ValidationError({
+                    'secondary_rate_source_field': 'Required when automatic rate update is enabled.'
+                })
         return attrs
 
     def to_representation(self, instance):
@@ -118,3 +144,30 @@ class SystemSettingsView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
+
+class SecondaryRateRefreshView(APIView):
+    """
+    POST /api/v1/settings/secondary-rate/refresh/
+
+    Fetch the secondary-currency exchange rate (e.g. BCV via DolarApi) from the
+    configured source and persist it. Manager or Admin only. Lets external
+    schedulers trigger an on-demand update without editing settings.
+    """
+
+    authentication_classes = [TokenAuthentication, SessionAuthentication]
+    permission_classes = [IsManagerOrAdmin]
+
+    def post(self, request):
+        instance = SystemSettings.get()
+        try:
+            rate = update_secondary_exchange_rate(instance)
+        except BCVRateError as exc:
+            return Response(
+                {'errors': [exc.message], 'code': exc.code},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
+        return Response({
+            'secondary_exchange_rate': str(rate),
+            'secondary_rate_updated_at': instance.secondary_rate_updated_at,
+        })

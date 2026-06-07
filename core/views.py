@@ -1653,6 +1653,14 @@ def user_settings(request):
             except (InvalidOperation, TypeError):
                 pass
 
+            sys_settings.secondary_rate_auto_update_enabled = (
+                request.POST.get('secondary_rate_auto_update_enabled') == 'on'
+            )
+            sys_settings.secondary_rate_source_url = request.POST.get(
+                'secondary_rate_source_url', '').strip()
+            sys_settings.secondary_rate_source_field = request.POST.get(
+                'secondary_rate_source_field', '').strip()
+
             sys_settings.ocr_enabled = request.POST.get('ocr_enabled') == 'on'
 
             ocr_provider = request.POST.get('ocr_provider', 'vepay').strip()
@@ -1735,3 +1743,19 @@ def user_settings(request):
         'sys_settings': sys_settings,
         'errors': {},
     })
+
+
+@require_POST
+@role_required('Admin')
+def secondary_rate_refresh(request):
+    """POST: fetch the secondary-currency rate from the configured source and
+    save it. Admin only. Redirects back to the settings page with a flash."""
+    from .services.bcv import BCVRateError, update_secondary_exchange_rate
+
+    try:
+        rate = update_secondary_exchange_rate()
+    except BCVRateError as exc:
+        messages.error(request, f'Rate update failed: {exc.message}')
+    else:
+        messages.success(request, f'Secondary exchange rate updated to {rate}.')
+    return redirect('settings')

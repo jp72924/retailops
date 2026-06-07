@@ -1010,6 +1010,7 @@ System-wide currency display settings. A singleton row — there is always exact
 |--------|----------|------------|-------------|
 | `GET` | `/api/v1/settings/` | Any authenticated | Retrieve the current settings |
 | `PATCH` | `/api/v1/settings/` | Manager+ | Partial update of one or more fields |
+| `POST` | `/api/v1/settings/secondary-rate/refresh/` | Manager+ | Fetch the secondary-currency rate from the configured source and save it |
 
 ---
 
@@ -1026,7 +1027,11 @@ System-wide currency display settings. A singleton row — there is always exact
   "secondary_currency_code": "",
   "secondary_currency_symbol": "",
   "secondary_decimal_places": 2,
-  "secondary_exchange_rate": "1.00000000"
+  "secondary_exchange_rate": "1.00000000",
+  "secondary_rate_auto_update_enabled": false,
+  "secondary_rate_source_url": "https://ve.dolarapi.com/v1/dolares/oficial",
+  "secondary_rate_source_field": "promedio",
+  "secondary_rate_updated_at": null
 }
 ```
 
@@ -1040,6 +1045,37 @@ System-wide currency display settings. A singleton row — there is always exact
 | `secondary_currency_symbol` | string | Display symbol for secondary amounts (e.g. `Bs.`). Max 4 characters. Empty when unused. |
 | `secondary_decimal_places` | integer | Decimal places for secondary amounts (0–4 typical). |
 | `secondary_exchange_rate` | string (decimal) | Units of secondary currency per 1 unit of primary (e.g. `"36.50000000"`). Must be > 0 when secondary is enabled. Returned with 8 decimal places. |
+| `secondary_rate_auto_update_enabled` | boolean | When `true`, the rate can be refreshed from `secondary_rate_source_url`. Requires both source fields to be set. |
+| `secondary_rate_source_url` | string (URL) | JSON endpoint to fetch the rate from. Default: DolarApi BCV official rate. |
+| `secondary_rate_source_field` | string | Dotted path to the numeric rate in the source JSON (e.g. `promedio`, `data.rate`). |
+| `secondary_rate_updated_at` | string (datetime) or null | Read-only. Timestamp of the last successful automatic update. |
+
+---
+
+#### `POST /api/v1/settings/secondary-rate/refresh/`
+
+Fetch the secondary-currency exchange rate from `secondary_rate_source_url`
+(reading `secondary_rate_source_field`) and persist it to
+`secondary_exchange_rate`. Manager or Admin only.
+
+**Response `200 OK`:**
+
+```json
+{
+  "secondary_exchange_rate": "36.42",
+  "secondary_rate_updated_at": "2026-06-07T13:20:00Z"
+}
+```
+
+**Response `502 Bad Gateway`** — the rate source was unreachable, returned an
+error, or the configured field was missing/non-numeric:
+
+```json
+{
+  "errors": ["Could not reach the rate source."],
+  "code": "network_error"
+}
+```
 
 ---
 
@@ -1281,11 +1317,15 @@ The JSON response shape:
   "secondary_currency_code": "",
   "secondary_currency_symbol": "",
   "secondary_decimal_places": 2,
-  "secondary_exchange_rate": "1.00000000"
+  "secondary_exchange_rate": "1.00000000",
+  "secondary_rate_auto_update_enabled": false,
+  "secondary_rate_source_url": "https://ve.dolarapi.com/v1/dolares/oficial",
+  "secondary_rate_source_field": "promedio",
+  "secondary_rate_updated_at": null
 }
 ```
 
-Singleton — there is always exactly one row. Returned by `GET /api/v1/settings/` and accepted by `PATCH /api/v1/settings/`. The five `secondary_*` fields are always present in responses; when `secondary_currency_enabled` is `false` their values are stored but ignored by all display logic.
+Singleton — there is always exactly one row. Returned by `GET /api/v1/settings/` and accepted by `PATCH /api/v1/settings/`. The `secondary_*` fields are always present in responses; when `secondary_currency_enabled` is `false` their display values are stored but ignored by all display logic. `secondary_rate_updated_at` is read-only and set by the rate-refresh endpoint or the `update_bcv_rate` command.
 
 ---
 

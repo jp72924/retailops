@@ -141,6 +141,57 @@
           Preview: {{ sys_settings.currency_symbol }}1.00 ≈ {{ sys_settings.secondary_currency_symbol }}{{ sys_settings.secondary_exchange_rate }}
         </div>
         {% endif %}
+
+        <hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">
+
+        <div class="form-group" style="margin-bottom:16px;">
+          <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
+            <input type="checkbox" name="secondary_rate_auto_update_enabled" value="on"
+              {% if sys_settings.secondary_rate_auto_update_enabled %}checked{% endif %}>
+            Automatically update the exchange rate from an external source
+          </label>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+            Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with
+            <code>python manage.py update_bcv_rate</code> or click “Update now”.
+          </div>
+        </div>
+
+        <div class="form-grid form-grid-2" style="gap:20px;">
+          <div class="form-group">
+            <label class="form-label" for="id_secondary_rate_source_url">Rate Source URL</label>
+            <input type="url" id="id_secondary_rate_source_url" name="secondary_rate_source_url"
+              class="form-control {% if errors.secondary_rate_source_url %}is-invalid{% endif %}"
+              value="{{ sys_settings.secondary_rate_source_url }}"
+              placeholder="https://ve.dolarapi.com/v1/dolares/oficial">
+            {% if errors.secondary_rate_source_url %}
+            <div class="invalid-feedback">{{ errors.secondary_rate_source_url }}</div>
+            {% endif %}
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="id_secondary_rate_source_field">Rate JSON Field</label>
+            <input type="text" id="id_secondary_rate_source_field" name="secondary_rate_source_field"
+              class="form-control {% if errors.secondary_rate_source_field %}is-invalid{% endif %}"
+              value="{{ sys_settings.secondary_rate_source_field }}" placeholder="promedio">
+            {% if errors.secondary_rate_source_field %}
+            <div class="invalid-feedback">{{ errors.secondary_rate_source_field }}</div>
+            {% endif %}
+            <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
+              Dotted path to the numeric rate, e.g. <code>promedio</code> or <code>data.rate</code>.
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
+          <button type="submit" class="btn btn-secondary btn-sm"
+            formaction="{% url 'secondary-rate-refresh' %}" formmethod="post" formnovalidate>
+            Update now
+          </button>
+          {% if sys_settings.secondary_rate_updated_at %}
+          <span style="font-size:0.72rem;color:var(--muted);">
+            Last updated: {{ sys_settings.secondary_rate_updated_at }}
+          </span>
+          {% endif %}
+        </div>
       </div>
     </div>
 

@@ -162,4 +162,7 @@ urlpatterns = [
     # GET  /settings/  — personal timezone/language + system currency (Admin)
     # POST /settings/  — save preferences
     path('settings/', views.user_settings, name='settings'),
+
+    # POST /settings/secondary-rate/refresh/  — fetch BCV/secondary rate now (Admin)
+    path('settings/secondary-rate/refresh/', views.secondary_rate_refresh, name='secondary-rate-refresh'),
 ]

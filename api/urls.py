@@ -20,7 +20,7 @@ from .views.payment import PaymentViewSet
 from .views.product import ProductViewSet
 from .views.role import RoleViewSet
 from .views.mcp_skill import MCPSkillView
-from .views.settings import SystemSettingsView
+from .views.settings import SecondaryRateRefreshView, SystemSettingsView
 from .views.user import UserViewSet
 
 router = DefaultRouter()
@@ -52,6 +52,7 @@ urlpatterns = router.urls + [
 
     # System settings (currency, etc.)
     path('settings/', SystemSettingsView.as_view(), name='api-settings'),
+    path('settings/secondary-rate/refresh/', SecondaryRateRefreshView.as_view(), name='api-secondary-rate-refresh'),
 
     # MCP skill card — public capability descriptor for AI agents
     path('mcp-skill/', MCPSkillView.as_view(), name='api-mcp-skill'),
