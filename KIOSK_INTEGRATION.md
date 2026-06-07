@@ -68,6 +68,32 @@ API_PATH=/api/v1
 KIOSK_API_KEY=<production station key>
 ```
 
+## Receipt OCR (VEPay)
+
+Receipt OCR is **disabled by default and points at no service**. RetailOps does
+not ship a hosted VEPay endpoint. To verify mobile-payment and bank-transfer
+receipts, run your own VEPay instance and connect it.
+
+VEPay is a separate open-source project:
+https://github.com/jp72924/vepay-api
+
+1. Deploy a VEPay instance you control (locally, on a VM, or on a container
+   platform). Follow that project's README for build and run instructions. A
+   local run typically exposes it on something like `http://127.0.0.1:8080`.
+2. In RetailOps, open **System Settings → Receipt OCR** and set:
+   - **Enable OCR**: on
+   - **Provider**: VEPay
+   - **VEPay Base URL**: the URL of your instance, e.g.
+     `https://vepay.your-domain.example.com` (no trailing `/v1`; RetailOps
+     appends the API paths).
+   - **API Key**: the key your VEPay instance expects (sent as the `X-API-Key`
+     header). Leave blank if your instance needs no key.
+3. Save. RetailOps calls `<base_url>/v1/receipts/parse` for parsing and
+   `<base_url>/health` (or `/healthz`) for health checks.
+
+Until a Base URL is configured, saving with OCR enabled is rejected — the field
+is required when OCR is on.
+
 ## Important Boundaries
 
 - The Kiosk never connects directly to PostgreSQL, SQLite, GCS, S3, or local
