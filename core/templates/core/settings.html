@@ -1,12 +1,13 @@
 {% extends "core/base.html" %}
-{% block title %}Settings | RetailOps{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Settings" %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page" style="max-width:720px;">
   <div class="page-header">
     <div>
-      <div class="page-title">Settings</div>
-      <div class="page-subtitle">Manage your personal preferences and regional settings</div>
+      <div class="page-title">{% trans "Settings" %}</div>
+      <div class="page-subtitle">{% trans "Manage your personal preferences and regional settings" %}</div>
     </div>
   </div>
 
@@ -15,12 +16,12 @@
 
     <!-- Personal / Regional Preferences -->
     <div class="card" style="margin-bottom:24px;">
-      <div class="card-header"><div class="card-title">Regional Preferences</div></div>
+      <div class="card-header"><div class="card-title">{% trans "Regional Preferences" %}</div></div>
       <div class="card-body">
         <div class="form-grid form-grid-2" style="gap:20px;">
 
           <div class="form-group">
-            <label class="form-label" for="id_timezone">Time Zone</label>
+            <label class="form-label" for="id_timezone">{% trans "Time Zone" %}</label>
             <select id="id_timezone" name="timezone" class="form-control {% if errors.timezone %}is-invalid{% endif %}">
               {% for tz in timezones %}
               <option value="{{ tz }}" {% if tz == request.user.timezone %}selected{% endif %}>{{ tz }}</option>
@@ -30,12 +31,12 @@
             <div class="invalid-feedback">{{ errors.timezone }}</div>
             {% endif %}
             <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-              All dates and times will display in this timezone.
+              {% trans "All dates and times will display in this timezone." %}
             </div>
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="id_language">Language</label>
+            <label class="form-label" for="id_language">{% trans "Language" %}</label>
             <select id="id_language" name="language" class="form-control {% if errors.language %}is-invalid{% endif %}">
               {% for code, label in languages %}
               <option value="{{ code }}" {% if code == request.user.language %}selected{% endif %}>{{ label }}</option>
@@ -54,26 +55,26 @@
     {% if user.role.name == 'Admin' %}
     <div class="card" style="margin-bottom:24px;">
       <div class="card-header">
-        <div class="card-title">Currency Settings</div>
-        <span style="font-size:0.78rem;color:var(--muted);">System-wide — applies to all users</span>
+        <div class="card-title">{% trans "Currency Settings" %}</div>
+        <span style="font-size:0.78rem;color:var(--muted);">{% trans "System-wide — applies to all users" %}</span>
       </div>
       <div class="card-body">
         <div class="form-grid form-grid-3" style="gap:20px;">
 
           <div class="form-group">
-            <label class="form-label" for="id_currency_code">Currency Code <span style="color:var(--muted);font-weight:400;">(ISO 4217)</span></label>
+            <label class="form-label" for="id_currency_code">{% trans "Currency Code" %} <span style="color:var(--muted);font-weight:400;">{% trans "(ISO 4217)" %}</span></label>
             <input type="text" id="id_currency_code" name="currency_code" class="form-control"
               value="{{ sys_settings.currency_code }}" maxlength="3" placeholder="USD">
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="id_currency_symbol">Symbol</label>
+            <label class="form-label" for="id_currency_symbol">{% trans "Symbol" %}</label>
             <input type="text" id="id_currency_symbol" name="currency_symbol" class="form-control"
               value="{{ sys_settings.currency_symbol }}" maxlength="4" placeholder="$">
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="id_decimal_places">Decimal Places</label>
+            <label class="form-label" for="id_decimal_places">{% trans "Decimal Places" %}</label>
             <select id="id_decimal_places" name="decimal_places" class="form-control">
               {% for n in "0123" %}
               <option value="{{ n }}" {% if n == sys_settings.decimal_places|stringformat:"s" %}selected{% endif %}>{{ n }}</option>
@@ -83,9 +84,9 @@
 
         </div>
         <div style="font-size:0.78rem;color:var(--muted);margin-top:12px;">
-          Preview: amounts will display as
+          {% trans "Preview: amounts will display as" %}
           <strong>{{ sys_settings.currency_symbol }}1{{ sys_settings.decimal_places|pluralize:",." }}00</strong>
-          (e.g. {{ sys_settings.currency_symbol }}1,234.{{ "00"|slice:sys_settings.decimal_places }})
+          ({% trans "e.g." %} {{ sys_settings.currency_symbol }}1,234.{{ "00"|slice:sys_settings.decimal_places }})
         </div>
 
         <hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">
@@ -94,21 +95,21 @@
           <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
             <input type="checkbox" name="secondary_currency_enabled" value="on"
               {% if sys_settings.secondary_currency_enabled %}checked{% endif %}>
-            Show a secondary currency alongside the primary
+            {% trans "Show a secondary currency alongside the primary" %}
           </label>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            When enabled, every monetary amount gets an approximate conversion displayed in smaller muted text.
+            {% trans "When enabled, every monetary amount gets an approximate conversion displayed in smaller muted text." %}
           </div>
         </div>
 
         <div class="form-grid form-grid-4" style="gap:20px;">
           <div class="form-group">
-            <label class="form-label" for="id_secondary_currency_code">Secondary Code</label>
+            <label class="form-label" for="id_secondary_currency_code">{% trans "Secondary Code" %}</label>
             <input type="text" id="id_secondary_currency_code" name="secondary_currency_code" class="form-control {% if errors.secondary_currency_code %}is-invalid{% endif %}"
               value="{{ sys_settings.secondary_currency_code }}" maxlength="3" placeholder="VES">
           </div>
           <div class="form-group">
-            <label class="form-label" for="id_secondary_currency_symbol">Secondary Symbol</label>
+            <label class="form-label" for="id_secondary_currency_symbol">{% trans "Secondary Symbol" %}</label>
             <input type="text" id="id_secondary_currency_symbol" name="secondary_currency_symbol" class="form-control {% if errors.secondary_currency_symbol %}is-invalid{% endif %}"
               value="{{ sys_settings.secondary_currency_symbol }}" maxlength="4" placeholder="Bs.">
             {% if errors.secondary_currency_symbol %}
@@ -116,7 +117,7 @@
             {% endif %}
           </div>
           <div class="form-group">
-            <label class="form-label" for="id_secondary_decimal_places">Secondary Decimals</label>
+            <label class="form-label" for="id_secondary_decimal_places">{% trans "Secondary Decimals" %}</label>
             <select id="id_secondary_decimal_places" name="secondary_decimal_places" class="form-control">
               {% for n in "01234" %}
               <option value="{{ n }}" {% if n == sys_settings.secondary_decimal_places|stringformat:"s" %}selected{% endif %}>{{ n }}</option>
@@ -124,21 +125,21 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label" for="id_secondary_exchange_rate">Exchange Rate</label>
+            <label class="form-label" for="id_secondary_exchange_rate">{% trans "Exchange Rate" %}</label>
             <input type="number" id="id_secondary_exchange_rate" name="secondary_exchange_rate" class="form-control {% if errors.secondary_exchange_rate %}is-invalid{% endif %}"
               value="{{ sys_settings.secondary_exchange_rate }}" step="0.00000001" min="0">
             {% if errors.secondary_exchange_rate %}
             <div class="invalid-feedback">{{ errors.secondary_exchange_rate }}</div>
             {% endif %}
             <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
-              Units of secondary per 1 primary.
+              {% trans "Units of secondary per 1 primary." %}
             </div>
           </div>
         </div>
 
         {% if sys_settings.secondary_currency_enabled %}
         <div style="font-size:0.78rem;color:var(--muted);margin-top:12px;">
-          Preview: {{ sys_settings.currency_symbol }}1.00 ≈ {{ sys_settings.secondary_currency_symbol }}{{ sys_settings.secondary_exchange_rate }}
+          {% trans "Preview:" %} {{ sys_settings.currency_symbol }}1.00 ≈ {{ sys_settings.secondary_currency_symbol }}{{ sys_settings.secondary_exchange_rate }}
         </div>
         {% endif %}
 
@@ -148,17 +149,17 @@
           <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
             <input type="checkbox" name="secondary_rate_auto_update_enabled" value="on"
               {% if sys_settings.secondary_rate_auto_update_enabled %}checked{% endif %}>
-            Automatically update the exchange rate from an external source
+            {% trans "Automatically update the exchange rate from an external source" %}
           </label>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with
-            <code>python manage.py update_bcv_rate</code> or click “Update now”.
+            {% blocktrans %}Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with
+            <code>python manage.py update_bcv_rate</code> or click “Update now”.{% endblocktrans %}
           </div>
         </div>
 
         <div class="form-grid form-grid-2" style="gap:20px;">
           <div class="form-group">
-            <label class="form-label" for="id_secondary_rate_source_url">Rate Source URL</label>
+            <label class="form-label" for="id_secondary_rate_source_url">{% trans "Rate Source URL" %}</label>
             <input type="url" id="id_secondary_rate_source_url" name="secondary_rate_source_url"
               class="form-control {% if errors.secondary_rate_source_url %}is-invalid{% endif %}"
               value="{{ sys_settings.secondary_rate_source_url }}"
@@ -168,7 +169,7 @@
             {% endif %}
           </div>
           <div class="form-group">
-            <label class="form-label" for="id_secondary_rate_source_field">Rate JSON Field</label>
+            <label class="form-label" for="id_secondary_rate_source_field">{% trans "Rate JSON Field" %}</label>
             <input type="text" id="id_secondary_rate_source_field" name="secondary_rate_source_field"
               class="form-control {% if errors.secondary_rate_source_field %}is-invalid{% endif %}"
               value="{{ sys_settings.secondary_rate_source_field }}" placeholder="promedio">
@@ -176,7 +177,7 @@
             <div class="invalid-feedback">{{ errors.secondary_rate_source_field }}</div>
             {% endif %}
             <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
-              Dotted path to the numeric rate, e.g. <code>promedio</code> or <code>data.rate</code>.
+              {% blocktrans %}Dotted path to the numeric rate, e.g. <code>promedio</code> or <code>data.rate</code>.{% endblocktrans %}
             </div>
           </div>
         </div>
@@ -184,11 +185,11 @@
         <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
           <button type="submit" class="btn btn-secondary btn-sm"
             formaction="{% url 'secondary-rate-refresh' %}" formmethod="post" formnovalidate>
-            Update now
+            {% trans "Update now" %}
           </button>
           {% if sys_settings.secondary_rate_updated_at %}
           <span style="font-size:0.72rem;color:var(--muted);">
-            Last updated: {{ sys_settings.secondary_rate_updated_at }}
+            {% blocktrans with updated=sys_settings.secondary_rate_updated_at %}Last updated: {{ updated }}{% endblocktrans %}
           </span>
           {% endif %}
         </div>
@@ -197,24 +198,24 @@
 
     <div class="card" style="margin-bottom:24px;">
       <div class="card-header">
-        <div class="card-title">Receipt OCR Settings</div>
-        <span style="font-size:0.78rem;color:var(--muted);">VEPay verification for kiosk receipts</span>
+        <div class="card-title">{% trans "Receipt OCR Settings" %}</div>
+        <span style="font-size:0.78rem;color:var(--muted);">{% trans "VEPay verification for kiosk receipts" %}</span>
       </div>
       <div class="card-body">
         <div class="form-group" style="margin-bottom:16px;">
           <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
             <input type="checkbox" name="ocr_enabled" value="on"
               {% if sys_settings.ocr_enabled %}checked{% endif %}>
-            Enable receipt OCR verification
+            {% trans "Enable receipt OCR verification" %}
           </label>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            When enabled, mobile payment and bank transfer receipts can be verified through the server-side VEPay proxy.
+            {% trans "When enabled, mobile payment and bank transfer receipts can be verified through the server-side VEPay proxy." %}
           </div>
         </div>
 
         <div class="form-grid form-grid-2" style="gap:20px;margin-bottom:20px;">
           <div class="form-group">
-            <label class="form-label" for="id_ocr_provider">Provider</label>
+            <label class="form-label" for="id_ocr_provider">{% trans "Provider" %}</label>
             <select id="id_ocr_provider" name="ocr_provider" class="form-control {% if errors.ocr_provider %}is-invalid{% endif %}">
               <option value="vepay" {% if sys_settings.ocr_provider == 'vepay' %}selected{% endif %}>VEPay</option>
             </select>
@@ -224,7 +225,7 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="id_ocr_base_url">VEPay Base URL</label>
+            <label class="form-label" for="id_ocr_base_url">{% trans "VEPay Base URL" %}</label>
             <input type="url" id="id_ocr_base_url" name="ocr_base_url" class="form-control {% if errors.ocr_base_url %}is-invalid{% endif %}"
               value="{{ sys_settings.ocr_base_url }}" placeholder="https://your-vepay-instance.example.com">
             {% if errors.ocr_base_url %}
@@ -234,16 +235,16 @@
         </div>
 
         <div class="form-group" style="margin-bottom:20px;">
-          <label class="form-label">API Key</label>
+          <label class="form-label">{% trans "API Key" %}</label>
           <div id="ocr-key-current" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <input type="text" class="form-control" value="{% if sys_settings.ocr_api_key %}***{% else %}No key configured{% endif %}" readonly style="max-width:260px;">
-            <button type="button" class="btn btn-secondary btn-sm" id="ocr-replace-key">Replace key</button>
+            <input type="text" class="form-control" value="{% if sys_settings.ocr_api_key %}***{% else %}{% trans 'No key configured' %}{% endif %}" readonly style="max-width:260px;">
+            <button type="button" class="btn btn-secondary btn-sm" id="ocr-replace-key">{% trans "Replace key" %}</button>
           </div>
           <div id="ocr-key-replace" style="display:none;margin-top:8px;max-width:360px;">
             <input type="password" id="id_ocr_api_key" name="ocr_api_key" class="form-control"
-              autocomplete="new-password" placeholder="Paste new VEPay API key">
+              autocomplete="new-password" placeholder="{% trans 'Paste new VEPay API key' %}">
             <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
-              Leave blank after choosing replace to clear the stored key.
+              {% trans "Leave blank after choosing replace to clear the stored key." %}
             </div>
           </div>
           <input type="hidden" name="ocr_api_key_action" id="ocr_api_key_action" value="__no_change__">
@@ -251,7 +252,7 @@
 
         <div class="form-grid form-grid-2" style="gap:20px;margin-bottom:20px;">
           <div class="form-group">
-            <label class="form-label" for="id_ocr_timeout_seconds">Timeout Seconds</label>
+            <label class="form-label" for="id_ocr_timeout_seconds">{% trans "Timeout Seconds" %}</label>
             <input type="number" id="id_ocr_timeout_seconds" name="ocr_timeout_seconds" class="form-control {% if errors.ocr_timeout_seconds %}is-invalid{% endif %}"
               value="{{ sys_settings.ocr_timeout_seconds }}" min="1" step="1">
             {% if errors.ocr_timeout_seconds %}
@@ -260,7 +261,7 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="id_ocr_max_file_mb">Max File Size MB</label>
+            <label class="form-label" for="id_ocr_max_file_mb">{% trans "Max File Size MB" %}</label>
             <input type="number" id="id_ocr_max_file_mb" name="ocr_max_file_mb" class="form-control {% if errors.ocr_max_file_mb %}is-invalid{% endif %}"
               value="{{ sys_settings.ocr_max_file_mb }}" min="1" step="1">
             {% if errors.ocr_max_file_mb %}
@@ -269,7 +270,7 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label" for="id_delete_receipt_image_after_days">Receipt Image Retention Days</label>
+            <label class="form-label" for="id_delete_receipt_image_after_days">{% trans "Receipt Image Retention Days" %}</label>
             <input type="number" id="id_delete_receipt_image_after_days" name="delete_receipt_image_after_days" class="form-control {% if errors.delete_receipt_image_after_days %}is-invalid{% endif %}"
               value="{{ sys_settings.delete_receipt_image_after_days }}" min="1" step="1">
             {% if errors.delete_receipt_image_after_days %}
@@ -279,17 +280,17 @@
         </div>
 
         <div class="form-group" style="margin-bottom:18px;">
-          <label class="form-label">Payment Methods</label>
+          <label class="form-label">{% trans "Payment Methods" %}</label>
           <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;">
             <label class="form-check">
               <input type="checkbox" name="ocr_enabled_methods" value="mobile_payment"
                 {% if 'mobile_payment' in sys_settings.ocr_enabled_methods %}checked{% endif %}>
-              Mobile Payment
+              {% trans "Mobile Payment" %}
             </label>
             <label class="form-check">
               <input type="checkbox" name="ocr_enabled_methods" value="bank_transfer"
                 {% if 'bank_transfer' in sys_settings.ocr_enabled_methods %}checked{% endif %}>
-              Bank Transfer
+              {% trans "Bank Transfer" %}
             </label>
           </div>
           {% if errors.ocr_enabled_methods %}
@@ -301,12 +302,12 @@
           <label class="form-check">
             <input type="checkbox" name="ocr_strict_amount" value="on"
               {% if sys_settings.ocr_strict_amount %}checked{% endif %}>
-            Require amount to match outstanding balance
+            {% trans "Require amount to match outstanding balance" %}
           </label>
           <label class="form-check">
             <input type="checkbox" name="ocr_require_complete" value="on"
               {% if sys_settings.ocr_require_complete %}checked{% endif %}>
-            Require VEPay complete validation
+            {% trans "Require VEPay complete validation" %}
           </label>
         </div>
 
@@ -314,23 +315,23 @@
           <label class="form-check">
             <input type="checkbox" name="receipt_image_required_for_receipt_methods" value="on"
               {% if sys_settings.receipt_image_required_for_receipt_methods %}checked{% endif %}>
-            Require receipt image for kiosk mobile payment and bank transfer
+            {% trans "Require receipt image for kiosk mobile payment and bank transfer" %}
           </label>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            When enabled, kiosk customers must upload a receipt image before these payments can be submitted.
+            {% trans "When enabled, kiosk customers must upload a receipt image before these payments can be submitted." %}
           </div>
         </div>
 
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
-          <button type="button" class="btn btn-secondary btn-sm" id="ocr-test-connection">Test connection</button>
-          <span id="ocr-health-status" class="badge badge-draft" style="text-transform:none;letter-spacing:0;">Not tested</span>
+          <button type="button" class="btn btn-secondary btn-sm" id="ocr-test-connection">{% trans "Test connection" %}</button>
+          <span id="ocr-health-status" class="badge badge-draft" style="text-transform:none;letter-spacing:0;">{% trans "Not tested" %}</span>
         </div>
       </div>
     </div>
     {% endif %}
 
     <div class="form-actions">
-      <button type="submit" class="btn btn-primary">Save Settings</button>
+      <button type="submit" class="btn btn-primary">{% trans "Save Settings" %}</button>
     </div>
   </form>
 </div>
@@ -363,7 +364,7 @@
 
   testButton?.addEventListener('click', async () => {
     testButton.disabled = true;
-    setHealthStatus('Checking...', 'badge-pending');
+    setHealthStatus('{% trans "Checking..." %}', 'badge-pending');
     try {
       const response = await fetch("{% url 'api:payment-receipt-healthz' %}", {
         method: 'GET',
@@ -377,12 +378,12 @@
         payload = {};
       }
       if (response.ok && payload.ok) {
-        setHealthStatus('Connected', 'badge-paid');
+        setHealthStatus('{% trans "Connected" %}', 'badge-paid');
       } else {
-        setHealthStatus(payload.error || 'Connection failed', 'badge-cancelled');
+        setHealthStatus(payload.error || '{% trans "Connection failed" %}', 'badge-cancelled');
       }
     } catch (err) {
-      setHealthStatus('Connection failed', 'badge-cancelled');
+      setHealthStatus('{% trans "Connection failed" %}', 'badge-cancelled');
     } finally {
       testButton.disabled = false;
     }

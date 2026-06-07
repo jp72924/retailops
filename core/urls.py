@@ -12,6 +12,9 @@ urlpatterns = [
     # POST /logout/  — clear session and redirect to login
     path('logout/', views.logout_view, name='logout'),
 
+    # POST /i18n/setlang/  — switch active UI language (navbar dropdown)
+    path('i18n/setlang/', views.set_language, name='set-language'),
+
     # ── Password Reset (unauthenticated) ──────────────────────────────────────
     # GET/POST /password-reset/         — submit email, trigger reset email
     path('password-reset/', auth_views.PasswordResetView.as_view(

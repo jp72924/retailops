@@ -1,21 +1,22 @@
 {% extends "core/base.html" %}
-{% block title %}Edit {{ edited_user.get_full_name }} | RetailOps{% endblock %}
+{% load i18n %}
+{% block title %}{% blocktrans with name=edited_user.get_full_name %}Edit {{ name }}{% endblocktrans %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">Edit User</div>
-      <div class="page-subtitle">Update account details for {{ edited_user.get_full_name }}</div>
+      <div class="page-title">{% trans "Edit User" %}</div>
+      <div class="page-subtitle">{% blocktrans with name=edited_user.get_full_name %}Update account details for {{ name }}{% endblocktrans %}</div>
     </div>
-    <a href="{% url 'user-list' %}" style="color:var(--muted);font-size:0.875rem;">← Back to Staff</a>
+    <a href="{% url 'user-list' %}" style="color:var(--muted);font-size:0.875rem;">← {% trans "Back to Staff" %}</a>
   </div>
 
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
 
     <!-- Edit Form -->
     <div class="card">
-      <div class="card-header"><div class="card-title">Account Details</div></div>
+      <div class="card-header"><div class="card-title">{% trans "Account Details" %}</div></div>
       <div class="card-body">
         <form method="post" action="{% url 'user-edit' edited_user.pk %}">
           {% csrf_token %}
@@ -23,14 +24,14 @@
 
             <div class="form-grid form-grid-2">
               <div class="form-group">
-                <label class="form-label" for="id_first_name">First Name <span class="req">*</span></label>
+                <label class="form-label" for="id_first_name">{% trans "First Name" %} <span class="req">*</span></label>
                 <input type="text" id="id_first_name" name="first_name"
                   class="form-control{% if errors.first_name %} is-invalid{% endif %}"
                   value="{{ form_data.first_name|default:edited_user.first_name }}" required>
                 {% if errors.first_name %}<div class="invalid-feedback">{{ errors.first_name }}</div>{% endif %}
               </div>
               <div class="form-group">
-                <label class="form-label" for="id_last_name">Last Name <span class="req">*</span></label>
+                <label class="form-label" for="id_last_name">{% trans "Last Name" %} <span class="req">*</span></label>
                 <input type="text" id="id_last_name" name="last_name"
                   class="form-control{% if errors.last_name %} is-invalid{% endif %}"
                   value="{{ form_data.last_name|default:edited_user.last_name }}" required>
@@ -39,7 +40,7 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="id_email">Email Address <span class="req">*</span></label>
+              <label class="form-label" for="id_email">{% trans "Email Address" %} <span class="req">*</span></label>
               <input type="email" id="id_email" name="email"
                 class="form-control{% if errors.email %} is-invalid{% endif %}"
                 value="{{ form_data.email|default:edited_user.email }}" required>
@@ -47,10 +48,10 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="id_role">Role <span class="req">*</span></label>
+              <label class="form-label" for="id_role">{% trans "Role" %} <span class="req">*</span></label>
               <select id="id_role" name="role"
                 class="form-control{% if errors.role %} is-invalid{% endif %}" required>
-                <option value="">— Select role —</option>
+                <option value="">{% trans "— Select role —" %}</option>
                 {% for role in roles %}
                 <option value="{{ role.pk }}"
                   {% if form_data.role == role.pk|stringformat:"s" or edited_user.role_id == role.pk %}selected{% endif %}>
@@ -61,7 +62,7 @@
               {% if errors.role %}<div class="invalid-feedback">{{ errors.role }}</div>{% endif %}
               {% if edited_user.role and edited_user != request.user %}
               <div style="font-size:0.78rem;color:var(--warning);margin-top:4px;">
-                ⚠ Changing a user's role immediately updates their permissions.
+                ⚠ {% trans "Changing a user's role immediately updates their permissions." %}
               </div>
               {% endif %}
             </div>
@@ -71,18 +72,18 @@
                 <input type="checkbox" name="is_active" value="1"
                   {% if edited_user.is_active %}checked{% endif %}
                   {% if edited_user == request.user %}disabled{% endif %}>
-                Account is active
+                {% trans "Account is active" %}
               </label>
               {% if edited_user == request.user %}
-              <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">You cannot deactivate your own account.</div>
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">{% trans "You cannot deactivate your own account." %}</div>
               {% endif %}
             </div>
 
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="btn btn-primary">Save Changes</button>
-            <a href="{% url 'user-list' %}" class="btn btn-secondary">Cancel</a>
+            <button type="submit" class="btn btn-primary">{% trans "Save Changes" %}</button>
+            <a href="{% url 'user-list' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
           </div>
         </form>
       </div>
@@ -90,7 +91,7 @@
 
     <!-- Change Password -->
     <div class="card">
-      <div class="card-header"><div class="card-title">Change Password</div></div>
+      <div class="card-header"><div class="card-title">{% trans "Change Password" %}</div></div>
       <div class="card-body">
         <form method="post" action="{% url 'user-edit' edited_user.pk %}">
           {% csrf_token %}
@@ -98,24 +99,24 @@
           <div class="form-grid" style="gap:16px;">
 
             <div class="form-group">
-              <label class="form-label" for="id_new_password">New Password <span class="req">*</span></label>
+              <label class="form-label" for="id_new_password">{% trans "New Password" %} <span class="req">*</span></label>
               <input type="password" id="id_new_password" name="new_password"
                 class="form-control{% if errors.new_password %} is-invalid{% endif %}"
-                placeholder="Enter new password">
+                placeholder="{% trans 'Enter new password' %}">
               {% if errors.new_password %}<div class="invalid-feedback">{{ errors.new_password }}</div>{% endif %}
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="id_confirm_password">Confirm Password <span class="req">*</span></label>
+              <label class="form-label" for="id_confirm_password">{% trans "Confirm Password" %} <span class="req">*</span></label>
               <input type="password" id="id_confirm_password" name="confirm_password"
                 class="form-control{% if errors.confirm_password %} is-invalid{% endif %}"
-                placeholder="Repeat new password">
+                placeholder="{% trans 'Repeat new password' %}">
               {% if errors.confirm_password %}<div class="invalid-feedback">{{ errors.confirm_password }}</div>{% endif %}
             </div>
 
           </div>
           <div class="form-actions">
-            <button type="submit" class="btn btn-warning">Set Password</button>
+            <button type="submit" class="btn btn-warning">{% trans "Set Password" %}</button>
           </div>
         </form>
       </div>

@@ -11,7 +11,9 @@ from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
+from django.conf import settings as django_settings
+from django.utils import timezone, translation
+from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .decorators import role_required
@@ -69,7 +71,7 @@ def login_view(request):
         if user is not None:
             login(request, user)
             return redirect(request.GET.get('next', 'dashboard'))
-        error = 'Invalid email or password.'
+        error = _('Invalid email or password.')
 
     return render(request, 'core/login.html', {'error': error})
 
@@ -1589,10 +1591,7 @@ def user_settings(request):
     """
     from zoneinfo import available_timezones, ZoneInfoNotFoundError, ZoneInfo
 
-    LANGUAGES = [
-        ('en', 'English'),
-        ('es', 'Spanish (Español)'),
-    ]
+    LANGUAGES = list(django_settings.LANGUAGES)
     timezones = sorted(available_timezones())
 
     sys_settings = SystemSettings.get()
@@ -1605,9 +1604,9 @@ def user_settings(request):
         try:
             ZoneInfo(tz_name)
         except (ZoneInfoNotFoundError, KeyError):
-            errors['timezone'] = 'Please select a valid timezone.'
+            errors['timezone'] = _('Please select a valid timezone.')
         if language not in dict(LANGUAGES):
-            errors['language'] = 'Please select a valid language.'
+            errors['language'] = _('Please select a valid language.')
 
         if errors:
             return render(request, 'core/settings.html', {
@@ -1620,6 +1619,10 @@ def user_settings(request):
         request.user.timezone = tz_name
         request.user.language = language
         request.user.save(update_fields=['timezone', 'language'])
+
+        # Apply the chosen language to this request and persist it in the
+        # language cookie so it survives logout into anonymous pages.
+        translation.activate(language)
 
         if request.user.role and request.user.role.name == 'Admin':
             currency_code   = request.POST.get('currency_code', '').strip().upper()
@@ -1734,8 +1737,14 @@ def user_settings(request):
                     'errors': {k: v[0] for k, v in e.message_dict.items()},
                 })
 
-        messages.success(request, 'Settings saved.')
-        return redirect('settings')
+        messages.success(request, _('Settings saved.'))
+        response = redirect('settings')
+        response.set_cookie(
+            django_settings.LANGUAGE_COOKIE_NAME,
+            request.user.language,
+            max_age=django_settings.LANGUAGE_COOKIE_AGE,
+        )
+        return response
 
     return render(request, 'core/settings.html', {
         'timezones': timezones,
@@ -1755,7 +1764,43 @@ def secondary_rate_refresh(request):
     try:
         rate = update_secondary_exchange_rate()
     except BCVRateError as exc:
-        messages.error(request, f'Rate update failed: {exc.message}')
+        messages.error(request, _('Rate update failed: %(error)s') % {'error': exc.message})
     else:
-        messages.success(request, f'Secondary exchange rate updated to {rate}.')
+        messages.success(request, _('Secondary exchange rate updated to %(rate)s.') % {'rate': rate})
     return redirect('settings')
+
+
+@require_POST
+def set_language(request):
+    """POST: switch the active UI language from the navbar dropdown.
+
+    Persists the choice to the language cookie (so anonymous/login pages honor
+    it) and, for authenticated users, to User.language (which
+    RegionalMiddleware activates on every request). Redirects back to the
+    referring page.
+    """
+    from django.utils.http import url_has_allowed_host_and_scheme
+
+    language = (request.POST.get('language') or '').strip()
+    valid = dict(django_settings.LANGUAGES)
+    next_url = request.POST.get('next') or request.META.get('HTTP_REFERER') or '/'
+    if not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        next_url = '/'
+
+    if language not in valid:
+        return redirect(next_url)
+
+    if request.user.is_authenticated:
+        request.user.language = language
+        request.user.save(update_fields=['language'])
+    translation.activate(language)
+
+    response = redirect(next_url)
+    response.set_cookie(
+        django_settings.LANGUAGE_COOKIE_NAME,
+        language,
+        max_age=django_settings.LANGUAGE_COOKIE_AGE,
+    )
+    return response

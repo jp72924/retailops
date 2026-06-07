@@ -1,16 +1,17 @@
 {% extends "core/base.html" %}
-{% block title %}{% if product %}Edit {{ product.name }}{% else %}Add Product{% endif %} | RetailOps{% endblock %}
+{% load i18n %}
+{% block title %}{% if product %}{% blocktrans with name=product.name %}Edit {{ name }}{% endblocktrans %}{% else %}{% trans "Add Product" %}{% endif %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">{% if product %}Edit Product{% else %}Add Product{% endif %}</div>
+      <div class="page-title">{% if product %}{% trans "Edit Product" %}{% else %}{% trans "Add Product" %}{% endif %}</div>
       <div class="page-subtitle">
-        {% if product %}Update details for {{ product.name }}{% else %}Add a new product to inventory{% endif %}
+        {% if product %}{% blocktrans with name=product.name %}Update details for {{ name }}{% endblocktrans %}{% else %}{% trans "Add a new product to inventory" %}{% endif %}
       </div>
     </div>
-    <a href="{% url 'inventory-list' %}" style="color:var(--muted);font-size:0.875rem;">← Back to Inventory</a>
+    <a href="{% url 'inventory-list' %}" style="color:var(--muted);font-size:0.875rem;">← {% trans "Back to Inventory" %}</a>
   </div>
 
   <div class="card" style="max-width:720px;">
@@ -20,35 +21,35 @@
 
         <!-- Identity -->
         <div class="form-section">
-          <div class="form-section-title">Product Identity</div>
+          <div class="form-section-title">{% trans "Product Identity" %}</div>
           <div class="form-grid form-grid-2">
 
             <div class="form-group">
-              <label class="form-label" for="id_sku">SKU <span class="req">*</span></label>
+              <label class="form-label" for="id_sku">{% trans "SKU" %} <span class="req">*</span></label>
               <input type="text" id="id_sku" name="sku"
                 class="form-control{% if errors.sku %} is-invalid{% endif %}"
                 value="{{ form_data.sku }}"
-                placeholder="e.g. SKU-0001" required>
+                placeholder="{% trans 'e.g. SKU-0001' %}" required>
               {% if errors.sku %}<div class="invalid-feedback">{{ errors.sku }}</div>{% endif %}
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="id_name">Product Name <span class="req">*</span></label>
+              <label class="form-label" for="id_name">{% trans "Product Name" %} <span class="req">*</span></label>
               <input type="text" id="id_name" name="name"
                 class="form-control{% if errors.name %} is-invalid{% endif %}"
                 value="{{ form_data.name }}"
-                placeholder="Product name" required>
+                placeholder="{% trans 'Product name' %}" required>
               {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
             </div>
 
             <div class="form-group">
               <div style="display:flex;justify-content:space-between;align-items:baseline">
-                <label class="form-label" for="id_category">Category <span class="req">*</span></label>
-                <a href="#" id="btn-new-cat" style="font-size:0.8rem">+ New</a>
+                <label class="form-label" for="id_category">{% trans "Category" %} <span class="req">*</span></label>
+                <a href="#" id="btn-new-cat" style="font-size:0.8rem">{% trans "+ New" %}</a>
               </div>
               <select id="id_category" name="category"
                 class="form-control{% if errors.category %} is-invalid{% endif %}" required>
-                <option value="">— Select category —</option>
+                <option value="">{% trans "— Select category —" %}</option>
                 {% for cat in categories %}
                 <option value="{{ cat.pk }}"
                   {% if form_data.category == cat.pk|stringformat:"s" %}selected{% endif %}>
@@ -64,23 +65,23 @@
                  background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
               <div style="background:#fff;border-radius:10px;padding:24px;width:100%;max-width:440px;
                           margin:16px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-                <div style="font-weight:700;font-size:1rem;margin-bottom:16px">New Category</div>
+                <div style="font-weight:700;font-size:1rem;margin-bottom:16px">{% trans "New Category" %}</div>
 
                 <div class="form-group" style="margin-bottom:12px">
-                  <label class="form-label" for="nc-name">Name <span class="req">*</span></label>
-                  <input type="text" id="nc-name" class="form-control" placeholder="e.g. Electronics" maxlength="150">
+                  <label class="form-label" for="nc-name">{% trans "Name" %} <span class="req">*</span></label>
+                  <input type="text" id="nc-name" class="form-control" placeholder="{% trans 'e.g. Electronics' %}" maxlength="150">
                   <div id="nc-error" style="color:var(--danger);font-size:.8rem;margin-top:4px;display:none"></div>
                 </div>
 
                 <div class="form-group" style="margin-bottom:12px">
-                  <label class="form-label" for="nc-desc">Description</label>
-                  <textarea id="nc-desc" class="form-control" rows="2" placeholder="Optional…"></textarea>
+                  <label class="form-label" for="nc-desc">{% trans "Description" %}</label>
+                  <textarea id="nc-desc" class="form-control" rows="2" placeholder="{% trans 'Optional…' %}"></textarea>
                 </div>
 
                 <div class="form-group" style="margin-bottom:20px">
-                  <label class="form-label" for="nc-parent">Parent Category</label>
+                  <label class="form-label" for="nc-parent">{% trans "Parent Category" %}</label>
                   <select id="nc-parent" class="form-control">
-                    <option value="">— None (top-level) —</option>
+                    <option value="">{% trans "— None (top-level) —" %}</option>
                     {% for cat in categories %}
                     <option value="{{ cat.pk }}">{{ cat }}</option>
                     {% endfor %}
@@ -88,14 +89,14 @@
                 </div>
 
                 <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button type="button" id="nc-cancel" class="btn btn-secondary">Cancel</button>
-                  <button type="button" id="nc-submit" class="btn btn-primary">Create</button>
+                  <button type="button" id="nc-cancel" class="btn btn-secondary">{% trans "Cancel" %}</button>
+                  <button type="button" id="nc-submit" class="btn btn-primary">{% trans "Create" %}</button>
                 </div>
               </div>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="id_unit_of_measure">Unit of Measure <span class="req">*</span></label>
+              <label class="form-label" for="id_unit_of_measure">{% trans "Unit of Measure" %} <span class="req">*</span></label>
               <select id="id_unit_of_measure" name="unit_of_measure"
                 class="form-control{% if errors.unit_of_measure %} is-invalid{% endif %}" required>
                 {% for value, label in unit_choices %}
@@ -111,38 +112,38 @@
           </div>
 
           <div class="form-group" style="margin-top:16px;">
-            <label class="form-label" for="id_description">Description</label>
+            <label class="form-label" for="id_description">{% trans "Description" %}</label>
             <textarea id="id_description" name="description" class="form-control"
-              placeholder="Optional product description…">{{ form_data.description }}</textarea>
+              placeholder="{% trans 'Optional product description…' %}">{{ form_data.description }}</textarea>
           </div>
         </div>
 
         <!-- Product Image -->
         <div class="form-section">
-          <div class="form-section-title">Product Image</div>
+          <div class="form-section-title">{% trans "Product Image" %}</div>
           <div class="product-image-form">
             <div class="product-image-preview">
               {% if product and product.primary_image_url %}
                 <img src="{{ product.primary_image_url }}" alt="{{ product.name }}">
               {% else %}
-                <div class="product-image-placeholder">No image</div>
+                <div class="product-image-placeholder">{% trans "No image" %}</div>
               {% endif %}
             </div>
 
             <div class="product-image-fields">
               <div class="form-group">
-                <label class="form-label" for="id_image">Upload Image</label>
+                <label class="form-label" for="id_image">{% trans "Upload Image" %}</label>
                 <input type="file" id="id_image" name="image"
                   accept="image/jpeg,image/png,image/webp"
                   class="form-control{% if errors.image %} is-invalid{% endif %}">
                 {% if errors.image %}<div class="invalid-feedback">{{ errors.image }}</div>{% endif %}
                 <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">
-                  JPEG, PNG, or WebP. Maximum size: 5 MB.
+                  {% trans "JPEG, PNG, or WebP. Maximum size: 5 MB." %}
                 </div>
               </div>
 
               <div class="form-group">
-                <label class="form-label" for="id_external_image_url">External Image URL</label>
+                <label class="form-label" for="id_external_image_url">{% trans "External Image URL" %}</label>
                 <input type="url" id="id_external_image_url" name="external_image_url"
                   class="form-control{% if errors.external_image_url %} is-invalid{% endif %}"
                   value="{{ form_data.external_image_url }}"
@@ -154,13 +155,13 @@
               <div class="form-group">
                 <label class="form-check">
                   <input type="checkbox" name="remove_image" value="1">
-                  Remove uploaded image
+                  {% trans "Remove uploaded image" %}
                 </label>
               </div>
               {% endif %}
 
               <div style="font-size:0.78rem;color:var(--muted);">
-                Active products require either an uploaded image or an external image URL.
+                {% trans "Active products require either an uploaded image or an external image URL." %}
               </div>
             </div>
           </div>
@@ -168,11 +169,11 @@
 
         <!-- Pricing & Stock -->
         <div class="form-section">
-          <div class="form-section-title">Pricing &amp; Stock</div>
+          <div class="form-section-title">{% trans "Pricing & Stock" %}</div>
           <div class="form-grid form-grid-2">
 
             <div class="form-group">
-              <label class="form-label" for="id_unit_price">Unit Price ($) <span class="req">*</span></label>
+              <label class="form-label" for="id_unit_price">{% trans "Unit Price ($)" %} <span class="req">*</span></label>
               <input type="number" id="id_unit_price" name="unit_price"
                 class="form-control{% if errors.unit_price %} is-invalid{% endif %}"
                 value="{{ form_data.unit_price }}"
@@ -181,13 +182,13 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="id_low_stock_threshold">Low Stock Threshold <span class="req">*</span></label>
+              <label class="form-label" for="id_low_stock_threshold">{% trans "Low Stock Threshold" %} <span class="req">*</span></label>
               <input type="number" id="id_low_stock_threshold" name="low_stock_threshold"
                 class="form-control{% if errors.low_stock_threshold %} is-invalid{% endif %}"
                 value="{{ form_data.low_stock_threshold }}"
                 min="0" required>
               {% if errors.low_stock_threshold %}<div class="invalid-feedback">{{ errors.low_stock_threshold }}</div>{% endif %}
-              <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">Alert shown when stock falls at or below this number.</div>
+              <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">{% trans "Alert shown when stock falls at or below this number." %}</div>
             </div>
 
           </div>
@@ -196,16 +197,16 @@
             <label class="form-check">
               <input type="checkbox" name="is_active" value="1"
                 {% if form_data.is_active %}checked{% endif %}>
-              Product is active (visible and orderable)
+              {% trans "Product is active (visible and orderable)" %}
             </label>
           </div>
         </div>
 
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">
-            {% if product %}Save Changes{% else %}Add Product{% endif %}
+            {% if product %}{% trans "Save Changes" %}{% else %}{% trans "Add Product" %}{% endif %}
           </button>
-          <a href="{% url 'inventory-list' %}" class="btn btn-secondary">Cancel</a>
+          <a href="{% url 'inventory-list' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
         </div>
 
       </form>
@@ -251,14 +252,14 @@
     ncError.style.display = 'none';
     const name = ncName.value.trim();
     if (!name) {
-      ncError.textContent = 'Name is required.';
+      ncError.textContent = '{% trans "Name is required." %}';
       ncError.style.display = 'block';
       ncName.focus();
       return;
     }
 
     btnSave.disabled = true;
-    btnSave.textContent = 'Saving…';
+    btnSave.textContent = '{% trans "Saving…" %}';
 
     const formData = new FormData();
     formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
@@ -291,15 +292,15 @@
 
         closeModal();
       } else {
-        ncError.textContent = data.error || 'Error creating category.';
+        ncError.textContent = data.error || '{% trans "Error creating category." %}';
         ncError.style.display = 'block';
       }
     } catch {
-      ncError.textContent = 'Network error. Please try again.';
+      ncError.textContent = '{% trans "Network error. Please try again." %}';
       ncError.style.display = 'block';
     } finally {
       btnSave.disabled = false;
-      btnSave.textContent = 'Create';
+      btnSave.textContent = '{% trans "Create" %}';
     }
   });
 })();

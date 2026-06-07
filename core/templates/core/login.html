@@ -1,9 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
+{% load i18n %}<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE }}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sign In | RetailOps</title>
+<title>{% trans "Sign In" %} | RetailOps</title>
 <style>
   :root {
     --primary: #2563EB; --secondary: #1E293B; --danger: #DC2626;
@@ -67,6 +67,12 @@
 
   .login-footer { text-align: center; margin-top: 20px; font-size: 0.8rem; color: var(--muted); }
   .login-footer a { color: var(--primary); }
+  .login-lang { text-align: center; margin-top: 16px; }
+  .login-lang select {
+    border: 1px solid var(--border-input); border-radius: var(--radius-sm);
+    padding: 5px 8px; font-size: 0.8rem; font-family: var(--font);
+    color: var(--text); background: var(--surface); cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -74,7 +80,7 @@
   <div class="login-card">
     <div class="login-logo">
       <div class="brand">&#9632;<span class="dot">R</span>etailOps</div>
-      <div class="tagline">Unified Retail &amp; Order Management</div>
+      <div class="tagline">{% trans "Unified Retail & Order Management" %}</div>
     </div>
 
     {% if error %}
@@ -87,7 +93,7 @@
       {% csrf_token %}
 
       <div class="form-group">
-        <label class="form-label" for="id_email">Email Address</label>
+        <label class="form-label" for="id_email">{% trans "Email Address" %}</label>
         <input
           type="email"
           id="id_email"
@@ -102,7 +108,7 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label" for="id_password">Password</label>
+        <label class="form-label" for="id_password">{% trans "Password" %}</label>
         <input
           type="password"
           id="id_password"
@@ -116,15 +122,26 @@
 
       <label class="form-check">
         <input type="checkbox" name="remember_me" {% if request.POST.remember_me %}checked{% endif %}>
-        Remember me
+        {% trans "Remember me" %}
       </label>
 
-      <button type="submit" class="btn-submit">Sign In</button>
+      <button type="submit" class="btn-submit">{% trans "Sign In" %}</button>
     </form>
 
     <div class="login-footer">
-      <a href="{% url 'password_reset' %}">Forgot password?</a>
+      <a href="{% url 'password_reset' %}">{% trans "Forgot password?" %}</a>
     </div>
+
+    <form method="post" action="{% url 'set-language' %}" class="login-lang" id="login-lang-form">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <select name="language" onchange="document.getElementById('login-lang-form').submit()" aria-label="{% trans 'Language' %}">
+        {% get_current_language as CUR_LANG %}
+        {% for code, label in LANGUAGES %}
+        <option value="{{ code }}" {% if code == CUR_LANG %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </form>
   </div>
 </div>
 </body>

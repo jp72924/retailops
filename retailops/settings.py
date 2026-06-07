@@ -110,6 +110,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'core.middleware.KioskCORSMiddleware',  # REVIEW
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.locale.LocaleMiddleware',  # language from cookie/Accept-Language (anonymous + pre-auth)
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -131,6 +132,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.i18n',
                 'core.context_processors.system_settings',
             ],
         },
@@ -251,10 +253,20 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'en'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
+
+# UI languages offered by the back-office. The per-user choice lives on
+# User.language and is activated by core.middleware.RegionalMiddleware; anonymous
+# visitors (e.g. the login page) get the cookie/Accept-Language value via
+# Django's LocaleMiddleware. Keep this list in sync with User.language choices
+# and the language switcher in templates/core/base.html.
+LANGUAGES = [
+    ('en', 'English'),
+    ('es', 'Español'),
+]
 
 LOCALE_PATHS = [BASE_DIR / 'locale']
 

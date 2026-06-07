@@ -1,4 +1,5 @@
 {% extends "core/base.html" %}
+{% load regional i18n %}
 {% block title %}{{ customer.get_full_name }} | RetailOps{% endblock %}
 
 {% block content %}
@@ -6,11 +7,11 @@
   <div class="page-header">
     <div>
       <div class="page-title">{{ customer.get_full_name }}</div>
-      <div class="page-subtitle">Customer since {{ customer.created_at|date:"M j, Y" }}</div>
+      <div class="page-subtitle">{% blocktrans with since=customer.created_at|date:"M j, Y" %}Customer since {{ since }}{% endblocktrans %}</div>
     </div>
     <div class="page-header-actions">
-      <a href="{% url 'customer-edit' customer.pk %}" class="btn btn-secondary">Edit</a>
-      <a href="{% url 'order-create' %}?customer={{ customer.pk }}" class="btn btn-primary">+ New Order</a>
+      <a href="{% url 'customer-edit' customer.pk %}" class="btn btn-secondary">{% trans "Edit" %}</a>
+      <a href="{% url 'order-create' %}?customer={{ customer.pk }}" class="btn btn-primary">{% trans "+ New Order" %}</a>
     </div>
   </div>
 
@@ -18,28 +19,28 @@
 
     <!-- Contact Details -->
     <div class="card">
-      <div class="card-header"><div class="card-title">Contact Details</div></div>
+      <div class="card-header"><div class="card-title">{% trans "Contact Details" %}</div></div>
       <div class="card-body">
         <div class="info-panel">
-          <div class="info-row"><span class="info-label">Email</span><a href="mailto:{{ customer.email }}">{{ customer.email }}</a></div>
-          <div class="info-row"><span class="info-label">Phone</span>{{ customer.phone|default:"—" }}</div>
-          <div class="info-row"><span class="info-label">ID Number</span>{{ customer.national_id|default:"—" }}</div>
-          <div class="info-row"><span class="info-label">Date of Birth</span>{{ customer.date_of_birth|date:"M j, Y"|default:"—" }}</div>
-          <div class="info-row"><span class="info-label">Gender</span>{% if customer.gender == 'M' %}Masculino{% elif customer.gender == 'F' %}Femenino{% else %}—{% endif %}</div>
-          {% if customer.user %}<div class="info-row"><span class="info-label">System User</span><span class="badge badge-active">Linked</span></div>{% endif %}
+          <div class="info-row"><span class="info-label">{% trans "Email" %}</span><a href="mailto:{{ customer.email }}">{{ customer.email }}</a></div>
+          <div class="info-row"><span class="info-label">{% trans "Phone" %}</span>{{ customer.phone|default:"—" }}</div>
+          <div class="info-row"><span class="info-label">{% trans "ID Number" %}</span>{{ customer.national_id|default:"—" }}</div>
+          <div class="info-row"><span class="info-label">{% trans "Date of Birth" %}</span>{{ customer.date_of_birth|date:"M j, Y"|default:"—" }}</div>
+          <div class="info-row"><span class="info-label">{% trans "Gender" %}</span>{% if customer.gender == 'M' %}{% trans "Male" %}{% elif customer.gender == 'F' %}{% trans "Female" %}{% else %}—{% endif %}</div>
+          {% if customer.user %}<div class="info-row"><span class="info-label">{% trans "System User" %}</span><span class="badge badge-active">{% trans "Linked" %}</span></div>{% endif %}
         </div>
       </div>
     </div>
 
     <!-- Address -->
     <div class="card">
-      <div class="card-header"><div class="card-title">Address</div></div>
+      <div class="card-header"><div class="card-title">{% trans "Address" %}</div></div>
       <div class="card-body">
         <div class="info-panel">
-          <div class="info-row"><span class="info-label">Line 1</span>{{ customer.address_line1 }}</div>
-          {% if customer.address_line2 %}<div class="info-row"><span class="info-label">Line 2</span>{{ customer.address_line2 }}</div>{% endif %}
-          <div class="info-row"><span class="info-label">City</span>{{ customer.city }}, {{ customer.state }} {{ customer.postal_code }}</div>
-          <div class="info-row"><span class="info-label">Country</span>{{ customer.country }}</div>
+          <div class="info-row"><span class="info-label">{% trans "Line 1" %}</span>{{ customer.address_line1 }}</div>
+          {% if customer.address_line2 %}<div class="info-row"><span class="info-label">{% trans "Line 2" %}</span>{{ customer.address_line2 }}</div>{% endif %}
+          <div class="info-row"><span class="info-label">{% trans "City" %}</span>{{ customer.city }}, {{ customer.state }} {{ customer.postal_code }}</div>
+          <div class="info-row"><span class="info-label">{% trans "Country" %}</span>{{ customer.country }}</div>
         </div>
       </div>
     </div>
@@ -48,7 +49,7 @@
 
   {% if customer.notes %}
   <div class="card" style="margin-bottom:24px;">
-    <div class="card-header"><div class="card-title">Notes</div></div>
+    <div class="card-header"><div class="card-title">{% trans "Notes" %}</div></div>
     <div class="card-body" style="color:var(--muted);">{{ customer.notes }}</div>
   </div>
   {% endif %}
@@ -56,8 +57,8 @@
   <!-- Order History -->
   <div class="card">
     <div class="card-header">
-      <div class="card-title">Order History</div>
-      <a href="{% url 'order-create' %}?customer={{ customer.pk }}" class="btn btn-primary btn-sm">+ New Order</a>
+      <div class="card-title">{% trans "Order History" %}</div>
+      <a href="{% url 'order-create' %}?customer={{ customer.pk }}" class="btn btn-primary btn-sm">{% trans "+ New Order" %}</a>
     </div>
 
     {% if orders %}
@@ -65,12 +66,12 @@
       <table>
         <thead>
           <tr>
-            <th>Order #</th>
-            <th>Date</th>
-            <th>Status</th>
-            <th>Items</th>
-            <th>Total</th>
-            <th>Actions</th>
+            <th>{% trans "Order #" %}</th>
+            <th>{% trans "Date" %}</th>
+            <th>{% trans "Status" %}</th>
+            <th>{% trans "Items" %}</th>
+            <th>{% trans "Total" %}</th>
+            <th>{% trans "Actions" %}</th>
           </tr>
         </thead>
         <tbody>
@@ -80,8 +81,8 @@
             <td>{{ order.created_at|date:"M j, Y" }}</td>
             <td><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
             <td>{{ order.items.count }}</td>
-            <td><strong>${{ order.total_amount }}</strong></td>
-            <td><a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">View</a></td>
+            <td><strong>{{ order.total_amount|currency }}</strong></td>
+            <td><a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a></td>
           </tr>
           {% endfor %}
         </tbody>
@@ -90,8 +91,8 @@
     {% else %}
     <div class="empty-state">
       <div class="empty-icon">📋</div>
-      <div class="empty-title">No orders yet</div>
-      <div><a href="{% url 'order-create' %}?customer={{ customer.pk }}">Create first order for this customer</a></div>
+      <div class="empty-title">{% trans "No orders yet" %}</div>
+      <div><a href="{% url 'order-create' %}?customer={{ customer.pk }}">{% trans "Create first order for this customer" %}</a></div>
     </div>
     {% endif %}
   </div>

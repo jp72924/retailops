@@ -1,26 +1,27 @@
 {% extends "core/base.html" %}
-{% block title %}Customers | RetailOps{% endblock %}
+{% load i18n %}
+{% block title %}{% trans "Customers" %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">Customers</div>
-      <div class="page-subtitle">{{ page_obj.paginator.count|default:"0" }} customer{{ page_obj.paginator.count|pluralize }} registered</div>
+      <div class="page-title">{% trans "Customers" %}</div>
+      <div class="page-subtitle">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} customer registered{% plural %}{{ counter }} customers registered{% endblocktrans %}</div>
     </div>
     <div class="page-header-actions">
-      <a href="{% url 'customer-create' %}" class="btn btn-primary">+ Register Customer</a>
+      <a href="{% url 'customer-create' %}" class="btn btn-primary">{% trans "+ Register Customer" %}</a>
     </div>
   </div>
 
   <!-- Filter Bar -->
   <form method="get" action="{% url 'customer-list' %}">
     <div class="filter-bar">
-      <input type="text" name="q" class="form-control" placeholder="&#128269; Search name, email, ID or phone…" value="{{ query|default:'' }}">
-      <button type="submit" class="btn btn-primary btn-sm">Search</button>
+      <input type="text" name="q" class="form-control" placeholder="{% trans '🔍 Search name, email, ID or phone…' %}" value="{{ query|default:'' }}">
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Search" %}</button>
       {% if query %}
-        <a href="{% url 'customer-list' %}" class="btn btn-secondary btn-sm">Clear</a>
-        <span class="filter-active">Filtered by "{{ query }}"</span>
+        <a href="{% url 'customer-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <span class="filter-active">{% blocktrans %}Filtered by "{{ query }}"{% endblocktrans %}</span>
       {% endif %}
     </div>
   </form>
@@ -30,14 +31,14 @@
     <table>
       <thead>
         <tr>
-          <th>Name</th>
-          <th>ID Number</th>
-          <th>Email</th>
-          <th>Phone</th>
-          <th>City</th>
-          <th>Country</th>
-          <th>Registered</th>
-          <th>Actions</th>
+          <th>{% trans "Name" %}</th>
+          <th>{% trans "ID Number" %}</th>
+          <th>{% trans "Email" %}</th>
+          <th>{% trans "Phone" %}</th>
+          <th>{% trans "City" %}</th>
+          <th>{% trans "Country" %}</th>
+          <th>{% trans "Registered" %}</th>
+          <th>{% trans "Actions" %}</th>
         </tr>
       </thead>
       <tbody>
@@ -51,12 +52,12 @@
           <td>{{ customer.country }}</td>
           <td style="color:var(--muted);">{{ customer.created_at|date:"M j, Y" }}</td>
           <td class="td-actions">
-            <a href="{% url 'customer-detail' customer.pk %}" class="btn btn-ghost btn-sm">View</a>
-            <a href="{% url 'customer-edit' customer.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+            <a href="{% url 'customer-detail' customer.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
+            <a href="{% url 'customer-edit' customer.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
             <form method="post" action="{% url 'customer-delete' customer.pk %}" class="inline"
-                  onsubmit="return confirm('Delete {{ customer.get_full_name|escapejs }}? This cannot be undone.')">
+                  onsubmit="return confirm('{% blocktrans with name=customer.get_full_name|escapejs %}Delete {{ name }}? This cannot be undone.{% endblocktrans %}')">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">Delete</button>
+              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">{% trans "Delete" %}</button>
             </form>
           </td>
         </tr>
@@ -69,7 +70,7 @@
   {% if page_obj.has_other_pages %}
   <div class="pagination">
     <span class="pg-info">
-      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+      {% blocktrans with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktrans %}
     </span>
     {% if page_obj.has_previous %}
       <a href="?{% if query %}q={{ query }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
@@ -95,11 +96,11 @@
   <div class="table-wrap">
     <div class="empty-state">
       <div class="empty-icon">👤</div>
-      <div class="empty-title">No customers found</div>
+      <div class="empty-title">{% trans "No customers found" %}</div>
       {% if query %}
-        <div>No results for "{{ query }}". <a href="{% url 'customer-list' %}">Clear search</a></div>
+        <div>{% blocktrans %}No results for "{{ query }}".{% endblocktrans %} <a href="{% url 'customer-list' %}">{% trans "Clear search" %}</a></div>
       {% else %}
-        <div><a href="{% url 'customer-create' %}">Register your first customer</a></div>
+        <div><a href="{% url 'customer-create' %}">{% trans "Register your first customer" %}</a></div>
       {% endif %}
     </div>
   </div>

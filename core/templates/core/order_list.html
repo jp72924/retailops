@@ -1,16 +1,16 @@
 {% extends "core/base.html" %}
-{% load regional %}
-{% block title %}Sales Orders | RetailOps{% endblock %}
+{% load regional i18n %}
+{% block title %}{% trans "Sales Orders" %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
   <div class="page-header">
     <div>
-      <div class="page-title">Sales Orders</div>
-      <div class="page-subtitle">Manage and track all sales orders</div>
+      <div class="page-title">{% trans "Sales Orders" %}</div>
+      <div class="page-subtitle">{% trans "Manage and track all sales orders" %}</div>
     </div>
     <div class="page-header-actions">
-      <a href="{% url 'order-create' %}" class="btn btn-primary">+ New Order</a>
+      <a href="{% url 'order-create' %}" class="btn btn-primary">{% trans "+ New Order" %}</a>
     </div>
   </div>
 
@@ -18,19 +18,19 @@
   <form method="get" action="{% url 'order-list' %}">
     <div class="filter-bar">
       <input type="text" name="q" class="form-control"
-        placeholder="&#128269; Search order # or customer…" value="{{ query|default:'' }}">
+        placeholder="{% trans '🔍 Search order # or customer…' %}" value="{{ query|default:'' }}">
       <select name="status" class="form-control">
-        <option value="">All Statuses</option>
+        <option value="">{% trans "All Statuses" %}</option>
         {% for value, label in status_choices %}
         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="From date">
-      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="To date">
-      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="{% trans 'From date' %}">
+      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="{% trans 'To date' %}">
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Filter" %}</button>
       {% if query or status_filter or date_from or date_to %}
-        <a href="{% url 'order-list' %}" class="btn btn-secondary btn-sm">Clear</a>
-        <span class="filter-active">Filters active</span>
+        <a href="{% url 'order-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <span class="filter-active">{% trans "Filters active" %}</span>
       {% endif %}
     </div>
   </form>
@@ -40,13 +40,13 @@
     <table>
       <thead>
         <tr>
-          <th>Order #</th>
-          <th>Customer</th>
-          <th>Date</th>
-          <th>Status</th>
-          <th>Items</th>
-          <th>Total</th>
-          <th>Actions</th>
+          <th>{% trans "Order #" %}</th>
+          <th>{% trans "Customer" %}</th>
+          <th>{% trans "Date" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Items" %}</th>
+          <th>{% trans "Total" %}</th>
+          <th>{% trans "Actions" %}</th>
         </tr>
       </thead>
       <tbody>
@@ -59,15 +59,15 @@
           <td>{{ order.items.count }}</td>
           <td><strong>{{ order.total_amount|currency }}</strong></td>
           <td class="td-actions">
-            <a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">View</a>
+            <a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
             {% if order.status == 'draft' or order.status == 'pending' %}
-            <a href="{% url 'order-detail' order.pk %}" class="btn btn-secondary btn-sm">Edit</a>
+            <a href="{% url 'order-detail' order.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
             {% endif %}
             {% if order.status == 'draft' %}
             <form method="post" action="{% url 'order-delete' order.pk %}" class="inline"
-                  onsubmit="return confirm('Delete order {{ order.order_number|escapejs }}?')">
+                  onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Delete order {{ number }}?{% endblocktrans %}')">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">Delete</button>
+              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">{% trans "Delete" %}</button>
             </form>
             {% endif %}
           </td>
@@ -80,7 +80,7 @@
   {% if page_obj.has_other_pages %}
   <div class="pagination">
     <span class="pg-info">
-      Showing {{ page_obj.start_index }}–{{ page_obj.end_index }} of {{ page_obj.paginator.count }}
+      {% blocktrans with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktrans %}
     </span>
     {% if page_obj.has_previous %}
       <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
@@ -106,11 +106,11 @@
   <div class="table-wrap">
     <div class="empty-state">
       <div class="empty-icon">📋</div>
-      <div class="empty-title">No orders found</div>
+      <div class="empty-title">{% trans "No orders found" %}</div>
       {% if query or status_filter or date_from or date_to %}
-        <div>No orders match your filters. <a href="{% url 'order-list' %}">Clear filters</a></div>
+        <div>{% trans "No orders match your filters." %} <a href="{% url 'order-list' %}">{% trans "Clear filters" %}</a></div>
       {% else %}
-        <div><a href="{% url 'order-create' %}">Create your first order</a></div>
+        <div><a href="{% url 'order-create' %}">{% trans "Create your first order" %}</a></div>
       {% endif %}
     </div>
   </div>
