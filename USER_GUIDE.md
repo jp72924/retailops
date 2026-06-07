@@ -450,9 +450,40 @@ When enabled, every monetary amount is shown together with an approximate conver
    - **Exchange Rate** — How many units of the secondary currency equal **one** unit of the primary currency. Must be greater than zero.
 3. Click **Save Settings**.
 
-> The exchange rate is **static** — it stays the value you set until an Admin changes it. Update it whenever you need the displayed conversions to reflect the current market. The kiosk PWA, if your business uses one, has its own live-rate pipeline and is unaffected by this value.
-
 To turn the feature off, simply untick the checkbox and save. The other secondary-currency fields are kept on file but are ignored everywhere until the feature is re-enabled.
+
+#### Automatic exchange-rate update (optional)
+
+Instead of typing the rate by hand, RetailOps can fetch it from an external JSON
+source — for example the BCV official rate via DolarApi.
+
+1. Tick **Automatically update the exchange rate from an external source**.
+2. Set:
+   - **Rate Source URL** — an endpoint returning JSON. Default:
+     `https://ve.dolarapi.com/v1/dolares/oficial` (BCV official rate).
+   - **Rate JSON Field** — the dotted path to the numeric rate in the response.
+     Default `promedio`; use e.g. `data.rate` for `{"data": {"rate": 36.42}}`.
+3. Click **Save Settings**, then **Update now** to fetch immediately. The
+   timestamp of the last successful update is shown next to the button.
+
+To keep the rate current without manual clicks, schedule the management command
+on your server (cron, Task Scheduler, or your platform's scheduler):
+
+```bash
+python manage.py update_bcv_rate          # runs only when auto-update is enabled
+python manage.py update_bcv_rate --dry-run # fetch and print without saving
+python manage.py update_bcv_rate --force   # run even if auto-update is disabled
+```
+
+External schedulers and AI agents can trigger the same update over the API:
+
+```text
+POST /api/v1/settings/secondary-rate/refresh/   (Manager or Admin token)
+```
+
+> Until you enable auto-update, the exchange rate stays **static** — it keeps the
+> value you set until someone changes it. The kiosk PWA, if your business uses
+> one, has its own live-rate pipeline and is unaffected by this value.
 
 ---
 

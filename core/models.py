@@ -540,6 +540,18 @@ class SystemSettings(models.Model):
     secondary_exchange_rate    = models.DecimalField(
         max_digits=20, decimal_places=8, default=Decimal('1')
     )
+    secondary_rate_auto_update_enabled = models.BooleanField(default=False)
+    secondary_rate_source_url = models.URLField(
+        blank=True,
+        default='https://ve.dolarapi.com/v1/dolares/oficial',
+    )
+    secondary_rate_source_field = models.CharField(
+        max_length=100,
+        blank=True,
+        default='promedio',
+        help_text='Dotted path to the numeric rate in the source JSON, e.g. "promedio" or "data.rate".',
+    )
+    secondary_rate_updated_at = models.DateTimeField(null=True, blank=True)
 
     ocr_enabled = models.BooleanField(default=False)
     ocr_provider = models.CharField(
@@ -570,6 +582,15 @@ class SystemSettings(models.Model):
             if self.secondary_exchange_rate is None or self.secondary_exchange_rate <= 0:
                 raise ValidationError({
                     'secondary_exchange_rate': 'Must be greater than zero.'
+                })
+        if self.secondary_rate_auto_update_enabled:
+            if not (self.secondary_rate_source_url or '').strip():
+                raise ValidationError({
+                    'secondary_rate_source_url': 'Required when automatic rate update is enabled.'
+                })
+            if not (self.secondary_rate_source_field or '').strip():
+                raise ValidationError({
+                    'secondary_rate_source_field': 'Required when automatic rate update is enabled.'
                 })
         if self.ocr_enabled and not (self.ocr_base_url or '').strip():
             raise ValidationError({
