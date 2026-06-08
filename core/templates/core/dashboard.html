@@ -14,23 +14,27 @@
   <!-- Stat Cards -->
   <div class="stat-grid">
     <div class="stat-card primary">
-      <div class="stat-label">{% trans "Orders This Month" %}</div>
+      <div class="icon-wrap" style="background:var(--primary-soft);color:var(--primary)"><i class="fas fa-shopping-bag"></i></div>
       <div class="stat-value">{{ stats.orders_this_month|default:"0" }}</div>
+      <div class="stat-label">{% trans "Orders This Month" %}</div>
       <div class="stat-sub">{% trans "Sales orders created" %}</div>
     </div>
     <div class="stat-card success">
-      <div class="stat-label">{% trans "Revenue This Month" %}</div>
+      <div class="icon-wrap" style="background:var(--success-soft);color:var(--success)"><i class="fas fa-dollar-sign"></i></div>
       <div class="stat-value">{{ stats.revenue_this_month|default:"0.00"|currency }}</div>
+      <div class="stat-label">{% trans "Revenue This Month" %}</div>
       <div class="stat-sub">{% trans "From paid orders" %}</div>
     </div>
     <div class="stat-card warning">
-      <div class="stat-label">{% trans "Pending Payments" %}</div>
+      <div class="icon-wrap" style="background:var(--warning-soft);color:var(--warning)"><i class="fas fa-clock"></i></div>
       <div class="stat-value">{{ stats.pending_payments_count|default:"0" }}</div>
+      <div class="stat-label">{% trans "Pending Payments" %}</div>
       <div class="stat-sub">{% trans "Orders awaiting payment" %}</div>
     </div>
     <div class="stat-card danger">
-      <div class="stat-label">{% trans "Low Stock Items" %}</div>
+      <div class="icon-wrap" style="background:var(--danger-soft);color:var(--danger)"><i class="fas fa-box-open"></i></div>
       <div class="stat-value">{{ stats.low_stock_count|default:"0" }}</div>
+      <div class="stat-label">{% trans "Low Stock Items" %}</div>
       <div class="stat-sub">{% trans "Below threshold" %}</div>
     </div>
   </div>
@@ -38,18 +42,11 @@
   <div class="dash-grid">
     <div class="dash-main">
 
-      <!-- Tabs -->
       <div class="card">
         <div class="card-header">
-          <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;">
-            <button class="btn btn-sm" id="tab-btn-orders" onclick="dashTab('orders')"
-              style="border-radius:0;border:none;background:var(--primary);color:#fff;">
-              {% trans "Recent Orders" %}
-            </button>
-            <button class="btn btn-sm" id="tab-btn-alerts" onclick="dashTab('alerts')"
-              style="border-radius:0;border:none;">
-              {% trans "Inventory Alerts" %}
-            </button>
+          <div class="tabs">
+            <button class="tab active" id="tab-btn-orders" onclick="dashTab('orders')">{% trans "Recent Orders" %}</button>
+            <button class="tab" id="tab-btn-alerts" onclick="dashTab('alerts')">{% trans "Inventory Alerts" %}</button>
           </div>
           <a href="{% url 'order-list' %}" class="btn btn-ghost btn-sm">{% trans "View all →" %}</a>
         </div>
@@ -85,7 +82,7 @@
           </div>
           {% else %}
           <div class="empty-state">
-            <div class="empty-icon">📋</div>
+            <div class="empty-icon"><i class="fas fa-shopping-bag"></i></div>
             <div class="empty-title">{% trans "No orders yet" %}</div>
             <div><a href="{% url 'order-create' %}">{% trans "Create your first order" %}</a></div>
           </div>
@@ -99,11 +96,11 @@
             <div style="display:flex;flex-direction:column;gap:10px;">
               {% for product in low_stock_products %}
               <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
-                background:{% if product.current_stock == 0 %}#FEE2E2;border:1px solid #FCA5A5{% else %}#FEF3C7;border:1px solid #FCD34D{% endif %};
+                background:{% if product.current_stock == 0 %}var(--danger-soft);border:1px solid var(--danger){% else %}var(--warning-soft);border:1px solid var(--warning){% endif %};
                 border-radius:var(--radius-sm);font-size:0.875rem;">
                 <div>
                   <strong>{{ product.sku }}</strong> — {{ product.name }}
-                  <span style="color:var(--muted);font-size:0.8rem;">({{ product.category.name }})</span>
+                  <span style="color:var(--text-secondary);font-size:0.8rem;">({{ product.category.name }})</span>
                 </div>
                 {% if product.current_stock == 0 %}
                   <span class="badge badge-cancelled">{% trans "Out of stock" %}</span>
@@ -115,7 +112,8 @@
             </div>
             {% else %}
             <div class="empty-state" style="padding:24px;">
-              <div class="empty-title" style="color:var(--success);">{% trans "✓ All stock levels are healthy" %}</div>
+              <div class="empty-icon" style="color:var(--success);opacity:1"><i class="fas fa-check-circle"></i></div>
+              <div class="empty-title">{% trans "All stock levels are healthy" %}</div>
             </div>
             {% endif %}
           </div>
@@ -131,16 +129,16 @@
         <div class="card-body" style="padding:12px;">
           <div class="quick-actions">
             <a href="{% url 'order-create' %}" class="qa-btn">
-              <span class="qa-icon">+</span> {% trans "New Order" %}
+              <span class="qa-icon"><i class="fas fa-plus"></i></span> {% trans "New Order" %}
             </a>
             <a href="{% url 'customer-create' %}" class="qa-btn">
-              <span class="qa-icon">👤</span> {% trans "Register Customer" %}
+              <span class="qa-icon"><i class="fas fa-user-plus"></i></span> {% trans "Register Customer" %}
             </a>
             <a href="{% url 'payment-list' %}" class="qa-btn">
-              <span class="qa-icon">💳</span> {% trans "View Payments" %}
+              <span class="qa-icon"><i class="fas fa-credit-card"></i></span> {% trans "View Payments" %}
             </a>
             <a href="{% url 'inventory-list' %}" class="qa-btn">
-              <span class="qa-icon">📦</span> {% trans "Inventory" %}
+              <span class="qa-icon"><i class="fas fa-boxes"></i></span> {% trans "Inventory" %}
             </a>
           </div>
         </div>
@@ -156,12 +154,8 @@
     const isOrders = tab === 'orders';
     document.getElementById('dash-tab-orders').style.display = isOrders ? '' : 'none';
     document.getElementById('dash-tab-alerts').style.display = isOrders ? 'none' : '';
-    document.getElementById('tab-btn-orders').style.cssText = isOrders
-      ? 'border-radius:0;border:none;background:var(--primary);color:#fff;'
-      : 'border-radius:0;border:none;';
-    document.getElementById('tab-btn-alerts').style.cssText = !isOrders
-      ? 'border-radius:0;border:none;background:var(--primary);color:#fff;'
-      : 'border-radius:0;border:none;';
+    document.getElementById('tab-btn-orders').classList.toggle('active', isOrders);
+    document.getElementById('tab-btn-alerts').classList.toggle('active', !isOrders);
   }
 </script>
 {% endblock %}

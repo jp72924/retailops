@@ -120,7 +120,7 @@
   {% else %}
   <div class="table-wrap">
     <div class="empty-state">
-      <div class="empty-icon">💳</div>
+      <div class="empty-icon"><i class="fas fa-credit-card"></i></div>
       <div class="empty-title">{% trans "No payments found" %}</div>
       {% if query or method_filter or status_filter %}
         <div>{% trans "No results match your filters." %} <a href="{% url 'payment-list' %}">{% trans "Clear filters" %}</a></div>

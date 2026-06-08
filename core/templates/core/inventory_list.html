@@ -33,7 +33,7 @@
   <!-- Low-stock banner -->
   {% if low_stock_count %}
   <div class="alert-banner alert-warning" id="low-stock-banner">
-    <span>⚠</span>
+    <i class="fas fa-exclamation-triangle"></i>
     {% blocktrans count counter=low_stock_count %}<strong>{{ counter }} product</strong> is below the low-stock threshold — restock soon.{% plural %}<strong>{{ counter }} products</strong> are below the low-stock threshold — restock soon.{% endblocktrans %}
     <button type="button" class="alert-close"
       onclick="document.getElementById('low-stock-banner').style.display='none'">✕</button>
@@ -44,7 +44,7 @@
   <form method="get" action="{% url 'inventory-list' %}">
     <div class="filter-bar">
       <input type="text" name="q" class="form-control"
-        placeholder="{% trans '🔍 Search SKU or product name…' %}" value="{{ query|default:'' }}">
+        placeholder="{% trans 'Search SKU or product name…' %}" value="{{ query|default:'' }}">
       <select name="category" class="form-control">
         <option value="">{% trans "All Categories" %}</option>
         {% for cat in categories %}

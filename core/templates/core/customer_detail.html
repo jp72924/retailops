@@ -90,7 +90,7 @@
     </div>
     {% else %}
     <div class="empty-state">
-      <div class="empty-icon">📋</div>
+      <div class="empty-icon"><i class="fas fa-shopping-bag"></i></div>
       <div class="empty-title">{% trans "No orders yet" %}</div>
       <div><a href="{% url 'order-create' %}?customer={{ customer.pk }}">{% trans "Create first order for this customer" %}</a></div>
     </div>

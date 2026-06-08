@@ -10,7 +10,7 @@
       <div class="page-subtitle">{% trans "Manage and track all sales orders" %}</div>
     </div>
     <div class="page-header-actions">
-      <a href="{% url 'order-create' %}" class="btn btn-primary">{% trans "+ New Order" %}</a>
+      <a href="{% url 'order-create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Order" %}</a>
     </div>
   </div>
 
@@ -18,7 +18,7 @@
   <form method="get" action="{% url 'order-list' %}">
     <div class="filter-bar">
       <input type="text" name="q" class="form-control"
-        placeholder="{% trans '🔍 Search order # or customer…' %}" value="{{ query|default:'' }}">
+        placeholder="{% trans 'Search order # or customer…' %}" value="{{ query|default:'' }}">
       <select name="status" class="form-control">
         <option value="">{% trans "All Statuses" %}</option>
         {% for value, label in status_choices %}
@@ -105,7 +105,7 @@
   {% else %}
   <div class="table-wrap">
     <div class="empty-state">
-      <div class="empty-icon">📋</div>
+      <div class="empty-icon"><i class="fas fa-shopping-bag"></i></div>
       <div class="empty-title">{% trans "No orders found" %}</div>
       {% if query or status_filter or date_from or date_to %}
         <div>{% trans "No orders match your filters." %} <a href="{% url 'order-list' %}">{% trans "Clear filters" %}</a></div>
