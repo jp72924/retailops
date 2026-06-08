@@ -1,0 +1,152 @@
+{% load i18n regional %}
+<div class="slide-header">
+  <div>
+    <div class="flex items-center gap-3 mb-1">
+      <span class="td-mono font-bold text-lg">{{ order.order_number }}</span>
+      <span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span>
+    </div>
+    <div class="text-xs" style="color:var(--text-secondary)">
+      {% trans "Created by" %} {{ order.created_by.get_full_name }} · {{ order.created_at|date:"M j, Y" }}
+      {% if order.confirmed_by %} · {% trans "Confirmed by" %} {{ order.confirmed_by.get_full_name }} {{ order.confirmed_at|date:"M j, Y" }}{% endif %}
+    </div>
+  </div>
+  <button type="button" class="btn-icon" onclick="closeSlide('slide-order')"><i class="fas fa-times"></i></button>
+</div>
+<div class="slide-body">
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Customer" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="avatar-circle" style="background:linear-gradient(135deg,var(--primary),#7c3aed)">
+          {{ order.customer.first_name.0|upper }}{{ order.customer.last_name.0|upper }}
+        </div>
+        <div>
+          <div class="font-semibold text-sm">{{ order.customer.get_full_name }}</div>
+          <div class="text-xs" style="color:var(--text-secondary)">{{ order.customer.email }}</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border-color);padding-top:10px;">
+        <div class="info-row" style="justify-content:space-between;"><span style="color:var(--text-secondary)">{% trans "Phone" %}</span><span>{{ order.customer.phone|default:"—" }}</span></div>
+        {% if order.customer.national_id %}
+        <div class="info-row" style="justify-content:space-between;"><span style="color:var(--text-secondary)">{% trans "ID" %}</span><span>{{ order.customer.national_id }}</span></div>
+        {% endif %}
+        <div class="info-row" style="justify-content:space-between;"><span style="color:var(--text-secondary)">{% trans "Address" %}</span><span>{{ order.customer.address_line1 }}, {{ order.customer.city }}</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Line Items" %}</div>
+    <div class="table-container" style="margin-bottom:12px;">
+      <table>
+        <thead>
+          <tr>
+            <th>{% trans "Product" %}</th>
+            <th>{% trans "SKU" %}</th>
+            <th>{% trans "Qty" %}</th>
+            <th class="text-right">{% trans "Price" %}</th>
+            <th class="text-right">{% trans "Total" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in order.items.all %}
+          <tr>
+            <td>
+              <div class="flex items-center gap-2">
+                <div class="product-thumb product-thumb-sm">
+                  {% if item.product.primary_image_url %}
+                  <img src="{{ item.product.primary_image_url }}" alt="{{ item.product.name }}">
+                  {% else %}IMG{% endif %}
+                </div>
+                <span class="font-medium text-sm">{{ item.product.name }}</span>
+              </div>
+            </td>
+            <td class="td-mono text-xs" style="color:var(--text-tertiary)">{{ item.product.sku }}</td>
+            <td class="text-sm">{{ item.quantity }}</td>
+            <td class="text-sm">{{ item.unit_price|currency }}</td>
+            <td class="text-sm text-right font-semibold">{{ item.line_total|currency }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="totals-box">
+      <div class="totals-row"><span style="color:var(--text-secondary)">{% trans "Subtotal" %}</span><span>{{ order.subtotal|currency }}</span></div>
+      <div class="totals-row"><span style="color:var(--text-secondary)">{% trans "Tax" %}</span><span>{{ order.tax_amount|currency }}</span></div>
+      <div class="totals-row"><span style="color:var(--text-secondary)">{% trans "Discount" %}</span><span>{{ order.discount_amount|currency }}</span></div>
+      <div class="totals-row total"><span>{% trans "Total" %}</span><span style="color:var(--primary)">{{ order.total_amount|currency }}</span></div>
+    </div>
+  </div>
+  {% if order.notes %}
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Order Notes" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="text-sm" style="color:var(--text-secondary)">{{ order.notes|linebreaksbr }}</div>
+    </div>
+  </div>
+  {% endif %}
+  {% if order.payments.exists %}
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Payments" %}</div>
+    <div class="flex flex-col gap-2">
+      {% for payment in order.payments.all %}
+      <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="text-sm font-semibold">{{ payment.payment_number }}</div>
+          <div class="text-xs" style="color:var(--text-secondary)">{{ payment.get_payment_method_display }} · {{ payment.recorded_by.get_full_name }}</div>
+        </div>
+        <div class="font-bold">{{ payment.amount|currency }}</div>
+      </div>
+      {% endfor %}
+      <div class="mt-2 pt-2 flex justify-between text-sm" style="border-top:1px solid var(--border-color);">
+        <span style="color:var(--text-secondary)">{% trans "Outstanding" %}</span>
+        <strong class="{% if order.amount_outstanding > 0 %}text-red-500{% else %}text-emerald-500{% endif %}">
+          {{ order.amount_outstanding|currency }}
+        </strong>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  <div class="flex flex-wrap gap-2">
+    {% if order.status == 'draft' and user.role.name != 'Staff' or user.role.name == 'Manager' or user.role.name == 'Admin' %}
+    <form method="post" action="{% url 'order-submit' order.pk %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Submit for Review" %}</button>
+    </form>
+    {% endif %}
+    {% if order.status == 'pending' and user.role.name == 'Manager' or user.role.name == 'Admin' %}
+    <form method="post" action="{% url 'order-confirm' order.pk %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Confirm Order" %}</button>
+    </form>
+    {% endif %}
+    {% if order.status == 'confirmed' %}
+    <button type="button" class="btn btn-success btn-sm"
+      hx-get="{% url 'payment-create' %}?sales_order={{ order.pk }}"
+      hx-target="#modal-payment-body"
+      hx-swap="innerHTML"
+      onclick="openModal('modal-payment')">
+      {% trans "Record Payment" %}
+    </button>
+    <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-danger btn-sm">{% trans "Cancel Order" %}</button>
+    </form>
+    {% endif %}
+    {% if order.status == 'paid' %}
+    <form method="post" action="{% url 'order-ship' order.pk %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Mark Shipped" %}</button>
+    </form>
+    <form method="post" action="{% url 'order-refund' order.pk %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-warning btn-sm">{% trans "Issue Refund" %}</button>
+    </form>
+    {% endif %}
+    {% if order.status == 'shipped' %}
+    <form method="post" action="{% url 'order-deliver' order.pk %}" class="inline">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-success btn-sm">{% trans "Mark Delivered" %}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>

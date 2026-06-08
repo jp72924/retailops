@@ -1,0 +1,105 @@
+{% load i18n %}
+<div class="modal-content wide">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% if customer %}{% trans "Edit Customer" %}{% else %}{% trans "New Customer" %}{% endif %}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-customer')"><i class="fas fa-times"></i></button>
+  </div>
+  <form method="post" action="{% if customer %}{% url 'customer-edit' customer.pk %}{% else %}{% url 'customer-create' %}{% endif %}">
+    {% csrf_token %}
+    <div class="modal-body">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Personal Information" %}</div>
+      <div class="form-grid form-grid-2" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label class="label">{% trans "First Name" %} <span class="req">*</span></label>
+          <input type="text" name="first_name" class="input {% if errors.first_name %}is-invalid{% endif %}"
+            value="{{ form_data.first_name|default:'' }}" required>
+          {% if errors.first_name %}<div class="invalid-feedback">{{ errors.first_name }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Last Name" %} <span class="req">*</span></label>
+          <input type="text" name="last_name" class="input {% if errors.last_name %}is-invalid{% endif %}"
+            value="{{ form_data.last_name|default:'' }}" required>
+          {% if errors.last_name %}<div class="invalid-feedback">{{ errors.last_name }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Email" %} <span class="req">*</span></label>
+          <input type="email" name="email" class="input {% if errors.email %}is-invalid{% endif %}"
+            value="{{ form_data.email|default:'' }}" required>
+          {% if errors.email %}<div class="invalid-feedback">{{ errors.email }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Phone" %}</label>
+          <input type="tel" name="phone" class="input"
+            value="{{ form_data.phone|default:'' }}" placeholder="04XX-XXXXXXX">
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "ID Number" %}</label>
+          <input type="text" name="national_id" class="input {% if errors.national_id %}is-invalid{% endif %}"
+            value="{{ form_data.national_id|default:'' }}" placeholder="V12345678" maxlength="20">
+          {% if errors.national_id %}<div class="invalid-feedback">{{ errors.national_id }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Date of Birth" %}</label>
+          <input type="date" name="date_of_birth" class="input {% if errors.date_of_birth %}is-invalid{% endif %}"
+            value="{{ form_data.date_of_birth|default:'' }}">
+          {% if errors.date_of_birth %}<div class="invalid-feedback">{{ errors.date_of_birth }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Gender" %}</label>
+          <select name="gender" class="input">
+            <option value="">{% trans "— Not specified —" %}</option>
+            <option value="M" {% if form_data.gender == 'M' %}selected{% endif %}>{% trans "Male" %}</option>
+            <option value="F" {% if form_data.gender == 'F' %}selected{% endif %}>{% trans "Female" %}</option>
+          </select>
+        </div>
+      </div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Address" %}</div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Address Line 1" %} <span class="req">*</span></label>
+        <input type="text" name="address_line1" class="input {% if errors.address_line1 %}is-invalid{% endif %}"
+          value="{{ form_data.address_line1|default:'' }}" placeholder="{% trans 'Street address' %}" required>
+        {% if errors.address_line1 %}<div class="invalid-feedback">{{ errors.address_line1 }}</div>{% endif %}
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Address Line 2" %}</label>
+        <input type="text" name="address_line2" class="input"
+          value="{{ form_data.address_line2|default:'' }}" placeholder="{% trans 'Apartment, suite, unit…' %}">
+      </div>
+      <div class="form-grid form-grid-3" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label class="label">{% trans "City" %} <span class="req">*</span></label>
+          <input type="text" name="city" class="input {% if errors.city %}is-invalid{% endif %}"
+            value="{{ form_data.city|default:'' }}" required>
+          {% if errors.city %}<div class="invalid-feedback">{{ errors.city }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "State" %} <span class="req">*</span></label>
+          <input type="text" name="state" class="input {% if errors.state %}is-invalid{% endif %}"
+            value="{{ form_data.state|default:'' }}" required>
+          {% if errors.state %}<div class="invalid-feedback">{{ errors.state }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Postal Code" %} <span class="req">*</span></label>
+          <input type="text" name="postal_code" class="input {% if errors.postal_code %}is-invalid{% endif %}"
+            value="{{ form_data.postal_code|default:'' }}" required>
+          {% if errors.postal_code %}<div class="invalid-feedback">{{ errors.postal_code }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Country" %} <span class="req">*</span></label>
+        <input type="text" name="country" class="input {% if errors.country %}is-invalid{% endif %}"
+          value="{{ form_data.country|default:'Venezuela' }}" required>
+        {% if errors.country %}<div class="invalid-feedback">{{ errors.country }}</div>{% endif %}
+      </div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Notes" %}</div>
+      <div class="form-group">
+        <label class="label">{% trans "Internal Notes" %}</label>
+        <textarea name="notes" class="input" rows="2" placeholder="{% trans 'Any additional notes…' %}">{{ form_data.notes|default:'' }}</textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-customer')">{% trans "Cancel" %}</button>
+      <button type="submit" class="btn btn-primary">{% trans "Save Customer" %}</button>
+    </div>
+  </form>
+</div>

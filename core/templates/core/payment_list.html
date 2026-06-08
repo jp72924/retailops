@@ -4,87 +4,85 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Payments" %}</div>
-      <div class="page-subtitle">{% trans "All recorded payments" %}</div>
-    </div>
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Payments" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% trans "All recorded payments" %}</p></div>
   </div>
 
   <!-- Filter Bar -->
-  <form method="get" action="{% url 'payment-list' %}">
-    <div class="filter-bar">
-      <input type="text" name="q" class="form-control"
-        placeholder="{% trans '🔍 Search payment # or order #…' %}" value="{{ query|default:'' }}">
-      <select name="method" class="form-control">
+  <div class="flex flex-wrap items-center gap-3 mb-5">
+    <form method="get" action="{% url 'payment-list' %}" class="flex flex-wrap items-center gap-3">
+      <div class="input-group" style="width:240px;">
+        <i class="fas fa-search"></i>
+        <input type="text" name="q" class="form-control"
+          placeholder="{% trans 'Search payments…' %}" value="{{ query|default:'' }}">
+      </div>
+      <select name="method" class="form-control" style="width:150px;">
         <option value="">{% trans "All Methods" %}</option>
         {% for value, label in method_choices %}
         <option value="{{ value }}" {% if method_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <select name="status" class="form-control">
+      <select name="status" class="form-control" style="width:150px;">
         <option value="">{% trans "All Statuses" %}</option>
         {% for value, label in status_choices %}
         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="{% trans 'From date' %}">
-      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="{% trans 'To date' %}">
-      <button type="submit" class="btn btn-primary btn-sm">{% trans "Filter" %}</button>
+      <input type="date" name="date_from" class="form-control" style="width:auto;" value="{{ date_from|default:'' }}" title="{% trans 'From date' %}">
+      <input type="date" name="date_to"   class="form-control" style="width:auto;" value="{{ date_to|default:'' }}"   title="{% trans 'To date' %}">
+      <button type="submit" class="btn btn-secondary btn-sm">{% trans "Filter" %}</button>
       {% if query or method_filter or status_filter or date_from or date_to %}
-        <a href="{% url 'payment-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <a href="{% url 'payment-list' %}" class="btn btn-ghost btn-sm">{% trans "Clear" %}</a>
         <span class="filter-active">{% trans "Filters active" %}</span>
       {% endif %}
-    </div>
-  </form>
+    </form>
+  </div>
 
   {% if page_obj.object_list %}
-  <div class="table-wrap">
+  <div class="table-container">
     <table>
       <thead>
         <tr>
-          <th>{% trans "Payment #" %}</th>
-          <th>{% trans "Order #" %}</th>
+          <th>{% trans "Payment" %}</th>
+          <th>{% trans "Order" %}</th>
           <th>{% trans "Customer" %}</th>
           <th>{% trans "Amount" %}</th>
           <th>{% trans "Method" %}</th>
           <th>{% trans "Status" %}</th>
-          <th>{% trans "Reference" %}</th>
-          <th>{% trans "Receipt" %}</th>
-          <th>{% trans "Recorded By" %}</th>
           <th>{% trans "Date" %}</th>
-          <th>{% trans "Actions" %}</th>
+          <th style="width:60px;"></th>
         </tr>
       </thead>
       <tbody>
         {% for payment in page_obj %}
         <tr>
-          <td class="td-mono">
-            <a href="{% url 'payment-detail' payment.pk %}">{{ payment.payment_number }}</a>
+          <td class="td-mono font-medium">
+            <a href="{% url 'payment-detail' payment.pk %}"
+               hx-get="{% url 'payment-detail' payment.pk %}"
+               hx-target="#slide-payment-body"
+               hx-swap="innerHTML"
+               onclick="event.preventDefault();openSlide('slide-payment')"
+               style="color:var(--primary)">{{ payment.payment_number }}</a>
           </td>
-          <td class="td-mono">
-            <a href="{% url 'order-detail' payment.sales_order.pk %}">{{ payment.sales_order.order_number }}</a>
-          </td>
+          <td class="td-mono text-xs">{{ payment.sales_order.order_number }}</td>
           <td>{{ payment.sales_order.customer.get_full_name }}</td>
-          <td><strong>{{ payment.amount|currency }}</strong></td>
+          <td class="font-semibold">{{ payment.amount|currency }}</td>
           <td>{{ payment.get_payment_method_display }}</td>
           <td>
-            <span class="badge {% if payment.status == 'confirmed' %}badge-paid{% else %}badge-pending{% endif %}">
-              {{ payment.get_status_display }}
-            </span>
-          </td>
-          <td style="color:var(--muted);">{{ payment.reference_number|default:"—" }}</td>
-          <td>
-            {% if payment.receipt_image %}
-            <a href="{{ payment.receipt_image.url }}" class="btn btn-ghost btn-sm">{% trans "Receipt" %}</a>
+            {% if payment.status == 'confirmed' %}
+              <span class="badge badge-paid">{{ payment.get_status_display }}</span>
             {% else %}
-            <span style="color:var(--muted);">-</span>
+              <span class="badge badge-cancelled">{{ payment.get_status_display }}</span>
             {% endif %}
           </td>
-          <td>{{ payment.recorded_by.get_full_name }}</td>
-          <td>{{ payment.created_at|date:"M j, Y" }}</td>
-          <td>
-            <a href="{% url 'payment-detail' payment.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
+          <td style="color:var(--text-tertiary)">{{ payment.created_at|date:"M j, Y" }}</td>
+          <td class="td-actions">
+            <a href="{% url 'payment-detail' payment.pk %}"
+               class="btn-icon" title="{% trans 'View' %}"
+               hx-get="{% url 'payment-detail' payment.pk %}"
+               hx-target="#slide-payment-body"
+               hx-swap="innerHTML"
+               onclick="event.preventDefault();openSlide('slide-payment')"><i class="fas fa-eye"></i></a>
           </td>
         </tr>
         {% endfor %}
@@ -98,7 +96,7 @@
       {% blocktrans with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktrans %}
     </span>
     {% if page_obj.has_previous %}
-      <a href="?page={{ page_obj.previous_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">‹</a>
+      <a href="?{% if query %}q={{ query }}&{% endif %}{% if method_filter %}method={{ method_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
     {% else %}
       <span class="pg-btn disabled">‹</span>
     {% endif %}
@@ -106,11 +104,11 @@
       {% if page_obj.number == num %}
         <span class="pg-btn active">{{ num }}</span>
       {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
-        <a href="?page={{ num }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">{{ num }}</a>
+        <a href="?{% if query %}q={{ query }}&{% endif %}{% if method_filter %}method={{ method_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ num }}" class="pg-btn">{{ num }}</a>
       {% endif %}
     {% endfor %}
     {% if page_obj.has_next %}
-      <a href="?page={{ page_obj.next_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}" class="pg-btn">›</a>
+      <a href="?{% if query %}q={{ query }}&{% endif %}{% if method_filter %}method={{ method_filter }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ page_obj.next_page_number }}" class="pg-btn">›</a>
     {% else %}
       <span class="pg-btn disabled">›</span>
     {% endif %}
@@ -118,17 +116,28 @@
   {% endif %}
 
   {% else %}
-  <div class="table-wrap">
+  <div class="table-container">
     <div class="empty-state">
-      <div class="empty-icon"><i class="fas fa-credit-card"></i></div>
+      <i class="fas fa-credit-card"></i>
       <div class="empty-title">{% trans "No payments found" %}</div>
-      {% if query or method_filter or status_filter %}
-        <div>{% trans "No results match your filters." %} <a href="{% url 'payment-list' %}">{% trans "Clear filters" %}</a></div>
-      {% else %}
-        <div>{% url 'order-list' as order_list_url %}{% blocktrans %}Payments are recorded from the <a href="{{ order_list_url }}">order detail</a> view.{% endblocktrans %}</div>
+      {% if query or method_filter or status_filter or date_from or date_to %}
+        <div>{% trans "No payments match your filters." %} <a href="{% url 'payment-list' %}">{% trans "Clear filters" %}</a></div>
       {% endif %}
     </div>
   </div>
   {% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Payment Detail Slide-over -->
+<div class="slide-overlay" id="slide-payment-overlay" onclick="closeSlide('slide-payment')"></div>
+<div class="slide-panel" id="slide-payment">
+  <div id="slide-payment-body">
+    <div class="slide-header">
+      <div>{% trans "Loading…" %}</div>
+      <button type="button" class="btn-icon" onclick="closeSlide('slide-payment')"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
 </div>
 {% endblock %}

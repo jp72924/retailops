@@ -3,335 +3,277 @@
 {% block title %}{% trans "Settings" %} | RetailOps{% endblock %}
 
 {% block content %}
-<div class="page" style="max-width:720px;">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Settings" %}</div>
-      <div class="page-subtitle">{% trans "Manage your personal preferences and regional settings" %}</div>
-    </div>
+<div class="page">
+  <div class="mb-6">
+    <h1 class="text-xl font-bold mb-0.5">{% trans "Settings" %}</h1>
+    <p class="text-sm" style="color:var(--text-secondary)">{% trans "Manage preferences and system configuration" %}</p>
   </div>
 
   <form method="post" action="{% url 'settings' %}">
     {% csrf_token %}
 
-    <!-- Personal / Regional Preferences -->
-    <div class="card" style="margin-bottom:24px;">
-      <div class="card-header"><div class="card-title">{% trans "Regional Preferences" %}</div></div>
-      <div class="card-body">
-        <div class="form-grid form-grid-2" style="gap:20px;">
+    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+      <div class="xl:col-span-2 flex flex-col gap-5">
 
-          <div class="form-group">
-            <label class="form-label" for="id_timezone">{% trans "Time Zone" %}</label>
-            <select id="id_timezone" name="timezone" class="form-control {% if errors.timezone %}is-invalid{% endif %}">
-              {% for tz in timezones %}
-              <option value="{{ tz }}" {% if tz == request.user.timezone %}selected{% endif %}>{{ tz }}</option>
-              {% endfor %}
-            </select>
-            {% if errors.timezone %}
-            <div class="invalid-feedback">{{ errors.timezone }}</div>
-            {% endif %}
-            <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-              {% trans "All dates and times will display in this timezone." %}
+        <!-- Regional Preferences -->
+        <div class="card">
+          <div class="card-header"><h3 class="font-semibold text-sm">{% trans "Regional Preferences" %}</h3></div>
+          <div class="card-body grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div class="form-group">
+              <label class="label" for="id_timezone">{% trans "Time Zone" %}</label>
+              <select id="id_timezone" name="timezone" class="input {% if errors.timezone %}is-invalid{% endif %}">
+                {% for tz in timezones %}
+                <option value="{{ tz }}" {% if tz == request.user.timezone %}selected{% endif %}>{{ tz }}</option>
+                {% endfor %}
+              </select>
+              {% if errors.timezone %}<div class="invalid-feedback">{{ errors.timezone }}</div>{% endif %}
+              <p class="text-xs mt-1.5" style="color:var(--text-tertiary)">{% trans "All dates and times will display in this timezone." %}</p>
             </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="id_language">{% trans "Language" %}</label>
-            <select id="id_language" name="language" class="form-control {% if errors.language %}is-invalid{% endif %}">
-              {% for code, label in languages %}
-              <option value="{{ code }}" {% if code == request.user.language %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-            {% if errors.language %}
-            <div class="invalid-feedback">{{ errors.language }}</div>
-            {% endif %}
-          </div>
-
-        </div>
-      </div>
-    </div>
-
-    <!-- Currency Settings (Admin only) -->
-    {% if user.role.name == 'Admin' %}
-    <div class="card" style="margin-bottom:24px;">
-      <div class="card-header">
-        <div class="card-title">{% trans "Currency Settings" %}</div>
-        <span style="font-size:0.78rem;color:var(--muted);">{% trans "System-wide — applies to all users" %}</span>
-      </div>
-      <div class="card-body">
-        <div class="form-grid form-grid-3" style="gap:20px;">
-
-          <div class="form-group">
-            <label class="form-label" for="id_currency_code">{% trans "Currency Code" %} <span style="color:var(--muted);font-weight:400;">{% trans "(ISO 4217)" %}</span></label>
-            <input type="text" id="id_currency_code" name="currency_code" class="form-control"
-              value="{{ sys_settings.currency_code }}" maxlength="3" placeholder="USD">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="id_currency_symbol">{% trans "Symbol" %}</label>
-            <input type="text" id="id_currency_symbol" name="currency_symbol" class="form-control"
-              value="{{ sys_settings.currency_symbol }}" maxlength="4" placeholder="$">
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="id_decimal_places">{% trans "Decimal Places" %}</label>
-            <select id="id_decimal_places" name="decimal_places" class="form-control">
-              {% for n in "0123" %}
-              <option value="{{ n }}" {% if n == sys_settings.decimal_places|stringformat:"s" %}selected{% endif %}>{{ n }}</option>
-              {% endfor %}
-            </select>
-          </div>
-
-        </div>
-        <div style="font-size:0.78rem;color:var(--muted);margin-top:12px;">
-          {% trans "Preview: amounts will display as" %}
-          <strong>{{ sys_settings.currency_symbol }}1{{ sys_settings.decimal_places|pluralize:",." }}00</strong>
-          ({% trans "e.g." %} {{ sys_settings.currency_symbol }}1,234.{{ "00"|slice:sys_settings.decimal_places }})
-        </div>
-
-        <hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">
-
-        <div class="form-group" style="margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
-            <input type="checkbox" name="secondary_currency_enabled" value="on"
-              {% if sys_settings.secondary_currency_enabled %}checked{% endif %}>
-            {% trans "Show a secondary currency alongside the primary" %}
-          </label>
-          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            {% trans "When enabled, every monetary amount gets an approximate conversion displayed in smaller muted text." %}
-          </div>
-        </div>
-
-        <div class="form-grid form-grid-4" style="gap:20px;">
-          <div class="form-group">
-            <label class="form-label" for="id_secondary_currency_code">{% trans "Secondary Code" %}</label>
-            <input type="text" id="id_secondary_currency_code" name="secondary_currency_code" class="form-control {% if errors.secondary_currency_code %}is-invalid{% endif %}"
-              value="{{ sys_settings.secondary_currency_code }}" maxlength="3" placeholder="VES">
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="id_secondary_currency_symbol">{% trans "Secondary Symbol" %}</label>
-            <input type="text" id="id_secondary_currency_symbol" name="secondary_currency_symbol" class="form-control {% if errors.secondary_currency_symbol %}is-invalid{% endif %}"
-              value="{{ sys_settings.secondary_currency_symbol }}" maxlength="4" placeholder="Bs.">
-            {% if errors.secondary_currency_symbol %}
-            <div class="invalid-feedback">{{ errors.secondary_currency_symbol }}</div>
-            {% endif %}
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="id_secondary_decimal_places">{% trans "Secondary Decimals" %}</label>
-            <select id="id_secondary_decimal_places" name="secondary_decimal_places" class="form-control">
-              {% for n in "01234" %}
-              <option value="{{ n }}" {% if n == sys_settings.secondary_decimal_places|stringformat:"s" %}selected{% endif %}>{{ n }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="id_secondary_exchange_rate">{% trans "Exchange Rate" %}</label>
-            <input type="number" id="id_secondary_exchange_rate" name="secondary_exchange_rate" class="form-control {% if errors.secondary_exchange_rate %}is-invalid{% endif %}"
-              value="{{ sys_settings.secondary_exchange_rate }}" step="0.00000001" min="0">
-            {% if errors.secondary_exchange_rate %}
-            <div class="invalid-feedback">{{ errors.secondary_exchange_rate }}</div>
-            {% endif %}
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
-              {% trans "Units of secondary per 1 primary." %}
+            <div class="form-group">
+              <label class="label" for="id_language">{% trans "Language" %}</label>
+              <select id="id_language" name="language" class="input {% if errors.language %}is-invalid{% endif %}">
+                {% for code, label in languages %}
+                <option value="{{ code }}" {% if code == request.user.language %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+              {% if errors.language %}<div class="invalid-feedback">{{ errors.language }}</div>{% endif %}
             </div>
           </div>
         </div>
 
-        {% if sys_settings.secondary_currency_enabled %}
-        <div style="font-size:0.78rem;color:var(--muted);margin-top:12px;">
-          {% trans "Preview:" %} {{ sys_settings.currency_symbol }}1.00 ≈ {{ sys_settings.secondary_currency_symbol }}{{ sys_settings.secondary_exchange_rate }}
+        <!-- Currency Settings (Admin only) -->
+        {% if user.role.name == 'Admin' %}
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="font-semibold text-sm">{% trans "Currency Settings" %}</h3>
+              <p class="text-xs mt-0.5" style="color:var(--text-tertiary)">{% trans "System-wide — applies to all users" %}</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-4">
+              <div class="form-group">
+                <label class="label">{% trans "Currency Code" %} <span class="normal-case font-normal" style="color:var(--text-tertiary)">(ISO 4217)</span></label>
+                <input type="text" name="currency_code" class="input" value="{{ sys_settings.currency_code }}" maxlength="3">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Symbol" %}</label>
+                <input type="text" name="currency_symbol" class="input" value="{{ sys_settings.currency_symbol }}" maxlength="4">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Decimal Places" %}</label>
+                <select name="decimal_places" class="input">
+                  {% for n in "0123" %}
+                  <option value="{{ n }}" {% if n == sys_settings.decimal_places|stringformat:"s" %}selected{% endif %}>{{ n }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            <p class="text-xs mb-5" style="color:var(--text-tertiary)">
+              {% trans "Preview: amounts will display as" %} <strong style="color:var(--text-primary)">{{ sys_settings.currency_symbol }}1,234.{{ "00"|slice:sys_settings.decimal_places }}</strong>
+            </p>
+            <div class="flex items-center justify-between p-4 rounded-xl mb-5" style="background:var(--bg-base)">
+              <div class="flex items-center gap-3">
+                <div class="toggle {% if sys_settings.secondary_currency_enabled %}on{% endif %}" onclick="this.classList.toggle('on');document.getElementById('id_secondary_currency_enabled').value=this.classList.contains('on')?'on':'';"></div>
+                <input type="hidden" name="secondary_currency_enabled" id="id_secondary_currency_enabled" value="{% if sys_settings.secondary_currency_enabled %}on{% endif %}">
+                <div>
+                  <div class="text-sm font-semibold">{% trans "Secondary Currency" %}</div>
+                  <div class="text-xs" style="color:var(--text-secondary)">{% trans "Display conversion alongside primary" %}</div>
+                </div>
+              </div>
+              <span class="text-sm font-mono font-semibold" style="color:var(--primary)">
+                {{ sys_settings.currency_symbol }}1 ≈ {{ sys_settings.secondary_currency_symbol }}{{ sys_settings.secondary_exchange_rate|floatformat:sys_settings.secondary_decimal_places }}
+              </span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-4">
+              <div class="form-group">
+                <label class="label">{% trans "Secondary Code" %}</label>
+                <input type="text" name="secondary_currency_code" class="input" value="{{ sys_settings.secondary_currency_code }}" maxlength="3">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Secondary Symbol" %}</label>
+                <input type="text" name="secondary_currency_symbol" class="input" value="{{ sys_settings.secondary_currency_symbol }}" maxlength="4">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Secondary Decimals" %}</label>
+                <select name="secondary_decimal_places" class="input">
+                  {% for n in "01234" %}
+                  <option value="{{ n }}" {% if n == sys_settings.secondary_decimal_places|stringformat:"s" %}selected{% endif %}>{{ n }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Exchange Rate" %}</label>
+                <input type="number" name="secondary_exchange_rate" class="input" value="{{ sys_settings.secondary_exchange_rate }}" step="0.00000001" min="0">
+                <p class="text-xs mt-1" style="color:var(--text-tertiary)">{% trans "Units of secondary per 1 primary." %}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 mb-4">
+              <div class="toggle {% if sys_settings.secondary_rate_auto_update_enabled %}on{% endif %}" onclick="this.classList.toggle('on');document.getElementById('id_secondary_rate_auto_update_enabled').value=this.classList.contains('on')?'on':'';"></div>
+              <input type="hidden" name="secondary_rate_auto_update_enabled" id="id_secondary_rate_auto_update_enabled" value="{% if sys_settings.secondary_rate_auto_update_enabled %}on{% endif %}">
+              <div>
+                <div class="text-sm font-semibold">{% trans "Auto-update from external source" %}</div>
+                <div class="text-xs" style="color:var(--text-secondary)">{% trans "Fetches the rate from the URL below on a schedule" %}</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
+              <div class="form-group">
+                <label class="label">{% trans "Rate Source URL" %}</label>
+                <input type="url" name="secondary_rate_source_url" class="input" value="{{ sys_settings.secondary_rate_source_url }}" placeholder="https://...">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Rate JSON Field" %}</label>
+                <input type="text" name="secondary_rate_source_field" class="input" value="{{ sys_settings.secondary_rate_source_field }}" placeholder="promedio">
+                <p class="text-xs mt-1" style="color:var(--text-tertiary)">{% trans "Dotted path to the numeric rate." %}</p>
+              </div>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap">
+              <button type="submit" class="btn btn-secondary btn-sm" formaction="{% url 'secondary-rate-refresh' %}" formmethod="post" formnovalidate>
+                <i class="fas fa-sync-alt"></i> {% trans "Update now" %}
+              </button>
+              {% if sys_settings.secondary_rate_updated_at %}
+              <span class="text-xs" style="color:var(--text-tertiary)">
+                {% blocktrans with updated=sys_settings.secondary_rate_updated_at|date:"M j, Y" %}Last updated: {{ updated }}{% endblocktrans %}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+
+        <!-- OCR Settings -->
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3 class="font-semibold text-sm">{% trans "Receipt OCR Settings" %}</h3>
+              <p class="text-xs mt-0.5" style="color:var(--text-tertiary)">{% trans "VEPay verification for kiosk receipts" %}</p>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="flex items-center gap-3 mb-5">
+              <div class="toggle {% if sys_settings.ocr_enabled %}on{% endif %}" id="ocr-main-toggle" onclick="this.classList.toggle('on');document.getElementById('id_ocr_enabled').value=this.classList.contains('on')?'on':'';"></div>
+              <input type="hidden" name="ocr_enabled" id="id_ocr_enabled" value="{% if sys_settings.ocr_enabled %}on{% endif %}">
+              <div>
+                <div class="text-sm font-semibold">{% trans "Enable receipt OCR verification" %}</div>
+                <div class="text-xs" style="color:var(--text-secondary)">{% trans "Mobile payment and bank transfer receipts can be verified through the VEPay proxy" %}</div>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+              <div class="form-group">
+                <label class="label">{% trans "Provider" %}</label>
+                <select name="ocr_provider" class="input">
+                  <option value="vepay" {% if sys_settings.ocr_provider == 'vepay' %}selected{% endif %}>VEPay</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "VEPay Base URL" %}</label>
+                <input type="url" name="ocr_base_url" class="input" value="{{ sys_settings.ocr_base_url }}" placeholder="https://your-vepay-instance.example.com">
+              </div>
+            </div>
+            <div class="mb-5">
+              <label class="label">{% trans "API Key" %}</label>
+              <div id="ocr-key-display" class="flex items-center gap-3 flex-wrap">
+                <input type="text" class="input" value="{% if sys_settings.ocr_api_key %}***{% else %}{% trans 'No key configured' %}{% endif %}" readonly style="max-width:260px;">
+                <button type="button" class="btn btn-secondary btn-sm" id="ocr-replace-key">{% trans "Replace key" %}</button>
+              </div>
+              <div id="ocr-key-input" class="mt-2 hidden" style="max-width:360px;">
+                <input type="password" class="input" name="ocr_api_key" placeholder="{% trans 'Paste new VEPay API key' %}">
+                <p class="text-xs mt-1" style="color:var(--text-tertiary)">{% trans "Leave blank to clear the stored key." %}</p>
+              </div>
+              <input type="hidden" name="ocr_api_key_action" id="ocr_api_key_action" value="__no_change__">
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+              <div class="form-group">
+                <label class="label">{% trans "Timeout Seconds" %}</label>
+                <input type="number" name="ocr_timeout_seconds" class="input" value="{{ sys_settings.ocr_timeout_seconds }}" min="1">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Max File Size (MB)" %}</label>
+                <input type="number" name="ocr_max_file_mb" class="input" value="{{ sys_settings.ocr_max_file_mb }}" min="1">
+              </div>
+              <div class="form-group">
+                <label class="label">{% trans "Receipt Retention (Days)" %}</label>
+                <input type="number" name="delete_receipt_image_after_days" class="input" value="{{ sys_settings.delete_receipt_image_after_days }}" min="1">
+              </div>
+            </div>
+            <div class="mb-4">
+              <label class="label">{% trans "Payment Methods" %}</label>
+              <div class="flex gap-4 mt-2">
+                <label class="form-check">
+                  <input type="checkbox" name="ocr_enabled_methods" value="mobile_payment" {% if 'mobile_payment' in sys_settings.ocr_enabled_methods %}checked{% endif %}>
+                  {% trans "Mobile Payment" %}
+                </label>
+                <label class="form-check">
+                  <input type="checkbox" name="ocr_enabled_methods" value="bank_transfer" {% if 'bank_transfer' in sys_settings.ocr_enabled_methods %}checked{% endif %}>
+                  {% trans "Bank Transfer" %}
+                </label>
+              </div>
+            </div>
+            <div class="flex gap-4 mb-4 flex-wrap">
+              <label class="form-check">
+                <input type="checkbox" name="ocr_strict_amount" value="on" {% if sys_settings.ocr_strict_amount %}checked{% endif %}>
+                {% trans "Require amount to match outstanding balance" %}
+              </label>
+              <label class="form-check">
+                <input type="checkbox" name="ocr_require_complete" value="on" {% if sys_settings.ocr_require_complete %}checked{% endif %}>
+                {% trans "Require VEPay complete validation" %}
+              </label>
+            </div>
+            <div class="mb-5">
+              <label class="form-check">
+                <input type="checkbox" name="receipt_image_required_for_receipt_methods" value="on" {% if sys_settings.receipt_image_required_for_receipt_methods %}checked{% endif %}>
+                {% trans "Require receipt image for kiosk mobile payment and bank transfer" %}
+              </label>
+              <p class="text-xs mt-1 ml-6" style="color:var(--text-tertiary)">{% trans "When enabled, kiosk customers must upload a receipt image before these payments can be submitted." %}</p>
+            </div>
+            <div class="flex items-center gap-3 flex-wrap pt-4" style="border-top:1px solid var(--border-color)">
+              <button type="button" class="btn btn-secondary btn-sm" id="ocr-test-connection">
+                <i class="fas fa-plug"></i> {% trans "Test connection" %}
+              </button>
+              <span id="ocr-health-status" class="badge badge-draft" style="text-transform:none;letter-spacing:0;">{% trans "Not tested" %}</span>
+            </div>
+          </div>
         </div>
         {% endif %}
+      </div>
 
-        <hr style="margin:20px 0;border:none;border-top:1px solid var(--border);">
-
-        <div class="form-group" style="margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
-            <input type="checkbox" name="secondary_rate_auto_update_enabled" value="on"
-              {% if sys_settings.secondary_rate_auto_update_enabled %}checked{% endif %}>
-            {% trans "Automatically update the exchange rate from an external source" %}
-          </label>
-          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            {% blocktrans %}Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with
-            <code>python manage.py update_bcv_rate</code> or click “Update now”.{% endblocktrans %}
-          </div>
-        </div>
-
-        <div class="form-grid form-grid-2" style="gap:20px;">
-          <div class="form-group">
-            <label class="form-label" for="id_secondary_rate_source_url">{% trans "Rate Source URL" %}</label>
-            <input type="url" id="id_secondary_rate_source_url" name="secondary_rate_source_url"
-              class="form-control {% if errors.secondary_rate_source_url %}is-invalid{% endif %}"
-              value="{{ sys_settings.secondary_rate_source_url }}"
-              placeholder="https://ve.dolarapi.com/v1/dolares/oficial">
-            {% if errors.secondary_rate_source_url %}
-            <div class="invalid-feedback">{{ errors.secondary_rate_source_url }}</div>
-            {% endif %}
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="id_secondary_rate_source_field">{% trans "Rate JSON Field" %}</label>
-            <input type="text" id="id_secondary_rate_source_field" name="secondary_rate_source_field"
-              class="form-control {% if errors.secondary_rate_source_field %}is-invalid{% endif %}"
-              value="{{ sys_settings.secondary_rate_source_field }}" placeholder="promedio">
-            {% if errors.secondary_rate_source_field %}
-            <div class="invalid-feedback">{{ errors.secondary_rate_source_field }}</div>
-            {% endif %}
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
-              {% blocktrans %}Dotted path to the numeric rate, e.g. <code>promedio</code> or <code>data.rate</code>.{% endblocktrans %}
+      <div class="flex flex-col gap-5">
+        <!-- Appearance -->
+        <div class="card">
+          <div class="card-header"><h3 class="font-semibold text-sm">{% trans "Appearance" %}</h3></div>
+          <div class="card-body flex flex-col gap-3">
+            <div class="flex items-center justify-between p-3 rounded-lg" style="background:var(--bg-base)">
+              <div class="flex items-center gap-3">
+                <i class="fas fa-moon" style="color:var(--text-secondary)"></i>
+                <span class="text-sm font-medium">{% trans "Dark Mode" %}</span>
+              </div>
+              <div class="toggle" id="settings-theme-toggle" onclick="toggleTheme();this.classList.toggle('on')"></div>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg" style="background:var(--bg-base)">
+              <div class="flex items-center gap-3">
+                <i class="fas fa-bell" style="color:var(--text-secondary)"></i>
+                <span class="text-sm font-medium">{% trans "Notifications" %}</span>
+              </div>
+              <div class="toggle on" onclick="this.classList.toggle('on')"></div>
             </div>
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;gap:12px;margin-top:12px;flex-wrap:wrap;">
-          <button type="submit" class="btn btn-secondary btn-sm"
-            formaction="{% url 'secondary-rate-refresh' %}" formmethod="post" formnovalidate>
-            {% trans "Update now" %}
-          </button>
-          {% if sys_settings.secondary_rate_updated_at %}
-          <span style="font-size:0.72rem;color:var(--muted);">
-            {% blocktrans with updated=sys_settings.secondary_rate_updated_at %}Last updated: {{ updated }}{% endblocktrans %}
-          </span>
-          {% endif %}
-        </div>
-      </div>
-    </div>
-
-    <div class="card" style="margin-bottom:24px;">
-      <div class="card-header">
-        <div class="card-title">{% trans "Receipt OCR Settings" %}</div>
-        <span style="font-size:0.78rem;color:var(--muted);">{% trans "VEPay verification for kiosk receipts" %}</span>
-      </div>
-      <div class="card-body">
-        <div class="form-group" style="margin-bottom:16px;">
-          <label style="display:flex;align-items:center;gap:8px;font-weight:500;cursor:pointer;">
-            <input type="checkbox" name="ocr_enabled" value="on"
-              {% if sys_settings.ocr_enabled %}checked{% endif %}>
-            {% trans "Enable receipt OCR verification" %}
-          </label>
-          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            {% trans "When enabled, mobile payment and bank transfer receipts can be verified through the server-side VEPay proxy." %}
-          </div>
-        </div>
-
-        <div class="form-grid form-grid-2" style="gap:20px;margin-bottom:20px;">
-          <div class="form-group">
-            <label class="form-label" for="id_ocr_provider">{% trans "Provider" %}</label>
-            <select id="id_ocr_provider" name="ocr_provider" class="form-control {% if errors.ocr_provider %}is-invalid{% endif %}">
-              <option value="vepay" {% if sys_settings.ocr_provider == 'vepay' %}selected{% endif %}>VEPay</option>
-            </select>
-            {% if errors.ocr_provider %}
-            <div class="invalid-feedback">{{ errors.ocr_provider }}</div>
-            {% endif %}
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="id_ocr_base_url">{% trans "VEPay Base URL" %}</label>
-            <input type="url" id="id_ocr_base_url" name="ocr_base_url" class="form-control {% if errors.ocr_base_url %}is-invalid{% endif %}"
-              value="{{ sys_settings.ocr_base_url }}" placeholder="https://your-vepay-instance.example.com">
-            {% if errors.ocr_base_url %}
-            <div class="invalid-feedback">{{ errors.ocr_base_url }}</div>
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:20px;">
-          <label class="form-label">{% trans "API Key" %}</label>
-          <div id="ocr-key-current" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <input type="text" class="form-control" value="{% if sys_settings.ocr_api_key %}***{% else %}{% trans 'No key configured' %}{% endif %}" readonly style="max-width:260px;">
-            <button type="button" class="btn btn-secondary btn-sm" id="ocr-replace-key">{% trans "Replace key" %}</button>
-          </div>
-          <div id="ocr-key-replace" style="display:none;margin-top:8px;max-width:360px;">
-            <input type="password" id="id_ocr_api_key" name="ocr_api_key" class="form-control"
-              autocomplete="new-password" placeholder="{% trans 'Paste new VEPay API key' %}">
-            <div style="font-size:0.72rem;color:var(--muted);margin-top:4px;">
-              {% trans "Leave blank after choosing replace to clear the stored key." %}
+        <!-- Profile -->
+        <div class="card">
+          <div class="card-body text-center py-8">
+            <div class="avatar-circle avatar-circle-lg mx-auto mb-3 flex items-center justify-center text-xl font-bold text-white" style="background:linear-gradient(135deg,var(--primary),#7c3aed)">
+              {{ user.first_name.0|upper }}{{ user.last_name.0|upper }}
             </div>
+            <div class="font-semibold text-sm">{{ user.get_full_name }}</div>
+            <div class="text-xs mb-4" style="color:var(--text-secondary)">{{ user.email }}</div>
+            <a href="{% url 'settings' %}" class="btn btn-secondary btn-sm w-full">{% trans "Edit Profile" %}</a>
           </div>
-          <input type="hidden" name="ocr_api_key_action" id="ocr_api_key_action" value="__no_change__">
-        </div>
-
-        <div class="form-grid form-grid-2" style="gap:20px;margin-bottom:20px;">
-          <div class="form-group">
-            <label class="form-label" for="id_ocr_timeout_seconds">{% trans "Timeout Seconds" %}</label>
-            <input type="number" id="id_ocr_timeout_seconds" name="ocr_timeout_seconds" class="form-control {% if errors.ocr_timeout_seconds %}is-invalid{% endif %}"
-              value="{{ sys_settings.ocr_timeout_seconds }}" min="1" step="1">
-            {% if errors.ocr_timeout_seconds %}
-            <div class="invalid-feedback">{{ errors.ocr_timeout_seconds }}</div>
-            {% endif %}
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="id_ocr_max_file_mb">{% trans "Max File Size MB" %}</label>
-            <input type="number" id="id_ocr_max_file_mb" name="ocr_max_file_mb" class="form-control {% if errors.ocr_max_file_mb %}is-invalid{% endif %}"
-              value="{{ sys_settings.ocr_max_file_mb }}" min="1" step="1">
-            {% if errors.ocr_max_file_mb %}
-            <div class="invalid-feedback">{{ errors.ocr_max_file_mb }}</div>
-            {% endif %}
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" for="id_delete_receipt_image_after_days">{% trans "Receipt Image Retention Days" %}</label>
-            <input type="number" id="id_delete_receipt_image_after_days" name="delete_receipt_image_after_days" class="form-control {% if errors.delete_receipt_image_after_days %}is-invalid{% endif %}"
-              value="{{ sys_settings.delete_receipt_image_after_days }}" min="1" step="1">
-            {% if errors.delete_receipt_image_after_days %}
-            <div class="invalid-feedback">{{ errors.delete_receipt_image_after_days }}</div>
-            {% endif %}
-          </div>
-        </div>
-
-        <div class="form-group" style="margin-bottom:18px;">
-          <label class="form-label">{% trans "Payment Methods" %}</label>
-          <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:4px;">
-            <label class="form-check">
-              <input type="checkbox" name="ocr_enabled_methods" value="mobile_payment"
-                {% if 'mobile_payment' in sys_settings.ocr_enabled_methods %}checked{% endif %}>
-              {% trans "Mobile Payment" %}
-            </label>
-            <label class="form-check">
-              <input type="checkbox" name="ocr_enabled_methods" value="bank_transfer"
-                {% if 'bank_transfer' in sys_settings.ocr_enabled_methods %}checked{% endif %}>
-              {% trans "Bank Transfer" %}
-            </label>
-          </div>
-          {% if errors.ocr_enabled_methods %}
-          <div class="invalid-feedback">{{ errors.ocr_enabled_methods }}</div>
-          {% endif %}
-        </div>
-
-        <div class="form-grid form-grid-2" style="gap:20px;margin-bottom:20px;">
-          <label class="form-check">
-            <input type="checkbox" name="ocr_strict_amount" value="on"
-              {% if sys_settings.ocr_strict_amount %}checked{% endif %}>
-            {% trans "Require amount to match outstanding balance" %}
-          </label>
-          <label class="form-check">
-            <input type="checkbox" name="ocr_require_complete" value="on"
-              {% if sys_settings.ocr_require_complete %}checked{% endif %}>
-            {% trans "Require VEPay complete validation" %}
-          </label>
-        </div>
-
-        <div class="form-group" style="margin-bottom:20px;">
-          <label class="form-check">
-            <input type="checkbox" name="receipt_image_required_for_receipt_methods" value="on"
-              {% if sys_settings.receipt_image_required_for_receipt_methods %}checked{% endif %}>
-            {% trans "Require receipt image for kiosk mobile payment and bank transfer" %}
-          </label>
-          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            {% trans "When enabled, kiosk customers must upload a receipt image before these payments can be submitted." %}
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
-          <button type="button" class="btn btn-secondary btn-sm" id="ocr-test-connection">{% trans "Test connection" %}</button>
-          <span id="ocr-health-status" class="badge badge-draft" style="text-transform:none;letter-spacing:0;">{% trans "Not tested" %}</span>
         </div>
       </div>
     </div>
-    {% endif %}
 
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary">{% trans "Save Settings" %}</button>
+    <div class="mt-6">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> {% trans "Save Changes" %}</button>
     </div>
   </form>
 </div>
@@ -341,15 +283,15 @@
 {% if user.role.name == 'Admin' %}
 <script>
   const replaceKeyButton = document.getElementById('ocr-replace-key');
-  const keyCurrent = document.getElementById('ocr-key-current');
-  const keyReplace = document.getElementById('ocr-key-replace');
+  const keyCurrent = document.getElementById('ocr-key-display');
+  const keyReplace = document.getElementById('ocr-key-input');
   const keyAction = document.getElementById('ocr_api_key_action');
 
   replaceKeyButton?.addEventListener('click', () => {
     keyCurrent.style.display = 'none';
-    keyReplace.style.display = 'block';
+    keyReplace.classList.remove('hidden');
     keyAction.value = 'replace';
-    document.getElementById('id_ocr_api_key')?.focus();
+    document.querySelector('#ocr-key-input input')?.focus();
   });
 
   const testButton = document.getElementById('ocr-test-connection');
@@ -357,7 +299,7 @@
 
   function setHealthStatus(text, className) {
     healthStatus.textContent = text;
-    healthStatus.className = `badge ${className}`;
+    healthStatus.className = 'badge ' + className;
     healthStatus.style.textTransform = 'none';
     healthStatus.style.letterSpacing = '0';
   }
@@ -388,6 +330,13 @@
       testButton.disabled = false;
     }
   });
+
+  // Sync theme toggle with current state
+  (function() {
+    const theme = document.documentElement.getAttribute('data-theme');
+    const toggle = document.getElementById('settings-theme-toggle');
+    if (toggle) toggle.classList.toggle('on', theme === 'dark');
+  })();
 </script>
 {% endif %}
 {% endblock %}

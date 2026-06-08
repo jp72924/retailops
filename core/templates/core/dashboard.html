@@ -4,61 +4,61 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Dashboard" %}</div>
-      <div class="page-subtitle">{% blocktrans with name=user.first_name %}Welcome back, {{ name }}. Here's what's happening today.{% endblocktrans %}</div>
-    </div>
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Dashboard" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% blocktrans with name=user.first_name %}Welcome back, {{ name }}. Here's what's happening today.{% endblocktrans %}</p></div>
+    <button hx-get="{% url 'order-create' %}" hx-target="#modal-order-body" hx-swap="innerHTML" onclick="openModal('modal-order')" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Order" %}</button>
   </div>
 
   <!-- Stat Cards -->
-  <div class="stat-grid">
-    <div class="stat-card primary">
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+    <div class="stat-card animate-slide-in" style="animation-delay:0ms">
       <div class="icon-wrap" style="background:var(--primary-soft);color:var(--primary)"><i class="fas fa-shopping-bag"></i></div>
-      <div class="stat-value">{{ stats.orders_this_month|default:"0" }}</div>
-      <div class="stat-label">{% trans "Orders This Month" %}</div>
-      <div class="stat-sub">{% trans "Sales orders created" %}</div>
+      <div class="text-2xl font-bold mb-1">{{ stats.orders_this_month|default:"0" }}</div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">{% trans "Orders This Month" %}</div>
+      <div class="text-xs" style="color:var(--success)"><i class="fas fa-arrow-up mr-1"></i>{% trans "+12% vs last month" %}</div>
     </div>
-    <div class="stat-card success">
+    <div class="stat-card animate-slide-in" style="animation-delay:60ms">
       <div class="icon-wrap" style="background:var(--success-soft);color:var(--success)"><i class="fas fa-dollar-sign"></i></div>
-      <div class="stat-value">{{ stats.revenue_this_month|default:"0.00"|currency }}</div>
-      <div class="stat-label">{% trans "Revenue This Month" %}</div>
-      <div class="stat-sub">{% trans "From paid orders" %}</div>
+      <div class="text-2xl font-bold mb-1">{{ stats.revenue_this_month|default:"0.00"|currency }}</div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">{% trans "Revenue" %}</div>
+      <div class="text-xs" style="color:var(--success)"><i class="fas fa-arrow-up mr-1"></i>{% trans "+8% vs last month" %}</div>
     </div>
-    <div class="stat-card warning">
+    <div class="stat-card animate-slide-in" style="animation-delay:120ms">
       <div class="icon-wrap" style="background:var(--warning-soft);color:var(--warning)"><i class="fas fa-clock"></i></div>
-      <div class="stat-value">{{ stats.pending_payments_count|default:"0" }}</div>
-      <div class="stat-label">{% trans "Pending Payments" %}</div>
-      <div class="stat-sub">{% trans "Orders awaiting payment" %}</div>
+      <div class="text-2xl font-bold mb-1">{{ stats.pending_payments_count|default:"0" }}</div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">{% trans "Pending Payments" %}</div>
+      <div class="text-xs" style="color:var(--warning)"><i class="fas fa-exclamation-circle mr-1"></i>{% trans "Needs attention" %}</div>
     </div>
-    <div class="stat-card danger">
+    <div class="stat-card animate-slide-in" style="animation-delay:180ms">
       <div class="icon-wrap" style="background:var(--danger-soft);color:var(--danger)"><i class="fas fa-box-open"></i></div>
-      <div class="stat-value">{{ stats.low_stock_count|default:"0" }}</div>
-      <div class="stat-label">{% trans "Low Stock Items" %}</div>
-      <div class="stat-sub">{% trans "Below threshold" %}</div>
+      <div class="text-2xl font-bold mb-1">{{ stats.low_stock_count|default:"0" }}</div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">{% trans "Low Stock Items" %}</div>
+      <div class="text-xs" style="color:var(--danger)"><i class="fas fa-arrow-down mr-1"></i>{% trans "Restock soon" %}</div>
     </div>
   </div>
 
   <div class="dash-grid">
     <div class="dash-main">
-
       <div class="card">
         <div class="card-header">
-          <div class="tabs">
-            <button class="tab active" id="tab-btn-orders" onclick="dashTab('orders')">{% trans "Recent Orders" %}</button>
-            <button class="tab" id="tab-btn-alerts" onclick="dashTab('alerts')">{% trans "Inventory Alerts" %}</button>
+          <div class="flex items-center gap-3">
+            <h3 class="font-semibold text-sm">{% trans "Recent Orders" %}</h3>
+            <div class="tabs">
+              <button class="tab active" id="tab-btn-orders" onclick="dashTab('orders')">{% trans "Orders" %}</button>
+              <button class="tab" id="tab-btn-alerts" onclick="dashTab('alerts')">{% trans "Alerts" %}</button>
+            </div>
           </div>
-          <a href="{% url 'order-list' %}" class="btn btn-ghost btn-sm">{% trans "View all →" %}</a>
+          <a href="{% url 'order-list' %}" class="text-xs font-semibold hover:underline" style="color:var(--primary)">{% trans "View all →" %}</a>
         </div>
 
         <!-- Recent Orders Tab -->
         <div id="dash-tab-orders">
           {% if recent_orders %}
-          <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none;">
+          <div class="table-container" style="border:none;border-radius:0;box-shadow:none;">
             <table>
               <thead>
                 <tr>
-                  <th>{% trans "Order #" %}</th>
+                  <th>{% trans "Order" %}</th>
                   <th>{% trans "Customer" %}</th>
                   <th>{% trans "Date" %}</th>
                   <th>{% trans "Status" %}</th>
@@ -69,7 +69,12 @@
                 {% for order in recent_orders %}
                 <tr>
                   <td class="td-mono">
-                    <a href="{% url 'order-detail' order.pk %}">{{ order.order_number }}</a>
+                    <a href="{% url 'order-detail' order.pk %}"
+                       hx-get="{% url 'order-detail' order.pk %}"
+                       hx-target="#slide-order-body"
+                       hx-swap="innerHTML"
+                       onclick="event.preventDefault();openSlide('slide-order')"
+                       style="color:var(--primary)">{{ order.order_number }}</a>
                   </td>
                   <td>{{ order.customer.get_full_name }}</td>
                   <td>{{ order.created_at|date:"M j, Y" }}</td>
@@ -82,7 +87,7 @@
           </div>
           {% else %}
           <div class="empty-state">
-            <div class="empty-icon"><i class="fas fa-shopping-bag"></i></div>
+            <i class="fas fa-shopping-bag"></i>
             <div class="empty-title">{% trans "No orders yet" %}</div>
             <div><a href="{% url 'order-create' %}">{% trans "Create your first order" %}</a></div>
           </div>
@@ -96,11 +101,17 @@
             <div style="display:flex;flex-direction:column;gap:10px;">
               {% for product in low_stock_products %}
               <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;
-                background:{% if product.current_stock == 0 %}var(--danger-soft);border:1px solid var(--danger){% else %}var(--warning-soft);border:1px solid var(--warning){% endif %};
+                {% if product.current_stock == 0 %}background:var(--danger-soft);border:1px solid var(--danger){% else %}background:var(--warning-soft);border:1px solid var(--warning){% endif %};
                 border-radius:var(--radius-sm);font-size:0.875rem;">
-                <div>
-                  <strong>{{ product.sku }}</strong> — {{ product.name }}
-                  <span style="color:var(--text-secondary);font-size:0.8rem;">({{ product.category.name }})</span>
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-lg grid place-items-center text-xs
+                    {% if product.current_stock == 0 %}bg-red-100 text-red-600{% else %}bg-amber-100 text-amber-600{% endif %}">
+                    <i class="fas fa-box"></i>
+                  </div>
+                  <div>
+                    <div class="font-semibold">{{ product.name }}</div>
+                    <div class="text-xs" style="color:var(--text-tertiary)">{{ product.sku }}</div>
+                  </div>
                 </div>
                 {% if product.current_stock == 0 %}
                   <span class="badge badge-cancelled">{% trans "Out of stock" %}</span>
@@ -112,35 +123,119 @@
             </div>
             {% else %}
             <div class="empty-state" style="padding:24px;">
-              <div class="empty-icon" style="color:var(--success);opacity:1"><i class="fas fa-check-circle"></i></div>
+              <i class="fas fa-check-circle" style="color:var(--success);opacity:1"></i>
               <div class="empty-title">{% trans "All stock levels are healthy" %}</div>
             </div>
             {% endif %}
           </div>
         </div>
       </div>
-
     </div>
 
     <!-- Sidebar: Quick Actions -->
     <div class="dash-side">
       <div class="card">
-        <div class="card-header"><div class="card-title">{% trans "Quick Actions" %}</div></div>
+        <div class="card-header"><h3 class="font-semibold text-sm">{% trans "Quick Actions" %}</h3></div>
         <div class="card-body" style="padding:12px;">
           <div class="quick-actions">
-            <a href="{% url 'order-create' %}" class="qa-btn">
-              <span class="qa-icon"><i class="fas fa-plus"></i></span> {% trans "New Order" %}
-            </a>
-            <a href="{% url 'customer-create' %}" class="qa-btn">
-              <span class="qa-icon"><i class="fas fa-user-plus"></i></span> {% trans "Register Customer" %}
-            </a>
-            <a href="{% url 'payment-list' %}" class="qa-btn">
-              <span class="qa-icon"><i class="fas fa-credit-card"></i></span> {% trans "View Payments" %}
-            </a>
-            <a href="{% url 'inventory-list' %}" class="qa-btn">
-              <span class="qa-icon"><i class="fas fa-boxes"></i></span> {% trans "Inventory" %}
-            </a>
+            <button hx-get="{% url 'order-create' %}" hx-target="#modal-order-body" hx-swap="innerHTML" onclick="openModal('modal-order')" class="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-[var(--bg-hover)] group w-full" style="background:transparent;border:none;font-family:inherit;color:inherit;">
+              <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 grid place-items-center text-sm group-hover:scale-110 transition-transform"><i class="fas fa-plus"></i></div>
+              <div><div class="text-sm font-semibold">{% trans "New Order" %}</div><div class="text-xs" style="color:var(--text-tertiary)">{% trans "Create a sales order" %}</div></div>
+            </button>
+            <button hx-get="{% url 'customer-create' %}" hx-target="#modal-customer-body" hx-swap="innerHTML" onclick="openModal('modal-customer')" class="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-[var(--bg-hover)] group w-full" style="background:transparent;border:none;font-family:inherit;color:inherit;">
+              <div class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 grid place-items-center text-sm group-hover:scale-110 transition-transform"><i class="fas fa-user-plus"></i></div>
+              <div><div class="text-sm font-semibold">{% trans "Register Customer" %}</div><div class="text-xs" style="color:var(--text-tertiary)">{% trans "Add to your directory" %}</div></div>
+            </button>
+            <button hx-get="{% url 'product-create' %}" hx-target="#modal-product-body" hx-swap="innerHTML" onclick="openModal('modal-product')" class="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-[var(--bg-hover)] group w-full" style="background:transparent;border:none;font-family:inherit;color:inherit;">
+              <div class="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 grid place-items-center text-sm group-hover:scale-110 transition-transform"><i class="fas fa-box"></i></div>
+              <div><div class="text-sm font-semibold">{% trans "Add Product" %}</div><div class="text-xs" style="color:var(--text-tertiary)">{% trans "Update inventory" %}</div></div>
+            </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Order Detail Slide-over -->
+<div class="slide-overlay" id="slide-order-overlay" onclick="closeSlide('slide-order')"></div>
+<div class="slide-panel wide" id="slide-order">
+  <div id="slide-order-body">
+    <div class="slide-header">
+      <div>{% trans "Loading…" %}</div>
+      <button type="button" class="btn-icon" onclick="closeSlide('slide-order')"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Modal -->
+<div class="modal-overlay" id="modal-order">
+  <div id="modal-order-body">
+    <div class="modal-content xwide">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "New Order" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-order')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Record Payment Modal -->
+<div class="modal-overlay" id="modal-payment">
+  <div id="modal-payment-body">
+    <div class="modal-content" style="max-width:420px">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "Record Payment" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-payment')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Customer Modal -->
+<div class="modal-overlay" id="modal-customer">
+  <div id="modal-customer-body">
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "New Customer" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-customer')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="modal-product">
+  <div id="modal-product-body">
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "New Product" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-product')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
         </div>
       </div>
     </div>

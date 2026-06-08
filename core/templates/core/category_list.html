@@ -4,32 +4,26 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Product Categories" %}</div>
-      <div class="page-subtitle">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} category registered{% plural %}{{ counter }} categories registered{% endblocktrans %}</div>
-    </div>
-    {% if user.role and user.role.name in "Manager,Admin" %}
-    <div class="page-header-actions">
-      <a href="{% url 'category-create-page' %}" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Category" %}</a>
-    </div>
-    {% endif %}
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Categories" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% trans "Organize your product catalog" %}</p></div>
+    <button hx-get="{% url 'category-create' %}" hx-target="#modal-category-body" hx-swap="innerHTML" onclick="openModal('modal-category')" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Category" %}</button>
   </div>
 
   <!-- Filter Bar -->
-  <form method="get" action="{% url 'category-list' %}">
-    <div class="filter-bar">
-      <input type="text" name="q" class="form-control" placeholder="{% trans '🔍 Search name or description…' %}" value="{{ query|default:'' }}">
-      <button type="submit" class="btn btn-primary btn-sm">{% trans "Search" %}</button>
+  <div class="flex flex-wrap items-center gap-3 mb-5">
+    <form method="get" action="{% url 'category-list' %}" class="flex flex-wrap items-center gap-3">
+      <div class="input-group" style="width:320px;">
+        <i class="fas fa-search"></i>
+        <input type="text" name="q" class="form-control" placeholder="{% trans 'Search categories…' %}" value="{{ query|default:'' }}">
+      </div>
       {% if query %}
-        <a href="{% url 'category-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <a href="{% url 'category-list' %}" class="btn btn-ghost btn-sm">{% trans "Clear" %}</a>
         <span class="filter-active">{% blocktrans %}Filtered by "{{ query }}"{% endblocktrans %}</span>
       {% endif %}
-    </div>
-  </form>
+    </form>
+  </div>
 
-  {% if page_obj.object_list %}
-  <div class="table-wrap">
+  <div class="table-container">
     <table>
       <thead>
         <tr>
@@ -37,41 +31,53 @@
           <th>{% trans "Type" %}</th>
           <th>{% trans "Parent" %}</th>
           <th>{% trans "Products" %}</th>
-          <th>{% trans "Created" %}</th>
-          <th>{% trans "Actions" %}</th>
+          <th style="width:120px;"></th>
         </tr>
       </thead>
       <tbody>
-        {% for cat in page_obj %}
+        {% for category in page_obj %}
         <tr>
           <td>
-            <a href="{% url 'category-edit' cat.pk %}"><strong>{{ cat.name }}</strong></a>
-            {% if cat.description %}<div style="font-size:0.8rem;color:var(--muted);">{{ cat.description|truncatechars:60 }}</div>{% endif %}
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-lg grid place-items-center text-xs" style="background:var(--bg-base)">
+                <i class="fas fa-tag" style="color:var(--text-secondary)"></i>
+              </div>
+              <div>
+                <div class="font-semibold text-sm">{{ category.name }}</div>
+                <div class="text-xs" style="color:var(--text-tertiary)">{{ category.description|default:"" }}</div>
+              </div>
+            </div>
           </td>
           <td>
-            {% if cat.parent_category %}
+            {% if category.parent_category %}
               <span class="badge badge-pending">{% trans "Subcategory" %}</span>
             {% else %}
               <span class="badge badge-active">{% trans "Parent" %}</span>
             {% endif %}
           </td>
-          <td>
-            {% if cat.parent_category %}
-              <a href="{% url 'category-edit' cat.parent_category.pk %}">{{ cat.parent_category.name }}</a>
-            {% else %}—{% endif %}
-          </td>
-          <td>{{ cat.product_count }}</td>
-          <td style="color:var(--muted);">{{ cat.created_at|date:"M j, Y" }}</td>
+          <td>{{ category.parent_category.name|default:"—" }}</td>
+          <td>{{ category.product_count }}</td>
           <td class="td-actions">
-            <a href="{% url 'category-edit' cat.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
-            {% if user.role and user.role.name in "Manager,Admin" %}
-            <form method="post" action="{% url 'category-delete' cat.pk %}" class="inline"
-                  onsubmit="return confirm('{% blocktrans with name=cat.name|escapejs %}Delete category &quot;{{ name }}&quot;?\nSubcategories will become top-level. This cannot be undone.{% endblocktrans %}')">
+            <button class="btn-icon" title="{% trans 'Edit' %}" hx-get="{% url 'category-edit' category.pk %}" hx-target="#modal-category-body" hx-swap="innerHTML" onclick="openModal('modal-category')"><i class="fas fa-pen"></i></button>
+            <form method="post" action="{% url 'category-delete' category.pk %}" class="inline"
+                  onsubmit="return confirm('{% blocktrans with name=category.name|escapejs %}Delete "{{ name }}"?{% endblocktrans %}')">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm"
-                      style="color:var(--danger);border:1px solid var(--border);background:transparent;">{% trans "Delete" %}</button>
+              <button type="submit" class="btn-icon" title="{% trans 'Delete' %}"><i class="fas fa-trash"></i></button>
             </form>
-            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr>
+          <td colspan="5">
+            <div class="empty-state">
+              <i class="fas fa-tags"></i>
+              <div class="empty-title">{% trans "No categories found" %}</div>
+              {% if query %}
+                <div>{% blocktrans %}No results for "{{ query }}".{% endblocktrans %} <a href="{% url 'category-list' %}">{% trans "Clear search" %}</a></div>
+              {% else %}
+                <div><a href="{% url 'category-create' %}">{% trans "Create your first category" %}</a></div>
+              {% endif %}
+            </div>
           </td>
         </tr>
         {% endfor %}
@@ -79,7 +85,6 @@
     </table>
   </div>
 
-  <!-- Pagination -->
   {% if page_obj.has_other_pages %}
   <div class="pagination">
     <span class="pg-info">
@@ -104,19 +109,25 @@
     {% endif %}
   </div>
   {% endif %}
+</div>
+{% endblock %}
 
-  {% else %}
-  <div class="table-wrap">
-    <div class="empty-state">
-      <div class="empty-icon"><i class="fas fa-tags"></i></div>
-      <div class="empty-title">{% trans "No categories found" %}</div>
-      {% if query %}
-        <div>{% blocktrans %}No results for "{{ query }}".{% endblocktrans %} <a href="{% url 'category-list' %}">{% trans "Clear search" %}</a></div>
-      {% else %}
-        <div><a href="{% url 'category-create-page' %}">{% trans "Add your first product category" %}</a></div>
-      {% endif %}
+{% block modals %}
+<!-- New Category Modal -->
+<div class="modal-overlay" id="modal-category">
+  <div id="modal-category-body">
+    <div class="modal-content" style="max-width:420px">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "New Category" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-category')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
     </div>
   </div>
-  {% endif %}
 </div>
 {% endblock %}

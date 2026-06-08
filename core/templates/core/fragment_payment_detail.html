@@ -1,0 +1,78 @@
+{% load i18n regional %}
+<div class="slide-header">
+  <div>
+    <h3 class="font-semibold td-mono" style="font-size:1.1rem;">{{ payment.payment_number }}</h3>
+    <p class="text-xs mt-0.5" style="color:var(--text-secondary)">
+      {% trans "Recorded on" %} {{ payment.created_at|date:"M j, Y" }} {% trans "by" %} {{ payment.recorded_by.get_full_name }}
+    </p>
+  </div>
+  <button type="button" class="btn-icon" onclick="closeSlide('slide-payment')"><i class="fas fa-times"></i></button>
+</div>
+<div class="slide-body">
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Payment Details" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Amount" %}</span>
+        <span class="font-bold text-lg">{{ payment.amount|currency }}</span>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Method" %}</span>
+        <span class="font-medium">{{ payment.get_payment_method_display }}</span>
+      </div>
+      {% if payment.reference_number %}
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Reference" %}</span>
+        <span class="td-mono font-medium">{{ payment.reference_number }}</span>
+      </div>
+      {% endif %}
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Date" %}</span>
+        <span class="font-medium">{{ payment.created_at|date:"M j, Y" }}</span>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Recorded By" %}</span>
+        <span class="font-medium">{{ payment.recorded_by.get_full_name }}</span>
+      </div>
+      {% if payment.notes %}
+      <div class="mt-2 pt-2" style="border-top:1px solid var(--border-color);">
+        <div class="text-sm" style="color:var(--text-secondary)">{{ payment.notes|linebreaksbr }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Linked Order" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Order #" %}</span>
+        <a href="{% url 'order-detail' payment.sales_order.pk %}" class="td-mono font-medium">{{ payment.sales_order.order_number }}</a>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Status" %}</span>
+        <span class="badge badge-{{ payment.sales_order.status }}">{{ payment.sales_order.get_status_display }}</span>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Customer" %}</span>
+        <span class="font-medium">{{ payment.sales_order.customer.get_full_name }}</span>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Order Total" %}</span>
+        <span class="font-medium">{{ payment.sales_order.total_amount|currency }}</span>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Amount Paid" %}</span>
+        <span class="font-medium">{{ payment.sales_order.amount_paid|currency }}</span>
+      </div>
+      <div class="info-row" style="justify-content:space-between;">
+        <span class="info-label">{% trans "Outstanding" %}</span>
+        <strong class="{% if payment.sales_order.amount_outstanding > 0 %}text-red-500{% else %}text-emerald-500{% endif %}">
+          {{ payment.sales_order.amount_outstanding|currency }}
+        </strong>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="slide-footer">
+  <a href="{% url 'order-detail' payment.sales_order.pk %}" class="btn btn-secondary" onclick="closeSlide('slide-payment')">{% trans "View Order" %}</a>
+</div>

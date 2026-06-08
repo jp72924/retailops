@@ -1,81 +1,73 @@
 {% extends "core/base.html" %}
 {% load i18n %}
-{% block title %}{% trans "Staff Management" %} | RetailOps{% endblock %}
+{% block title %}{% trans "Staff" %} | RetailOps{% endblock %}
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Staff Management" %}</div>
-      <div class="page-subtitle">{% trans "Manage user accounts and roles — Admin only" %}</div>
-    </div>
-    <div class="page-header-actions">
-      <button type="button" class="btn btn-primary" onclick="openModal('invite-modal')">{% trans "+ Invite New User" %}</button>
-    </div>
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Staff" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% trans "Manage team members and roles" %}</p></div>
+    <button hx-get="{% url 'user-invite' %}" hx-target="#modal-invite-body" hx-swap="innerHTML" onclick="openModal('modal-invite')" class="btn btn-primary"><i class="fas fa-user-plus"></i> {% trans "Invite" %}</button>
   </div>
 
-  <div class="table-wrap">
+  <div class="table-container">
     <table>
       <thead>
         <tr>
-          <th>{% trans "Name" %}</th>
-          <th>{% trans "Email" %}</th>
+          <th>{% trans "Member" %}</th>
           <th>{% trans "Role" %}</th>
           <th>{% trans "Status" %}</th>
-          <th>{% trans "Last Login" %}</th>
-          <th>{% trans "Actions" %}</th>
+          <th>{% trans "Last Active" %}</th>
+          <th style="width:120px;"></th>
         </tr>
       </thead>
       <tbody>
         {% for u in users %}
-        <tr {% if not u.is_active %}style="opacity:0.55;"{% endif %}>
+        <tr style="{% if not u.is_active %}opacity:0.5{% endif %}">
           <td>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <div class="avatar" style="width:28px;height:28px;font-size:0.65rem;
-                {% if not u.is_active %}background:var(--muted);{% endif %}">
+            <div class="flex items-center gap-3">
+              <div class="avatar-circle"
+                style="background:linear-gradient(135deg,{% if u.role.name == 'Admin' %}var(--primary),#7c3aed{% elif u.role.name == 'Manager' %}#10b981,#059669{% else %}#64748b,#475569{% endif %})">
                 {{ u.first_name.0|upper }}{{ u.last_name.0|upper }}
               </div>
-              <strong>{{ u.get_full_name }}</strong>
-              {% if u == request.user %}<span style="font-size:0.75rem;color:var(--muted);">{% trans "(you)" %}</span>{% endif %}
+              <div>
+                <div class="font-semibold text-sm">{{ u.get_full_name }}</div>
+                <div class="text-xs" style="color:var(--text-tertiary)">{{ u.email }}</div>
+              </div>
             </div>
           </td>
-          <td style="color:var(--muted);">{{ u.email }}</td>
           <td>
-            {% if u.role %}
-              <span class="badge badge-{{ u.role.name|lower }}">{{ u.role.name }}</span>
+            {% if u.role.name == 'Admin' %}
+              <span class="badge badge-confirmed">{{ u.role.name }}</span>
+            {% elif u.role.name == 'Manager' %}
+              <span class="badge badge-paid">{{ u.role.name }}</span>
             {% else %}
-              <span style="color:var(--muted);">—</span>
+              <span class="badge badge-draft">{{ u.role.name }}</span>
             {% endif %}
           </td>
           <td>
             {% if u.is_active %}
-              <span class="badge badge-active">{% trans "Active" %}</span>
+              <span class="badge badge-paid">{% trans "Active" %}</span>
             {% else %}
-              <span class="badge badge-inactive">{% trans "Inactive" %}</span>
+              <span class="badge badge-cancelled">{% trans "Inactive" %}</span>
             {% endif %}
           </td>
-          <td style="color:var(--muted);">
+          <td style="color:var(--text-tertiary)">
             {% if u.last_login %}{{ u.last_login|date:"M j, Y" }}{% else %}{% trans "Never" %}{% endif %}
           </td>
           <td class="td-actions">
-            <a href="{% url 'user-edit' u.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
+            <button class="btn-icon" title="{% trans 'Edit' %}" hx-get="{% url 'user-edit' u.pk %}" hx-target="#modal-user-edit-body" hx-swap="innerHTML" onclick="openModal('modal-user-edit')"><i class="fas fa-pen"></i></button>
             {% if u != request.user %}
               {% if u.is_active %}
               <form method="post" action="{% url 'user-deactivate' u.pk %}" class="inline"
                     onsubmit="return confirm('{% blocktrans with name=u.get_full_name|escapejs %}Deactivate {{ name }}?{% endblocktrans %}')">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm"
-                  style="color:var(--warning);border:1px solid #FCD34D;background:transparent;">
-                  {% trans "Deactivate" %}
-                </button>
+                <button type="submit" class="btn-icon" title="{% trans 'Deactivate' %}"><i class="fas fa-ban"></i></button>
               </form>
               {% else %}
-              <form method="post" action="{% url 'user-reactivate' u.pk %}" class="inline">
+              <form method="post" action="{% url 'user-reactivate' u.pk %}" class="inline"
+                    onsubmit="return confirm('{% blocktrans with name=u.get_full_name|escapejs %}Reactivate {{ name }}?{% endblocktrans %}')">
                 {% csrf_token %}
-                <button type="submit" class="btn btn-sm"
-                  style="color:var(--success);border:1px solid #86EFAC;background:transparent;">
-                  {% trans "Reactivate" %}
-                </button>
+                <button type="submit" class="btn-icon" title="{% trans 'Activate' %}"><i class="fas fa-check"></i></button>
               </form>
               {% endif %}
             {% endif %}
@@ -83,10 +75,10 @@
         </tr>
         {% empty %}
         <tr>
-          <td colspan="6">
+          <td colspan="5">
             <div class="empty-state">
-              <div class="empty-icon"><i class="fas fa-user-shield"></i></div>
-              <div class="empty-title">{% trans "No users found" %}</div>
+              <i class="fas fa-user-shield"></i>
+              <div class="empty-title">{% trans "No team members yet" %}</div>
             </div>
           </td>
         </tr>
@@ -99,54 +91,38 @@
 
 {% block modals %}
 <!-- Invite User Modal -->
-<div class="modal-overlay" id="invite-modal">
-  <div class="modal">
-    <div class="modal-header">
-      <div class="modal-title">{% trans "Invite New Staff Member" %}</div>
-      <button type="button" class="modal-close" onclick="closeModal('invite-modal')">✕</button>
-    </div>
-    <form method="post" action="{% url 'user-invite' %}">
-      {% csrf_token %}
+<div class="modal-overlay" id="modal-invite">
+  <div id="modal-invite-body">
+    <div class="modal-content" style="max-width:440px">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "Invite User" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-invite')"><i class="fas fa-times"></i></button>
+      </div>
       <div class="modal-body">
-        <div class="form-grid" style="gap:16px;">
-          <div class="form-grid form-grid-2">
-            <div class="form-group">
-              <label class="form-label" for="inv_first_name">{% trans "First Name" %} <span class="req">*</span></label>
-              <input type="text" id="inv_first_name" name="first_name" class="form-control"
-                placeholder="{% trans 'First name' %}" required>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="inv_last_name">{% trans "Last Name" %} <span class="req">*</span></label>
-              <input type="text" id="inv_last_name" name="last_name" class="form-control"
-                placeholder="{% trans 'Last name' %}" required>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="inv_email">{% trans "Email Address" %} <span class="req">*</span></label>
-            <input type="email" id="inv_email" name="email" class="form-control"
-              placeholder="user@company.com" required>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="inv_role">{% trans "Role" %} <span class="req">*</span></label>
-            <select id="inv_role" name="role" class="form-control" required>
-              <option value="">{% trans "— Select role —" %}</option>
-              {% for role in roles %}
-              <option value="{{ role.pk }}">{{ role.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="inv_password">{% trans "Temporary Password" %} <span class="req">*</span></label>
-            <input type="password" id="inv_password" name="password" class="form-control"
-              placeholder="{% trans 'Set a temporary password' %}" required>
-          </div>
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('invite-modal')">{% trans "Cancel" %}</button>
-        <button type="submit" class="btn btn-primary">{% trans "Create User" %}</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal-overlay" id="modal-user-edit">
+  <div id="modal-user-edit-body">
+    <div class="modal-content wide">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "Edit User" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-user-edit')"><i class="fas fa-times"></i></button>
       </div>
-    </form>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

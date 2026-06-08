@@ -1,0 +1,45 @@
+{% load i18n regional %}
+<div class="modal-content" style="max-width:420px">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% trans "Record Payment" %}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-payment')"><i class="fas fa-times"></i></button>
+  </div>
+  <form method="post" action="{% url 'payment-create' %}">
+    {% csrf_token %}
+    <input type="hidden" name="sales_order" value="{{ order.pk }}">
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Amount" %} <span class="req">*</span></label>
+        <input type="number" name="amount" class="input" step="0.01" min="0.01" required
+          value="{{ order.amount_outstanding|default:'0.00' }}">
+        <div style="font-size:0.78rem;color:var(--text-tertiary);margin-top:4px;">
+          {% trans "Outstanding balance:" %} <strong>{{ order.amount_outstanding|currency }}</strong>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Method" %} <span class="req">*</span></label>
+        <div class="radio-group">
+          {% for value, label in payment_method_choices %}
+          <label class="radio-opt">
+            <input type="radio" name="payment_method" value="{{ value }}" {% if forloop.first %}checked{% endif %}>
+            {{ label }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Reference Number" %}</label>
+        <input type="text" name="reference_number" class="input" placeholder="{% trans 'Transaction ID, check #, etc.' %}">
+        <div style="font-size:0.72rem;color:var(--text-tertiary);margin-top:4px;">{% trans "Required for bank transfer, card, and check payments." %}</div>
+      </div>
+      <div class="form-group">
+        <label class="label">{% trans "Notes" %}</label>
+        <textarea name="notes" class="input" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-payment')">{% trans "Cancel" %}</button>
+      <button type="submit" class="btn btn-success">{% trans "Record" %}</button>
+    </div>
+  </form>
+</div>

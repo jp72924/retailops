@@ -4,70 +4,81 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Sales Orders" %}</div>
-      <div class="page-subtitle">{% trans "Manage and track all sales orders" %}</div>
-    </div>
-    <div class="page-header-actions">
-      <a href="{% url 'order-create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Order" %}</a>
-    </div>
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Orders" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% trans "Manage and track all sales orders" %}</p></div>
+    <button hx-get="{% url 'order-create' %}" hx-target="#modal-order-body" hx-swap="innerHTML" onclick="openModal('modal-order')" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Order" %}</button>
   </div>
 
-  <!-- Filter Bar -->
-  <form method="get" action="{% url 'order-list' %}">
-    <div class="filter-bar">
-      <input type="text" name="q" class="form-control"
-        placeholder="{% trans 'Search order # or customer…' %}" value="{{ query|default:'' }}">
-      <select name="status" class="form-control">
+  <div class="flex flex-wrap items-center gap-3 mb-5">
+    <form method="get" action="{% url 'order-list' %}" class="flex flex-wrap items-center gap-3">
+      <div class="input-group" style="width:240px;">
+        <i class="fas fa-search"></i>
+        <input type="text" name="q" class="form-control"
+          placeholder="{% trans 'Search orders…' %}" value="{{ query|default:'' }}">
+      </div>
+      <select name="status" class="form-control" style="width:150px;">
         <option value="">{% trans "All Statuses" %}</option>
         {% for value, label in status_choices %}
         <option value="{{ value }}" {% if status_filter == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
       </select>
-      <input type="date" name="date_from" class="form-control" value="{{ date_from|default:'' }}" title="{% trans 'From date' %}">
-      <input type="date" name="date_to"   class="form-control" value="{{ date_to|default:'' }}"   title="{% trans 'To date' %}">
-      <button type="submit" class="btn btn-primary btn-sm">{% trans "Filter" %}</button>
+      <input type="date" name="date_from" class="form-control" style="width:auto;" value="{{ date_from|default:'' }}" title="{% trans 'From date' %}">
+      <input type="date" name="date_to"   class="form-control" style="width:auto;" value="{{ date_to|default:'' }}"   title="{% trans 'To date' %}">
+      <button type="submit" class="btn btn-secondary btn-sm">{% trans "Filter" %}</button>
       {% if query or status_filter or date_from or date_to %}
-        <a href="{% url 'order-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <a href="{% url 'order-list' %}" class="btn btn-ghost btn-sm">{% trans "Clear" %}</a>
         <span class="filter-active">{% trans "Filters active" %}</span>
       {% endif %}
-    </div>
-  </form>
+    </form>
+  </div>
 
   {% if page_obj.object_list %}
-  <div class="table-wrap">
+  <div class="table-container">
     <table>
       <thead>
         <tr>
-          <th>{% trans "Order #" %}</th>
+          <th>{% trans "Order" %}</th>
           <th>{% trans "Customer" %}</th>
           <th>{% trans "Date" %}</th>
           <th>{% trans "Status" %}</th>
           <th>{% trans "Items" %}</th>
           <th>{% trans "Total" %}</th>
-          <th>{% trans "Actions" %}</th>
+          <th style="width:140px;"></th>
         </tr>
       </thead>
       <tbody>
         {% for order in page_obj %}
         <tr>
-          <td class="td-mono"><a href="{% url 'order-detail' order.pk %}">{{ order.order_number }}</a></td>
-          <td><a href="{% url 'customer-detail' order.customer.pk %}">{{ order.customer.get_full_name }}</a></td>
+          <td class="td-mono font-medium">
+            <a href="{% url 'order-detail' order.pk %}"
+               hx-get="{% url 'order-detail' order.pk %}"
+               hx-target="#slide-order-body"
+               hx-swap="innerHTML"
+               onclick="event.preventDefault();openSlide('slide-order')"
+               style="color:var(--primary)">{{ order.order_number }}</a>
+          </td>
+          <td>
+            <a href="{% url 'customer-detail' order.customer.pk %}">{{ order.customer.get_full_name }}</a>
+          </td>
           <td>{{ order.created_at|date:"M j, Y" }}</td>
           <td><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
           <td>{{ order.items.count }}</td>
-          <td><strong>{{ order.total_amount|currency }}</strong></td>
+          <td class="font-semibold">{{ order.total_amount|currency }}</td>
           <td class="td-actions">
-            <a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
+            <a href="{% url 'order-detail' order.pk %}"
+               class="btn-icon" title="{% trans 'View' %}"
+               hx-get="{% url 'order-detail' order.pk %}"
+               hx-target="#slide-order-body"
+               hx-swap="innerHTML"
+               onclick="event.preventDefault();openSlide('slide-order')"><i class="fas fa-eye"></i></a>
             {% if order.status == 'draft' or order.status == 'pending' %}
-            <a href="{% url 'order-detail' order.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
+            <a href="{% url 'order-detail' order.pk %}" class="btn-icon" title="{% trans 'Edit' %}"><i class="fas fa-pen"></i></a>
             {% endif %}
             {% if order.status == 'draft' %}
             <form method="post" action="{% url 'order-delete' order.pk %}" class="inline"
                   onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Delete order {{ number }}?{% endblocktrans %}')">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">{% trans "Delete" %}</button>
+              <button type="submit" class="btn-icon" title="{% trans 'Delete' %}"><i class="fas fa-trash"></i></button>
             </form>
             {% endif %}
           </td>
@@ -83,7 +94,7 @@
       {% blocktrans with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktrans %}
     </span>
     {% if page_obj.has_previous %}
-      <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
+      <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
     {% else %}
       <span class="pg-btn disabled">‹</span>
     {% endif %}
@@ -91,11 +102,11 @@
       {% if page_obj.number == num %}
         <span class="pg-btn active">{{ num }}</span>
       {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
-        <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ num }}" class="pg-btn">{{ num }}</a>
+        <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ num }}" class="pg-btn">{{ num }}</a>
       {% endif %}
     {% endfor %}
     {% if page_obj.has_next %}
-      <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}page={{ page_obj.next_page_number }}" class="pg-btn">›</a>
+      <a href="?{% if query %}q={{ query }}&{% endif %}{% if status_filter %}status={{ status_filter }}&{% endif %}{% if date_from %}date_from={{ date_from }}&{% endif %}{% if date_to %}date_to={{ date_to }}&{% endif %}page={{ page_obj.next_page_number }}" class="pg-btn">›</a>
     {% else %}
       <span class="pg-btn disabled">›</span>
     {% endif %}
@@ -103,9 +114,9 @@
   {% endif %}
 
   {% else %}
-  <div class="table-wrap">
+  <div class="table-container">
     <div class="empty-state">
-      <div class="empty-icon"><i class="fas fa-shopping-bag"></i></div>
+      <i class="fas fa-shopping-bag"></i>
       <div class="empty-title">{% trans "No orders found" %}</div>
       {% if query or status_filter or date_from or date_to %}
         <div>{% trans "No orders match your filters." %} <a href="{% url 'order-list' %}">{% trans "Clear filters" %}</a></div>
@@ -115,5 +126,54 @@
     </div>
   </div>
   {% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Order Detail Slide-over -->
+<div class="slide-overlay" id="slide-order-overlay" onclick="closeSlide('slide-order')"></div>
+<div class="slide-panel wide" id="slide-order">
+  <div id="slide-order-body">
+    <div class="slide-header">
+      <div>{% trans "Loading…" %}</div>
+      <button type="button" class="btn-icon" onclick="closeSlide('slide-order')"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Modal -->
+<div class="modal-overlay" id="modal-order">
+  <div id="modal-order-body">
+    <div class="modal-content xwide">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "New Order" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-order')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Record Payment Modal -->
+<div class="modal-overlay" id="modal-payment">
+  <div id="modal-payment-body">
+    <div class="modal-content" style="max-width:420px">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "Record Payment" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-payment')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

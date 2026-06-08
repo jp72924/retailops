@@ -1,0 +1,136 @@
+{% load i18n regional %}
+<div class="modal-content wide">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% if product %}{% trans "Edit Product" %}{% else %}{% trans "New Product" %}{% endif %}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-product')"><i class="fas fa-times"></i></button>
+  </div>
+  <form method="post" action="{% if product %}{% url 'product-edit' product.pk %}{% else %}{% url 'product-create' %}{% endif %}" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="modal-body">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Product Identity" %}</div>
+      <div class="form-grid form-grid-2" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label class="label">{% trans "SKU" %} <span class="req">*</span></label>
+          <input type="text" name="sku" class="input {% if errors.sku %}is-invalid{% endif %}"
+            value="{{ form_data.sku|default:'' }}" placeholder="SKU-0001" required>
+          {% if errors.sku %}<div class="invalid-feedback">{{ errors.sku }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Name" %} <span class="req">*</span></label>
+          <input type="text" name="name" class="input {% if errors.name %}is-invalid{% endif %}"
+            value="{{ form_data.name|default:'' }}" required>
+          {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Category" %} <span class="req">*</span></label>
+          <div style="display:flex;gap:8px;">
+            <select name="category" class="input {% if errors.category %}is-invalid{% endif %}" required style="flex:1;">
+              <option value="">{% trans "— Select —" %}</option>
+              {% for cat in categories %}
+              <option value="{{ cat.pk }}" {% if form_data.category|stringformat:"s" == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+              {% endfor %}
+            </select>
+            <button type="button" class="btn btn-secondary btn-sm" title="{% trans 'New Category' %}" onclick="openModal('modal-inline-category')"><i class="fas fa-plus"></i></button>
+          </div>
+          {% if errors.category %}<div class="invalid-feedback">{{ errors.category }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Unit of Measure" %} <span class="req">*</span></label>
+          <select name="unit_of_measure" class="input {% if errors.unit_of_measure %}is-invalid{% endif %}" required>
+            {% for value, label in unit_choices %}
+            <option value="{{ value }}" {% if form_data.unit_of_measure == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% if errors.unit_of_measure %}<div class="invalid-feedback">{{ errors.unit_of_measure }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Description" %}</label>
+        <textarea name="description" class="input" rows="2" placeholder="{% trans 'Optional product description…' %}">{{ form_data.description|default:'' }}</textarea>
+      </div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Product Image" %}</div>
+      <div class="form-grid form-grid-3" style="margin-bottom:16px;align-items:start;">
+        <div>
+          <div class="image-upload-area" onclick="document.getElementById('id_image').click()">
+            <i class="fas fa-cloud-upload-alt text-2xl mb-2" style="color:var(--text-tertiary)"></i>
+            <div class="text-sm font-semibold">{% trans "Upload Image" %}</div>
+            <div class="text-xs mt-1" style="color:var(--text-tertiary)">{% trans "JPEG, PNG, WebP. Max 5MB" %}</div>
+          </div>
+          <input type="file" name="image" id="id_image" style="display:none;" accept="image/*">
+        </div>
+        <div class="md:col-span-2 flex flex-col gap-3">
+          <div class="form-group">
+            <label class="label">{% trans "External Image URL" %}</label>
+            <input type="url" name="external_image_url" class="input"
+              value="{{ form_data.external_image_url|default:'' }}" placeholder="https://example.com/image.jpg">
+          </div>
+          <label class="form-check">
+            <input type="checkbox" name="remove_image" value="1">
+            {% trans "Remove uploaded image" %}
+          </label>
+          <div style="font-size:0.78rem;color:var(--text-tertiary)">{% trans "Active products require either an uploaded image or an external image URL." %}</div>
+        </div>
+      </div>
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Pricing & Stock" %}</div>
+      <div class="form-grid form-grid-2" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label class="label">{% trans "Unit Price" %} <span class="req">*</span></label>
+          <input type="number" name="unit_price" class="input {% if errors.unit_price %}is-invalid{% endif %}"
+            value="{{ form_data.unit_price|default:'' }}" step="0.01" min="0" required>
+          {% if errors.unit_price %}<div class="invalid-feedback">{{ errors.unit_price }}</div>{% endif %}
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Low Stock Threshold" %} <span class="req">*</span></label>
+          <input type="number" name="low_stock_threshold" class="input {% if errors.low_stock_threshold %}is-invalid{% endif %}"
+            value="{{ form_data.low_stock_threshold|default:'10' }}" min="0" required>
+          {% if errors.low_stock_threshold %}<div class="invalid-feedback">{{ errors.low_stock_threshold }}</div>{% endif %}
+        </div>
+      </div>
+      <label class="form-check">
+        <input type="checkbox" name="is_active" value="1" {% if form_data.is_active == '1' %}checked{% endif %}>
+        {% trans "Product is active (visible and orderable)" %}
+      </label>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-product')">{% trans "Cancel" %}</button>
+      <button type="submit" class="btn btn-primary">{% trans "Save Product" %}</button>
+    </div>
+  </form>
+</div>
+<div class="modal-overlay" id="modal-inline-category">
+  <div class="modal-content" style="max-width:420px">
+    <div class="modal-header">
+      <h3 class="font-semibold">{% trans "New Category" %}</h3>
+      <button type="button" class="btn-icon" onclick="closeModal('modal-inline-category')"><i class="fas fa-times"></i></button>
+    </div>
+    <form method="post" action="{% url 'category-create' %}">
+      {% csrf_token %}
+      <div class="modal-body">
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="label">{% trans "Name" %} <span class="req">*</span></label>
+          <input type="text" name="name" class="input {% if errors.name %}is-invalid{% endif %}"
+            value="{{ form_data.name|default:'' }}" maxlength="150" required>
+          {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
+        </div>
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="label">{% trans "Description" %}</label>
+          <textarea name="description" class="input" rows="2">{{ form_data.description|default:'' }}</textarea>
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Parent Category" %}</label>
+          <select name="parent_category" class="input">
+            <option value="">{% trans "— None (top-level) —" %}</option>
+            {% for cat in categories %}
+            <option value="{{ cat.pk }}" {% if form_data.parent_category|stringformat:"s" == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+            {% endfor %}
+          </select>
+          {% if errors.parent_category %}<div class="invalid-feedback">{{ errors.parent_category }}</div>{% endif %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-inline-category')">{% trans "Cancel" %}</button>
+        <button type="submit" class="btn btn-primary">{% trans "Create" %}</button>
+      </div>
+    </form>
+  </div>
+</div>

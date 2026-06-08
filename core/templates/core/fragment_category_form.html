@@ -1,0 +1,36 @@
+{% load i18n %}
+<div class="modal-content" style="max-width:420px">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% if category %}{% trans "Edit Category" %}{% else %}{% trans "New Category" %}{% endif %}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-category')"><i class="fas fa-times"></i></button>
+  </div>
+  <form method="post" action="{% if category %}{% url 'category-edit' category.pk %}{% else %}{% url 'category-create' %}{% endif %}">
+    {% csrf_token %}
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Name" %} <span class="req">*</span></label>
+        <input type="text" name="name" class="input {% if errors.name %}is-invalid{% endif %}"
+          value="{{ form_data.name|default:'' }}" maxlength="150" required>
+        {% if errors.name %}<div class="invalid-feedback">{{ errors.name }}</div>{% endif %}
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Description" %}</label>
+        <textarea name="description" class="input" rows="2">{{ form_data.description|default:'' }}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="label">{% trans "Parent Category" %}</label>
+        <select name="parent_category" class="input">
+          <option value="">{% trans "— None (top-level) —" %}</option>
+          {% for cat in all_categories %}
+          <option value="{{ cat.pk }}" {% if form_data.parent_category|stringformat:"s" == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
+          {% endfor %}
+        </select>
+        {% if errors.parent_category %}<div class="invalid-feedback">{{ errors.parent_category }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-category')">{% trans "Cancel" %}</button>
+      <button type="submit" class="btn btn-primary">{% trans "Save" %}</button>
+    </div>
+  </form>
+</div>

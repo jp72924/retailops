@@ -5,29 +5,23 @@
 {% block content %}
 
 <!-- Movement History Side Panel -->
-<div class="side-panel" id="movement-panel">
+<div class="slide-overlay" id="slide-movement-overlay" onclick="closeSlide('slide-movement')"></div>
+<div class="side-panel-alt" id="slide-movement">
   <div class="sp-header">
     <div class="sp-title" id="panel-title">{% trans "Movement History" %}</div>
-    <button type="button" onclick="closePanel('movement-panel')"
-      style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:var(--muted);">✕</button>
+    <button type="button" class="btn-icon" onclick="closeSlide('slide-movement')"><i class="fas fa-times"></i></button>
   </div>
   <div class="sp-body" id="panel-body">
-    <div style="color:var(--muted);font-size:0.875rem;">{% trans "Select a product to view movements." %}</div>
+    <div style="color:var(--text-tertiary);font-size:0.875rem;text-align:center;padding:24px;">{% trans "Select a product to view movements." %}</div>
   </div>
 </div>
 
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Inventory" %}</div>
-      <div class="page-subtitle">{% trans "Track stock levels and product movements" %}</div>
-    </div>
-    <div class="page-header-actions">
-      {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
-      <button type="button" class="btn btn-secondary" onclick="openAdjustModal(null, null)">{% trans "Adjust Stock" %}</button>
-      <a href="{% url 'product-create' %}" class="btn btn-primary">{% trans "+ Add Product" %}</a>
-      {% endif %}
-    </div>
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Inventory" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% trans "Track stock levels and movements" %}</p></div>
+    {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
+    <button hx-get="{% url 'product-create' %}" hx-target="#modal-product-body" hx-swap="innerHTML" onclick="openModal('modal-product')" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "Add Product" %}</button>
+    {% endif %}
   </div>
 
   <!-- Low-stock banner -->
@@ -35,17 +29,19 @@
   <div class="alert-banner alert-warning" id="low-stock-banner">
     <i class="fas fa-exclamation-triangle"></i>
     {% blocktrans count counter=low_stock_count %}<strong>{{ counter }} product</strong> is below the low-stock threshold — restock soon.{% plural %}<strong>{{ counter }} products</strong> are below the low-stock threshold — restock soon.{% endblocktrans %}
-    <button type="button" class="alert-close"
-      onclick="document.getElementById('low-stock-banner').style.display='none'">✕</button>
+    <button type="button" class="alert-close" onclick="document.getElementById('low-stock-banner').style.display='none'"><i class="fas fa-times"></i></button>
   </div>
   {% endif %}
 
   <!-- Filter Bar -->
-  <form method="get" action="{% url 'inventory-list' %}">
-    <div class="filter-bar">
-      <input type="text" name="q" class="form-control"
-        placeholder="{% trans 'Search SKU or product name…' %}" value="{{ query|default:'' }}">
-      <select name="category" class="form-control">
+  <div class="flex flex-wrap items-center gap-3 mb-5">
+    <form method="get" action="{% url 'inventory-list' %}" class="flex flex-wrap items-center gap-3">
+      <div class="input-group" style="width:240px;">
+        <i class="fas fa-search"></i>
+        <input type="text" name="q" class="form-control"
+          placeholder="{% trans 'Search products…' %}" value="{{ query|default:'' }}">
+      </div>
+      <select name="category" class="form-control" style="width:160px;">
         <option value="">{% trans "All Categories" %}</option>
         {% for cat in categories %}
         <option value="{{ cat.pk }}" {% if category_filter == cat.pk|stringformat:"s" %}selected{% endif %}>
@@ -53,38 +49,36 @@
         </option>
         {% endfor %}
       </select>
-      <select name="stock" class="form-control">
-        <option value=""        {% if not stock_filter %}selected{% endif %}>{% trans "All Stock Status" %}</option>
+      <select name="stock" class="form-control" style="width:160px;">
+        <option value=""        {% if not stock_filter %}selected{% endif %}>{% trans "All Stock" %}</option>
         <option value="ok"      {% if stock_filter == 'ok'  %}selected{% endif %}>{% trans "In Stock" %}</option>
         <option value="low"     {% if stock_filter == 'low' %}selected{% endif %}>{% trans "Low Stock" %}</option>
         <option value="out"     {% if stock_filter == 'out' %}selected{% endif %}>{% trans "Out of Stock" %}</option>
       </select>
-      <button type="submit" class="btn btn-primary btn-sm">{% trans "Filter" %}</button>
+      <button type="submit" class="btn btn-secondary btn-sm">{% trans "Filter" %}</button>
       {% if query or category_filter or stock_filter %}
-        <a href="{% url 'inventory-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <a href="{% url 'inventory-list' %}" class="btn btn-ghost btn-sm">{% trans "Clear" %}</a>
         <span class="filter-active">{% trans "Filters active" %}</span>
       {% endif %}
-    </div>
-  </form>
+    </form>
+  </div>
 
   {% if products %}
-  <div class="table-wrap">
+  <div class="table-container">
     <table>
       <thead>
         <tr>
+          <th>{% trans "Product" %}</th>
           <th>{% trans "SKU" %}</th>
-          <th>{% trans "Product Name" %}</th>
           <th>{% trans "Category" %}</th>
-          <th>{% trans "Unit" %}</th>
-          <th>{% trans "Unit Price" %}</th>
-          <th>{% trans "Stock Level" %}</th>
-          <th>{% trans "Actions" %}</th>
+          <th>{% trans "Price" %}</th>
+          <th>{% trans "Stock" %}</th>
+          <th style="width:160px;"></th>
         </tr>
       </thead>
       <tbody>
         {% for product in products %}
         <tr>
-          <td class="td-mono">{{ product.sku }}</td>
           <td>
             <div class="product-name-cell">
               <div class="product-thumb">
@@ -95,18 +89,18 @@
                 {% endif %}
               </div>
               <div class="product-name-text">
-                <strong>{{ product.name }}</strong>
+                <div class="font-semibold text-sm">{{ product.name }}</div>
                 {% if not product.is_active %}
-                  <span class="badge badge-inactive" style="margin-left:6px;">{% trans "Inactive" %}</span>
+                  <span class="badge badge-cancelled" style="margin-left:6px;">{% trans "Inactive" %}</span>
                 {% elif not product.has_image_source %}
                   <span class="badge badge-pending" style="margin-left:6px;">{% trans "Missing image" %}</span>
                 {% endif %}
               </div>
             </div>
           </td>
+          <td class="td-mono text-xs">{{ product.sku }}</td>
           <td>{{ product.category.name }}</td>
-          <td style="color:var(--muted);">{{ product.get_unit_of_measure_display }}</td>
-          <td>{{ product.unit_price|currency }}</td>
+          <td class="font-semibold">{{ product.unit_price|currency }}</td>
           <td>
             {% if product.current_stock <= 0 %}
               <span class="stock-out">{{ product.current_stock }}</span>
@@ -115,19 +109,19 @@
             {% else %}
               <span class="stock-ok">{{ product.current_stock }}</span>
             {% endif %}
-            <span style="font-size:0.75rem;color:var(--muted);">{% blocktrans with threshold=product.low_stock_threshold %}(min: {{ threshold }}){% endblocktrans %}</span>
+            <span style="font-size:0.75rem;color:var(--text-tertiary);">{% blocktrans with threshold=product.low_stock_threshold %}/ {{ threshold }}{% endblocktrans %}</span>
           </td>
           <td class="td-actions">
             {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
-            <a href="{% url 'product-edit' product.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
-            <button type="button" class="btn btn-secondary btn-sm"
-              onclick="openAdjustModal({{ product.pk }}, '{{ product.sku|escapejs }} — {{ product.name|escapejs }}')">
-              {% trans "Adjust" %}
+            <button class="btn-icon" title="{% trans 'Edit' %}" hx-get="{% url 'product-edit' product.pk %}" hx-target="#modal-product-body" hx-swap="innerHTML" onclick="openModal('modal-product')"><i class="fas fa-pen"></i></button>
+            <button type="button" class="btn-icon" title="{% trans 'Adjust' %}"
+              onclick="openModal('modal-adjust');document.getElementById('adjust-product-id').value={{ product.pk }};document.getElementById('adjust-product-label').textContent='{{ product.sku|escapejs }} — {{ product.name|escapejs }}';document.getElementById('adjust-product-label-row').style.display='block';document.getElementById('adjust-product-select-row').style.display='none';document.getElementById('adjust-product-select').removeAttribute('required');">
+              <i class="fas fa-sliders-h"></i>
             </button>
             {% endif %}
-            <button type="button" class="btn btn-ghost btn-sm"
+            <button type="button" class="btn-icon" title="{% trans 'Movements' %}"
               onclick="loadMovements({{ product.pk }}, '{{ product.sku|escapejs }} — {{ product.name|escapejs }}')">
-              {% trans "Movements" %}
+              <i class="fas fa-history"></i>
             </button>
           </td>
         </tr>
@@ -136,9 +130,9 @@
     </table>
   </div>
   {% else %}
-  <div class="table-wrap">
+  <div class="table-container">
     <div class="empty-state">
-      <div class="empty-icon">📦</div>
+      <i class="fas fa-boxes"></i>
       <div class="empty-title">{% trans "No products found" %}</div>
       {% if query or category_filter or stock_filter %}
         <div>{% trans "No products match your filters." %} <a href="{% url 'inventory-list' %}">{% trans "Clear filters" %}</a></div>
@@ -154,133 +148,116 @@
 {% endblock %}
 
 {% block modals %}
-<!-- ── Adjust Stock Modal ──────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="adjust-modal">
-  <div class="modal">
+<!-- Adjust Stock Modal -->
+<div class="modal-overlay" id="modal-adjust">
+  <div class="modal-content" style="max-width:420px">
     <div class="modal-header">
-      <div class="modal-title">{% trans "Adjust Stock" %}</div>
-      <button type="button" class="modal-close" onclick="closeModal('adjust-modal')">&#x2715;</button>
+      <h3 class="modal-title">{% trans "Adjust Stock" %}</h3>
+      <button type="button" class="btn-icon" onclick="closeModal('modal-adjust')"><i class="fas fa-times"></i></button>
     </div>
     <form method="post" action="{% url 'inventory-adjust' %}">
       {% csrf_token %}
       <input type="hidden" name="product_id" id="adjust-product-id">
       <div class="modal-body">
-
-        <!-- Product selector (shown when opened from the header button) -->
-        <div class="form-group" id="adjust-product-select-row" style="display:none;">
-          <label class="form-label" for="adjust-product-select">{% trans "Product" %} <span style="color:var(--danger)">*</span></label>
+        <div class="form-group" id="adjust-product-select-row" style="display:none;margin-bottom:16px;">
+          <label class="form-label">{% trans "Product" %} <span class="req">*</span></label>
           <select id="adjust-product-select" class="form-control" required>
             <option value="">{% trans "— Select product —" %}</option>
             {% for product in products %}
             <option value="{{ product.pk }}">{{ product.sku }} — {{ product.name }}</option>
             {% endfor %}
           </select>
-          <div id="adjust-product-name" style="font-size:0.85rem;color:var(--muted);margin-top:6px;"></div>
         </div>
-
-        <!-- Product label (shown when opened from a per-row button) -->
-        <div class="form-group" id="adjust-product-label-row">
+        <div class="form-group" id="adjust-product-label-row" style="margin-bottom:16px;">
           <label class="form-label">{% trans "Product" %}</label>
           <div id="adjust-product-label" style="font-weight:600;font-size:0.9rem;padding:8px 0;"></div>
         </div>
-
-        <div class="form-group">
-          <label class="form-label" for="adjust-movement-type">{% trans "Movement Type" %} <span style="color:var(--danger)">*</span></label>
-          <select name="movement_type" id="adjust-movement-type" class="form-control" required>
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="form-label">{% trans "Movement Type" %} <span class="req">*</span></label>
+          <select name="movement_type" class="form-control" required>
             <option value="purchase">{% trans "Purchase — add stock received from supplier" %}</option>
             <option value="adjustment">{% trans "Adjustment — correct a counting error" %}</option>
             <option value="return">{% trans "Return — stock returned from a customer" %}</option>
           </select>
         </div>
-
-        <div class="form-group">
-          <label class="form-label" for="adjust-quantity">
-            {% trans "Quantity" %} <span style="color:var(--danger)">*</span>
-            <span style="font-weight:400;color:var(--muted);font-size:0.8rem;">{% trans "(positive = add, negative = deduct)" %}</span>
+        <div class="form-group" style="margin-bottom:16px;">
+          <label class="form-label">
+            {% trans "Quantity" %} <span class="req">*</span>
+            <span style="font-weight:400;color:var(--text-tertiary);font-size:0.8rem;">{% trans "(positive = add, negative = deduct)" %}</span>
           </label>
-          <input type="number" name="quantity" id="adjust-quantity" class="form-control"
-            placeholder="{% trans 'e.g. 50 or -10' %}" step="1" required>
+          <input type="number" name="quantity" class="form-control" step="1" required placeholder="{% trans 'e.g. 50 or -10' %}">
         </div>
-
         <div class="form-group">
-          <label class="form-label" for="adjust-notes">{% trans "Notes" %} <span style="font-weight:400;color:var(--muted);font-size:0.8rem;">{% trans "(optional)" %}</span></label>
-          <textarea name="notes" id="adjust-notes" class="form-control" rows="2"
-            placeholder="{% trans 'Reason for adjustment, PO number, etc.' %}"></textarea>
+          <label class="form-label">{% trans "Notes" %} <span style="font-weight:400;color:var(--text-tertiary);font-size:0.8rem;">{% trans "(optional)" %}</span></label>
+          <textarea name="notes" class="form-control" rows="2" placeholder="{% trans 'Reason for adjustment, PO number, etc.' %}"></textarea>
         </div>
-
       </div>
       <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" onclick="closeModal('adjust-modal')">{% trans "Cancel" %}</button>
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-adjust')">{% trans "Cancel" %}</button>
         <button type="submit" class="btn btn-primary">{% trans "Record Adjustment" %}</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Add Product Modal -->
+<div class="modal-overlay" id="modal-product">
+  <div id="modal-product-body">
+    <div class="modal-content" style="max-width:720px">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "Add Product" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-product')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-  function openAdjustModal(productId, productLabel) {
-    // Reset form
-    document.getElementById('adjust-quantity').value = '';
-    document.getElementById('adjust-notes').value = '';
-    document.getElementById('adjust-movement-type').value = 'purchase';
-
-    if (productId) {
-      // Opened from a specific product row
-      document.getElementById('adjust-product-id').value = productId;
-      document.getElementById('adjust-product-label').textContent = productLabel;
-      document.getElementById('adjust-product-label-row').style.display = 'block';
-      document.getElementById('adjust-product-select-row').style.display = 'none';
-      // Remove required from select so the hidden input drives submission
-      document.getElementById('adjust-product-select').removeAttribute('required');
-    } else {
-      // Opened from the header — show product dropdown
-      document.getElementById('adjust-product-id').value = '';
-      document.getElementById('adjust-product-label').textContent = '';
-      document.getElementById('adjust-product-label-row').style.display = 'none';
-      document.getElementById('adjust-product-select-row').style.display = 'block';
-      document.getElementById('adjust-product-select').setAttribute('required', '');
-      document.getElementById('adjust-product-select').value = '';
-    }
-    openModal('adjust-modal');
-  }
-
   // When product is chosen from the dropdown, keep hidden input in sync
-  document.getElementById('adjust-product-select').addEventListener('change', function() {
-    document.getElementById('adjust-product-id').value = this.value;
-  });
+  const adjustSelect = document.getElementById('adjust-product-select');
+  if (adjustSelect) {
+    adjustSelect.addEventListener('change', function() {
+      document.getElementById('adjust-product-id').value = this.value;
+    });
+  }
 
   function loadMovements(productId, label) {
     document.getElementById('panel-title').textContent = label;
     document.getElementById('panel-body').innerHTML =
-      '<div style="color:var(--muted);font-size:0.875rem;text-align:center;padding:24px;">{% trans "Loading…" %}</div>';
-    openPanel('movement-panel');
+      '<div style="color:var(--text-tertiary);font-size:0.875rem;text-align:center;padding:24px;">{% trans "Loading…" %}</div>';
+    openSlide('slide-movement');
 
-    fetch(`/inventory/products/${productId}/movements/`)
+    fetch('/inventory/products/' + productId + '/movements/')
       .then(r => r.json())
       .then(data => {
         const { product, movements } = data;
-        let html = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">
-          {% trans "Current stock:" %} <strong style="color:${product.current_stock <= 0 ? 'var(--danger)' : product.current_stock <= 10 ? 'var(--warning)' : 'var(--success)'}">
-            ${product.current_stock}
-          </strong></div>`;
+        let html = '<div style="font-size:0.8rem;color:var(--text-secondary);margin-bottom:12px;">' +
+          '{% trans "Current stock:" %} <strong style="color:' + (product.current_stock <= 0 ? 'var(--danger)' : product.current_stock <= 10 ? 'var(--warning)' : 'var(--success)') + '">' +
+          product.current_stock + '</strong></div>';
         if (movements.length === 0) {
-          html += '<div style="color:var(--muted);font-style:italic;">{% trans "No movements recorded." %}</div>';
+          html += '<div style="color:var(--text-tertiary);font-style:italic;">{% trans "No movements recorded." %}</div>';
         } else {
           movements.forEach(m => {
             const isPos = m.quantity >= 0;
             const sign  = isPos ? '+' : '';
             const cls   = isPos ? 'movement-qty-pos' : 'movement-qty-neg';
             const date  = new Date(m.date).toLocaleDateString(document.documentElement.lang || 'en', { month:'short', day:'numeric', year:'numeric' });
-            html += `<div class="movement-item">
-              <div style="display:flex;justify-content:space-between;">
-                <span><strong>${m.type}</strong> · ${m.reference_type} #${m.reference_id}</span>
-                <span class="${cls}">${sign}${m.quantity}</span>
-              </div>
-              <div class="pay-hist-meta">${date} · ${m.created_by}</div>
-              ${m.notes ? `<div class="pay-hist-meta">${m.notes}</div>` : ''}
-            </div>`;
+            html += '<div class="movement-item">' +
+              '<div style="display:flex;justify-content:space-between;">' +
+              '<span><strong>' + m.type + '</strong> · ' + m.reference_type + ' #' + m.reference_id + '</span>' +
+              '<span class="' + cls + '">' + sign + m.quantity + '</span>' +
+              '</div>' +
+              '<div class="pay-hist-meta">' + date + ' · ' + m.created_by + '</div>' +
+              (m.notes ? '<div class="pay-hist-meta">' + m.notes + '</div>' : '') +
+              '</div>';
           });
         }
         document.getElementById('panel-body').innerHTML = html;

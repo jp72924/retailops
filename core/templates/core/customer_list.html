@@ -4,60 +4,69 @@
 
 {% block content %}
 <div class="page">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Customers" %}</div>
-      <div class="page-subtitle">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} customer registered{% plural %}{{ counter }} customers registered{% endblocktrans %}</div>
-    </div>
-    <div class="page-header-actions">
-      <a href="{% url 'customer-create' %}" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "Register Customer" %}</a>
-    </div>
+  <div class="flex items-center justify-between mb-6">
+    <div><h1 class="text-xl font-bold mb-0.5">{% trans "Customers" %}</h1><p class="text-sm" style="color:var(--text-secondary)">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} customer registered{% plural %}{{ counter }} customers registered{% endblocktrans %}</p></div>
+    <button hx-get="{% url 'customer-create' %}" hx-target="#modal-customer-body" hx-swap="innerHTML" onclick="openModal('modal-customer')" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "Add Customer" %}</button>
   </div>
 
   <!-- Filter Bar -->
-  <form method="get" action="{% url 'customer-list' %}">
-    <div class="filter-bar">
-      <input type="text" name="q" class="form-control" placeholder="{% trans '🔍 Search name, email, ID or phone…' %}" value="{{ query|default:'' }}">
-      <button type="submit" class="btn btn-primary btn-sm">{% trans "Search" %}</button>
+  <div class="flex flex-wrap items-center gap-3 mb-5">
+    <form method="get" action="{% url 'customer-list' %}" class="flex flex-wrap items-center gap-3">
+      <div class="input-group" style="width:320px;">
+        <i class="fas fa-search"></i>
+        <input type="text" name="q" class="form-control" placeholder="{% trans 'Search customers…' %}" value="{{ query|default:'' }}">
+      </div>
+      <button type="submit" class="btn btn-secondary btn-sm">{% trans "Search" %}</button>
       {% if query %}
-        <a href="{% url 'customer-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <a href="{% url 'customer-list' %}" class="btn btn-ghost btn-sm">{% trans "Clear" %}</a>
         <span class="filter-active">{% blocktrans %}Filtered by "{{ query }}"{% endblocktrans %}</span>
       {% endif %}
-    </div>
-  </form>
+    </form>
+  </div>
 
   {% if page_obj.object_list %}
-  <div class="table-wrap">
+  <div class="table-container">
     <table>
       <thead>
         <tr>
-          <th>{% trans "Name" %}</th>
-          <th>{% trans "ID Number" %}</th>
-          <th>{% trans "Email" %}</th>
-          <th>{% trans "Phone" %}</th>
-          <th>{% trans "City" %}</th>
-          <th>{% trans "Country" %}</th>
-          <th>{% trans "Registered" %}</th>
-          <th>{% trans "Actions" %}</th>
+          <th>{% trans "Customer" %}</th>
+          <th>{% trans "Contact" %}</th>
+          <th>{% trans "Location" %}</th>
+          <th>{% trans "Orders" %}</th>
+          <th>{% trans "Joined" %}</th>
+          <th style="width:120px;"></th>
         </tr>
       </thead>
       <tbody>
         {% for customer in page_obj %}
         <tr>
-          <td><a href="{% url 'customer-detail' customer.pk %}"><strong>{{ customer.get_full_name }}</strong></a></td>
-          <td class="td-mono">{{ customer.national_id|default:"—" }}</td>
-          <td style="color:var(--muted);">{{ customer.email }}</td>
+          <td>
+            <div class="flex items-center gap-3">
+              <div class="avatar-circle" style="background:linear-gradient(135deg,var(--primary),#7c3aed)">
+                {{ customer.first_name.0|upper }}{{ customer.last_name.0|upper }}
+              </div>
+              <div>
+                <div class="font-semibold text-sm">{{ customer.get_full_name }}</div>
+                <div class="text-xs" style="color:var(--text-tertiary)">{{ customer.email }}</div>
+              </div>
+            </div>
+          </td>
           <td>{{ customer.phone|default:"—" }}</td>
-          <td>{{ customer.city }}</td>
-          <td>{{ customer.country }}</td>
-          <td style="color:var(--muted);">{{ customer.created_at|date:"M j, Y" }}</td>
+          <td>{{ customer.city }}, {{ customer.country }}</td>
+          <td>{{ customer.orders.count }}</td>
+          <td style="color:var(--text-tertiary)">{{ customer.created_at|date:"M j, Y" }}</td>
           <td class="td-actions">
-            <a href="{% url 'customer-detail' customer.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
-            <a href="{% url 'customer-edit' customer.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
+            <a href="{% url 'customer-detail' customer.pk %}"
+               class="btn-icon" title="{% trans 'View' %}"
+               hx-get="{% url 'customer-detail' customer.pk %}"
+               hx-target="#slide-customer-body"
+               hx-swap="innerHTML"
+               onclick="event.preventDefault();openSlide('slide-customer')"><i class="fas fa-eye"></i></a>
+            <button class="btn-icon" title="{% trans 'Edit' %}" hx-get="{% url 'customer-edit' customer.pk %}" hx-target="#modal-customer-body" hx-swap="innerHTML" onclick="openModal('modal-customer')"><i class="fas fa-pen"></i></button>
             <form method="post" action="{% url 'customer-delete' customer.pk %}" class="inline"
                   onsubmit="return confirm('{% blocktrans with name=customer.get_full_name|escapejs %}Delete {{ name }}? This cannot be undone.{% endblocktrans %}')">
               {% csrf_token %}
-              <button type="submit" class="btn btn-sm" style="color:var(--danger);border:1px solid var(--border);background:transparent;">{% trans "Delete" %}</button>
+              <button type="submit" class="btn-icon" title="{% trans 'Delete' %}"><i class="fas fa-trash"></i></button>
             </form>
           </td>
         </tr>
@@ -93,9 +102,9 @@
   {% endif %}
 
   {% else %}
-  <div class="table-wrap">
+  <div class="table-container">
     <div class="empty-state">
-      <div class="empty-icon"><i class="fas fa-users"></i></div>
+      <i class="fas fa-users"></i>
       <div class="empty-title">{% trans "No customers found" %}</div>
       {% if query %}
         <div>{% blocktrans %}No results for "{{ query }}".{% endblocktrans %} <a href="{% url 'customer-list' %}">{% trans "Clear search" %}</a></div>
@@ -105,5 +114,36 @@
     </div>
   </div>
   {% endif %}
+</div>
+{% endblock %}
+
+{% block modals %}
+<!-- Customer Detail Slide-over -->
+<div class="slide-overlay" id="slide-customer-overlay" onclick="closeSlide('slide-customer')"></div>
+<div class="slide-panel" id="slide-customer">
+  <div id="slide-customer-body">
+    <div class="slide-header">
+      <div>{% trans "Loading…" %}</div>
+      <button type="button" class="btn-icon" onclick="closeSlide('slide-customer')"><i class="fas fa-times"></i></button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Customer Modal -->
+<div class="modal-overlay" id="modal-customer">
+  <div id="modal-customer-body">
+    <div class="modal-content" style="max-width:720px">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "Add Customer" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-customer')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

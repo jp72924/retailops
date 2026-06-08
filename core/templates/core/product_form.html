@@ -61,35 +61,34 @@
             </div>
 
             <!-- Inline category creation modal -->
-            <div id="modal-new-cat" style="display:none;position:fixed;inset:0;z-index:1000;
-                 background:rgba(0,0,0,.45);align-items:center;justify-content:center;">
-              <div style="background:#fff;border-radius:10px;padding:24px;width:100%;max-width:440px;
-                          margin:16px;box-shadow:0 8px 32px rgba(0,0,0,.2);">
-                <div style="font-weight:700;font-size:1rem;margin-bottom:16px">{% trans "New Category" %}</div>
-
-                <div class="form-group" style="margin-bottom:12px">
-                  <label class="form-label" for="nc-name">{% trans "Name" %} <span class="req">*</span></label>
-                  <input type="text" id="nc-name" class="form-control" placeholder="{% trans 'e.g. Electronics' %}" maxlength="150">
-                  <div id="nc-error" style="color:var(--danger);font-size:.8rem;margin-top:4px;display:none"></div>
+            <div class="modal-overlay" id="modal-new-cat" style="display:none;">
+              <div class="modal-content" style="max-width:420px">
+                <div class="modal-header">
+                  <h3 class="modal-title">{% trans "New Category" %}</h3>
+                  <button type="button" class="btn-icon" id="nc-cancel"><i class="fas fa-times"></i></button>
                 </div>
-
-                <div class="form-group" style="margin-bottom:12px">
-                  <label class="form-label" for="nc-desc">{% trans "Description" %}</label>
-                  <textarea id="nc-desc" class="form-control" rows="2" placeholder="{% trans 'Optional…' %}"></textarea>
+                <div class="modal-body">
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label" for="nc-name">{% trans "Name" %} <span class="req">*</span></label>
+                    <input type="text" id="nc-name" class="form-control" placeholder="{% trans 'e.g. Electronics' %}" maxlength="150">
+                    <div id="nc-error" class="invalid-feedback" style="display:none"></div>
+                  </div>
+                  <div class="form-group" style="margin-bottom:16px">
+                    <label class="form-label" for="nc-desc">{% trans "Description" %}</label>
+                    <textarea id="nc-desc" class="form-control" rows="2" placeholder="{% trans 'Optional…' %}"></textarea>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="nc-parent">{% trans "Parent Category" %}</label>
+                    <select id="nc-parent" class="form-control">
+                      <option value="">{% trans "— None (top-level) —" %}</option>
+                      {% for cat in categories %}
+                      <option value="{{ cat.pk }}">{{ cat }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
                 </div>
-
-                <div class="form-group" style="margin-bottom:20px">
-                  <label class="form-label" for="nc-parent">{% trans "Parent Category" %}</label>
-                  <select id="nc-parent" class="form-control">
-                    <option value="">{% trans "— None (top-level) —" %}</option>
-                    {% for cat in categories %}
-                    <option value="{{ cat.pk }}">{{ cat }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-
-                <div style="display:flex;gap:8px;justify-content:flex-end">
-                  <button type="button" id="nc-cancel" class="btn btn-secondary">{% trans "Cancel" %}</button>
+                <div class="modal-footer">
+                  <button type="button" id="nc-cancel-btn" class="btn btn-secondary">{% trans "Cancel" %}</button>
                   <button type="button" id="nc-submit" class="btn btn-primary">{% trans "Create" %}</button>
                 </div>
               </div>
@@ -221,6 +220,7 @@
   const modal    = document.getElementById('modal-new-cat');
   const btnOpen  = document.getElementById('btn-new-cat');
   const btnClose = document.getElementById('nc-cancel');
+  const btnClose2 = document.getElementById('nc-cancel-btn');
   const btnSave  = document.getElementById('nc-submit');
   const ncName   = document.getElementById('nc-name');
   const ncDesc   = document.getElementById('nc-desc');
@@ -228,24 +228,27 @@
   const ncError  = document.getElementById('nc-error');
   const catSelect = document.getElementById('id_category');
 
-  function openModal(e) {
+  function openInlineModal(e) {
     e.preventDefault();
     ncName.value   = '';
     ncDesc.value   = '';
     ncParent.value = '';
     ncError.style.display = 'none';
     modal.style.display = 'flex';
+    modal.classList.add('open');
     ncName.focus();
   }
 
-  function closeModal() {
-    modal.style.display = 'none';
+  function closeInlineModal() {
+    modal.classList.remove('open');
+    setTimeout(function() { modal.style.display = 'none'; }, 250);
   }
 
-  btnOpen.addEventListener('click', openModal);
-  btnClose.addEventListener('click', closeModal);
+  btnOpen.addEventListener('click', openInlineModal);
+  btnClose.addEventListener('click', closeInlineModal);
+  btnClose2.addEventListener('click', closeInlineModal);
   modal.addEventListener('click', function (e) {
-    if (e.target === modal) closeModal();
+    if (e.target === modal) closeInlineModal();
   });
 
   btnSave.addEventListener('click', async function () {

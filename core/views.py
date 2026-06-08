@@ -56,6 +56,21 @@ def _to_decimal(value, default=Decimal('0.00')):
         return default
 
 
+def _htmx_redirect(request, url_name, *args, **kwargs):
+    """Return an HX-Redirect response for HTMX requests, otherwise a normal redirect."""
+    from django.http import HttpResponse
+    if request.headers.get('HX-Request'):
+        return HttpResponse(status=204, headers={'HX-Redirect': redirect(url_name, *args, **kwargs).url})
+    return redirect(url_name, *args, **kwargs)
+
+
+def _render(request, template, fragment_template, ctx):
+    """Render a fragment template for HTMX requests, otherwise the full page template."""
+    if request.headers.get('HX-Request'):
+        return render(request, fragment_template, ctx)
+    return render(request, template, ctx)
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 def login_view(request):
@@ -217,7 +232,8 @@ def customer_create(request):
         }
 
         if errors:
-            return render(request, 'core/customer_form.html', {'errors': errors, 'form_data': form_data})
+            return _render(request, 'core/customer_form.html', 'core/fragment_customer_form.html',
+                           {'errors': errors, 'form_data': form_data})
 
         customer = Customer.objects.create(
             first_name=first_name, last_name=last_name, email=email,
@@ -228,9 +244,10 @@ def customer_create(request):
             country=country, notes=notes,
         )
         messages.success(request, f'Customer "{customer.get_full_name()}" registered.')
-        return redirect('customer-detail', pk=customer.pk)
+        return _htmx_redirect(request, 'customer-detail', pk=customer.pk)
 
-    return render(request, 'core/customer_form.html', {'errors': {}, 'form_data': {}})
+    return _render(request, 'core/customer_form.html', 'core/fragment_customer_form.html',
+                   {'errors': {}, 'form_data': {}})
 
 
 @login_required
@@ -238,7 +255,7 @@ def customer_detail(request, pk):
     """GET: read-only customer summary with order history."""
     customer = get_object_or_404(Customer, pk=pk)
     orders = customer.orders.order_by('-created_at')
-    return render(request, 'core/customer_detail.html', {
+    return _render(request, 'core/customer_detail.html', 'core/fragment_customer_detail.html', {
         'customer': customer,
         'orders':   orders,
     })
@@ -311,7 +328,7 @@ def customer_edit(request, pk):
         }
 
         if errors:
-            return render(request, 'core/customer_form.html',
+            return _render(request, 'core/customer_form.html', 'core/fragment_customer_form.html',
                           {'customer': customer, 'errors': errors, 'form_data': form_data})
 
         customer.first_name    = first_name
@@ -331,7 +348,7 @@ def customer_edit(request, pk):
         customer.save()
 
         messages.success(request, f'Customer "{customer.get_full_name()}" updated.')
-        return redirect('customer-detail', pk=customer.pk)
+        return _htmx_redirect(request, 'customer-detail', pk=customer.pk)
 
     form_data = {
         'first_name': customer.first_name,
@@ -349,7 +366,7 @@ def customer_edit(request, pk):
         'country':    customer.country,
         'notes':      customer.notes,
     }
-    return render(request, 'core/customer_form.html',
+    return _render(request, 'core/customer_form.html', 'core/fragment_customer_form.html',
                   {'customer': customer, 'errors': {}, 'form_data': form_data})
 
 
@@ -484,7 +501,7 @@ def order_create(request):
             ctx = _order_form_context()
             ctx['errors'] = errors
             messages.error(request, 'Please correct the errors below.')
-            return render(request, 'core/order_detail.html', ctx)
+            return _render(request, 'core/order_detail.html', 'core/fragment_order_form.html', ctx)
 
         with transaction.atomic():
             order = SalesOrder.objects.create(
@@ -499,12 +516,16 @@ def order_create(request):
                 messages.error(request, err)
                 ctx = _order_form_context()
                 ctx['errors'] = {'line_items': err}
-                return render(request, 'core/order_detail.html', ctx)
+                return _render(request, 'core/order_detail.html', 'core/fragment_order_form.html', ctx)
 
         messages.success(request, f'Order {order.order_number} created.')
-        return redirect('order-detail', pk=order.pk)
+        return _htmx_redirect(request, 'order-detail', pk=order.pk)
 
-    return render(request, 'core/order_detail.html', _order_form_context())
+    ctx = _order_form_context()
+    preselected_customer = request.GET.get('customer', '').strip()
+    if preselected_customer:
+        ctx['preselected_customer_id'] = preselected_customer
+    return _render(request, 'core/order_detail.html', 'core/fragment_order_form.html', ctx)
 
 
 @role_required('Staff', 'Manager', 'Admin')
@@ -521,7 +542,7 @@ def order_detail(request, pk):
     if request.method == 'POST':
         if order.status not in (SalesOrder.DRAFT, SalesOrder.PENDING):
             messages.error(request, 'Only Draft or Pending orders can be edited.')
-            return redirect('order-detail', pk=pk)
+            return _htmx_redirect(request, 'order-detail', pk=pk)
 
         data     = request.POST
         discount = _to_decimal(data.get('discount_amount', '0'))
@@ -535,12 +556,12 @@ def order_detail(request, pk):
                     order.customer = Customer.objects.get(pk=int(customer_id))
                 except (Customer.DoesNotExist, ValueError):
                     messages.error(request, 'Invalid customer selected.')
-                    return redirect('order-detail', pk=pk)
+                    return _htmx_redirect(request, 'order-detail', pk=pk)
 
         raw_items = _parse_line_items(data)
         if not raw_items:
             messages.error(request, 'At least one line item is required.')
-            return redirect('order-detail', pk=pk)
+            return _htmx_redirect(request, 'order-detail', pk=pk)
 
         with transaction.atomic():
             order.discount_amount = discount
@@ -549,13 +570,13 @@ def order_detail(request, pk):
             _, err = _save_order_items(order, raw_items)
             if err:
                 messages.error(request, err)
-                return redirect('order-detail', pk=pk)
+                return _htmx_redirect(request, 'order-detail', pk=pk)
 
         messages.success(request, f'Order {order.order_number} updated.')
-        return redirect('order-detail', pk=pk)
+        return _htmx_redirect(request, 'order-detail', pk=pk)
 
     ctx = _order_form_context(order)
-    return render(request, 'core/order_detail.html', ctx)
+    return _render(request, 'core/order_detail.html', 'core/fragment_order_detail.html', ctx)
 
 
 @require_POST
@@ -565,7 +586,7 @@ def order_delete(request, pk):
     order = get_object_or_404(SalesOrder, pk=pk, status=SalesOrder.DRAFT)
     order.delete()
     messages.success(request, f'Order {order.order_number} deleted.')
-    return redirect('order-list')
+    return _htmx_redirect(request, 'order-list')
 
 
 # ── Order Status Transitions ──────────────────────────────────────────────────
@@ -581,12 +602,12 @@ def order_submit(request, pk):
 
     if not order.items.exists():
         messages.error(request, 'Cannot submit an order with no line items.')
-        return redirect('order-detail', pk=pk)
+        return _htmx_redirect(request, 'order-detail', pk=pk)
 
     order.status = SalesOrder.PENDING
     order.save()
     messages.success(request, f'{order.order_number} submitted for review.')
-    return redirect('order-detail', pk=pk)
+    return _htmx_redirect(request, 'order-detail', pk=pk)
 
 
 @require_POST
@@ -617,7 +638,7 @@ def order_confirm(request, pk):
             )
 
     messages.success(request, f'{order.order_number} confirmed.')
-    return redirect('order-detail', pk=pk)
+    return _htmx_redirect(request, 'order-detail', pk=pk)
 
 
 @require_POST
@@ -631,7 +652,7 @@ def order_ship(request, pk):
     order.status = SalesOrder.SHIPPED
     order.save()
     messages.success(request, f'{order.order_number} marked as shipped.')
-    return redirect('order-detail', pk=pk)
+    return _htmx_redirect(request, 'order-detail', pk=pk)
 
 
 @require_POST
@@ -645,7 +666,7 @@ def order_deliver(request, pk):
     order.status = SalesOrder.DELIVERED
     order.save()
     messages.success(request, f'{order.order_number} marked as delivered.')
-    return redirect('order-detail', pk=pk)
+    return _htmx_redirect(request, 'order-detail', pk=pk)
 
 
 @require_POST
@@ -674,7 +695,7 @@ def order_cancel(request, pk):
             )
 
     messages.success(request, f'{order.order_number} cancelled.')
-    return redirect('order-detail', pk=pk)
+    return _htmx_redirect(request, 'order-detail', pk=pk)
 
 
 @require_POST
@@ -703,7 +724,7 @@ def order_refund(request, pk):
             )
 
     messages.success(request, f'{order.order_number} marked as refunded.')
-    return redirect('order-detail', pk=pk)
+    return _htmx_redirect(request, 'order-detail', pk=pk)
 
 
 # ── Payments ──────────────────────────────────────────────────────────────────
@@ -755,16 +776,22 @@ def payment_list(request):
     })
 
 
-@require_POST
 @login_required
 def payment_create(request):
     """
+    GET:  render payment form fragment.
     POST: record a payment from the modal form.
     Automatically transitions the linked SalesOrder to Paid if total_amount is covered.
     Redirects back to order-detail on success.
     """
-    order_id = request.POST.get('sales_order', '').strip()
+    order_id = (request.POST if request.method == 'POST' else request.GET).get('sales_order', '').strip()
     order    = get_object_or_404(SalesOrder, pk=order_id)
+
+    if request.method == 'GET':
+        return _render(request, 'core/payment_form.html', 'core/fragment_payment_form.html', {
+            'order': order,
+            'payment_method_choices': Payment.METHOD_CHOICES,
+        })
 
     amount           = _to_decimal(request.POST.get('amount', '0'))
     payment_method   = request.POST.get('payment_method', '').strip()
@@ -813,14 +840,14 @@ def payment_create(request):
                 f'Outstanding balance: ${order.amount_outstanding}.'
             )
 
-    return redirect('order-detail', pk=order.pk)
+    return _htmx_redirect(request, 'order-detail', pk=order.pk)
 
 
 @login_required
 def payment_detail(request, pk):
     """GET: read-only payment receipt."""
     payment = get_object_or_404(Payment, pk=pk)
-    return render(request, 'core/payment_detail.html', {'payment': payment})
+    return _render(request, 'core/payment_detail.html', 'core/fragment_payment_detail.html', {'payment': payment})
 
 
 # ── Inventory ─────────────────────────────────────────────────────────────────
@@ -960,7 +987,7 @@ def product_create(request):
                 _merge_product_validation_errors(errors, exc)
 
         if errors:
-            return render(request, 'core/product_form.html', {
+            return _render(request, 'core/product_form.html', 'core/fragment_product_form.html', {
                 'product': None,
                 'categories': ProductCategory.objects.all(),
                 'unit_choices': Product.UNIT_CHOICES,
@@ -970,9 +997,9 @@ def product_create(request):
 
         product.save()
         messages.success(request, f'Product "{product.name}" added.')
-        return redirect('inventory-list')
+        return _htmx_redirect(request, 'inventory-list')
 
-    return render(request, 'core/product_form.html', {
+    return _render(request, 'core/product_form.html', 'core/fragment_product_form.html', {
         'product': None,
         'categories': ProductCategory.objects.all(),
         'unit_choices': Product.UNIT_CHOICES,
@@ -1064,7 +1091,7 @@ def product_edit(request, pk):
                 _merge_product_validation_errors(errors, exc)
 
         if errors:
-            return render(request, 'core/product_form.html', {
+            return _render(request, 'core/product_form.html', 'core/fragment_product_form.html', {
                 'product': get_object_or_404(Product, pk=pk),
                 'categories': ProductCategory.objects.all(),
                 'unit_choices': Product.UNIT_CHOICES,
@@ -1078,9 +1105,9 @@ def product_edit(request, pk):
                 old_image_storage.delete(old_image_name)
 
         messages.success(request, f'Product "{product.name}" updated.')
-        return redirect('inventory-list')
+        return _htmx_redirect(request, 'inventory-list')
 
-    return render(request, 'core/product_form.html', {
+    return _render(request, 'core/product_form.html', 'core/fragment_product_form.html', {
         'product': product,
         'categories': ProductCategory.objects.all(),
         'unit_choices': Product.UNIT_CHOICES,
@@ -1261,13 +1288,13 @@ def category_create(request):
                 name=name, description=description, parent_category=parent,
             )
             messages.success(request, f'Category "{cat.name}" created.')
-            return redirect('category-list')
+            return _htmx_redirect(request, 'category-list')
 
         form_data = {'name': name, 'description': description, 'parent_category': parent_id}
-        return render(request, 'core/category_form.html',
+        return _render(request, 'core/category_form.html', 'core/fragment_category_form.html',
                       {'errors': errors, 'form_data': form_data, 'all_categories': all_cats})
 
-    return render(request, 'core/category_form.html',
+    return _render(request, 'core/category_form.html', 'core/fragment_category_form.html',
                   {'errors': {}, 'form_data': {}, 'all_categories': all_cats})
 
 
@@ -1308,10 +1335,10 @@ def category_edit(request, pk):
             category.parent_category  = parent
             category.save()
             messages.success(request, f'Category "{category.name}" updated.')
-            return redirect('category-list')
+            return _htmx_redirect(request, 'category-list')
 
         form_data = {'name': name, 'description': description, 'parent_category': parent_id}
-        return render(request, 'core/category_form.html',
+        return _render(request, 'core/category_form.html', 'core/fragment_category_form.html',
                       {'category': category, 'errors': errors,
                        'form_data': form_data, 'all_categories': all_cats})
 
@@ -1320,7 +1347,7 @@ def category_edit(request, pk):
         'description':     category.description,
         'parent_category': str(category.parent_category_id) if category.parent_category_id else '',
     }
-    return render(request, 'core/category_form.html',
+    return _render(request, 'core/category_form.html', 'core/fragment_category_form.html',
                   {'category': category, 'errors': {}, 'form_data': form_data, 'all_categories': all_cats})
 
 
@@ -1406,7 +1433,7 @@ def inventory_adjust(request):
         request,
         f'{label} of {sign}{quantity} recorded for {product.sku} — {product.name}.'
     )
-    return redirect('inventory-list')
+    return _htmx_redirect(request, 'inventory-list')
 
 
 # ── Users / Staff Management (Admin only) ─────────────────────────────────────
@@ -1462,7 +1489,7 @@ def user_invite(request):
         role=role,
     )
     messages.success(request, f'User "{user.get_full_name()}" created with role {role.name}.')
-    return redirect('user-list')
+    return _htmx_redirect(request, 'user-list')
 
 
 @role_required('Admin')
@@ -1490,7 +1517,7 @@ def user_edit(request, pk):
                 errors['confirm_password'] = 'Passwords do not match.'
 
             if errors:
-                return render(request, 'core/user_form.html', {
+                return _render(request, 'core/user_form.html', 'core/fragment_user_form.html', {
                     'edited_user': edited_user,
                     'roles': Role.objects.all(),
                     'errors': errors,
@@ -1500,7 +1527,7 @@ def user_edit(request, pk):
             edited_user.set_password(new_password)
             edited_user.save()
             messages.success(request, f'Password updated for {edited_user.get_full_name()}.')
-            return redirect('user-list')
+            return _htmx_redirect(request, 'user-list')
 
         # Default: update profile
         first_name = request.POST.get('first_name', '').strip()
@@ -1527,7 +1554,7 @@ def user_edit(request, pk):
         }
 
         if errors:
-            return render(request, 'core/user_form.html', {
+            return _render(request, 'core/user_form.html', 'core/fragment_user_form.html', {
                 'edited_user': edited_user,
                 'roles': Role.objects.all(),
                 'errors': errors,
@@ -1545,9 +1572,9 @@ def user_edit(request, pk):
         edited_user.save()
 
         messages.success(request, f'User "{edited_user.get_full_name()}" updated.')
-        return redirect('user-list')
+        return _htmx_redirect(request, 'user-list')
 
-    return render(request, 'core/user_form.html', {
+    return _render(request, 'core/user_form.html', 'core/fragment_user_form.html', {
         'edited_user': edited_user,
         'roles': Role.objects.all(),
         'errors': {},
@@ -1566,7 +1593,7 @@ def user_deactivate(request, pk):
     user.is_active = False
     user.save()
     messages.success(request, f'{user.get_full_name()} deactivated.')
-    return redirect('user-list')
+    return _htmx_redirect(request, 'user-list')
 
 
 @require_POST
@@ -1577,7 +1604,7 @@ def user_reactivate(request, pk):
     user.is_active = True
     user.save()
     messages.success(request, f'{user.get_full_name()} reactivated.')
-    return redirect('user-list')
+    return _htmx_redirect(request, 'user-list')
 
 
 # ── Regional Settings ──────────────────────────────────────────────────────────

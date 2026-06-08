@@ -1,0 +1,75 @@
+{% load i18n %}
+<div class="modal-content wide">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% trans "Edit User" %} — {{ edited_user.get_full_name }}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-user-edit')"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="modal-body">
+    <div class="form-grid form-grid-2" style="gap:24px;">
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Account Details" %}</div>
+        <form method="post" action="{% url 'user-edit' edited_user.pk %}" class="flex flex-col gap-4">
+          {% csrf_token %}
+          <div class="form-grid form-grid-2">
+            <div class="form-group">
+              <label class="label">{% trans "First Name" %} <span class="req">*</span></label>
+              <input type="text" name="first_name" class="input {% if errors.first_name %}is-invalid{% endif %}"
+                value="{{ form_data.first_name|default:edited_user.first_name }}" required>
+              {% if errors.first_name %}<div class="invalid-feedback">{{ errors.first_name }}</div>{% endif %}
+            </div>
+            <div class="form-group">
+              <label class="label">{% trans "Last Name" %} <span class="req">*</span></label>
+              <input type="text" name="last_name" class="input {% if errors.last_name %}is-invalid{% endif %}"
+                value="{{ form_data.last_name|default:edited_user.last_name }}" required>
+              {% if errors.last_name %}<div class="invalid-feedback">{{ errors.last_name }}</div>{% endif %}
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="label">{% trans "Email" %} <span class="req">*</span></label>
+            <input type="email" name="email" class="input {% if errors.email %}is-invalid{% endif %}"
+              value="{{ form_data.email|default:edited_user.email }}" required>
+            {% if errors.email %}<div class="invalid-feedback">{{ errors.email }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="label">{% trans "Role" %} <span class="req">*</span></label>
+            <select name="role" class="input {% if errors.role %}is-invalid{% endif %}" required>
+              <option value="">{% trans "— Select —" %}</option>
+              {% for role in roles %}
+              <option value="{{ role.pk }}" {% if form_data.role|stringformat:"s" == role.pk|stringformat:"s" or edited_user.role_id == role.pk %}selected{% endif %}>{{ role.name }}</option>
+              {% endfor %}
+            </select>
+            {% if errors.role %}<div class="invalid-feedback">{{ errors.role }}</div>{% endif %}
+          </div>
+          <label class="form-check" style="margin-top:4px;">
+            <input type="checkbox" name="is_active" value="1" {% if edited_user.is_active %}checked{% endif %}>
+            {% trans "Account is active" %}
+          </label>
+          <div class="form-actions" style="border-top:1px solid var(--border-color);padding-top:12px;margin-top:8px;">
+            <button type="submit" class="btn btn-primary">{% trans "Save Changes" %}</button>
+          </div>
+        </form>
+      </div>
+      <div>
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Change Password" %}</div>
+        <form method="post" action="{% url 'user-edit' edited_user.pk %}" class="flex flex-col gap-4">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="change_password">
+          <div class="form-group">
+            <label class="label">{% trans "New Password" %} <span class="req">*</span></label>
+            <input type="password" name="new_password" class="input {% if errors.new_password %}is-invalid{% endif %}"
+              placeholder="{% trans 'At least 8 characters' %}" required>
+            {% if errors.new_password %}<div class="invalid-feedback">{{ errors.new_password }}</div>{% endif %}
+          </div>
+          <div class="form-group">
+            <label class="label">{% trans "Confirm Password" %} <span class="req">*</span></label>
+            <input type="password" name="confirm_password" class="input {% if errors.confirm_password %}is-invalid{% endif %}" required>
+            {% if errors.confirm_password %}<div class="invalid-feedback">{{ errors.confirm_password }}</div>{% endif %}
+          </div>
+          <div class="form-actions" style="border-top:1px solid var(--border-color);padding-top:12px;margin-top:8px;">
+            <button type="submit" class="btn btn-warning">{% trans "Set Password" %}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>

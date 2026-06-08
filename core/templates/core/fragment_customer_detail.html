@@ -1,0 +1,72 @@
+{% load i18n regional %}
+<div class="slide-header">
+  <div>
+    <h3 class="font-semibold" style="font-size:1.1rem;">{{ customer.get_full_name }}</h3>
+    <p class="text-xs mt-0.5" style="color:var(--text-secondary)">{% trans "Customer since" %} {{ customer.created_at|date:"M j, Y" }}</p>
+  </div>
+  <button type="button" class="btn-icon" onclick="closeSlide('slide-customer')"><i class="fas fa-times"></i></button>
+</div>
+<div class="slide-body">
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Contact" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="flex items-center gap-3 mb-3">
+        <div class="avatar-circle" style="background:linear-gradient(135deg,var(--primary),#7c3aed)">
+          {{ customer.first_name.0|upper }}{{ customer.last_name.0|upper }}
+        </div>
+        <div>
+          <div class="font-semibold text-sm">{{ customer.get_full_name }}</div>
+          <div class="text-xs" style="color:var(--text-secondary)">{{ customer.email }}</div>
+        </div>
+      </div>
+      <div style="border-top:1px solid var(--border-color);padding-top:10px;">
+        <div class="info-row"><span class="info-label">{% trans "Phone" %}</span><span>{{ customer.phone|default:"—" }}</span></div>
+        {% if customer.national_id %}<div class="info-row"><span class="info-label">{% trans "ID" %}</span><span>{{ customer.national_id }}</span></div>{% endif %}
+        {% if customer.date_of_birth %}<div class="info-row"><span class="info-label">{% trans "DOB" %}</span><span>{{ customer.date_of_birth|date:"M j, Y" }}</span></div>{% endif %}
+        {% if customer.gender %}<div class="info-row"><span class="info-label">{% trans "Gender" %}</span><span>{% if customer.gender == 'M' %}{% trans "Male" %}{% else %}{% trans "Female" %}{% endif %}</span></div>{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Address" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="text-sm font-medium">{{ customer.address_line1 }}</div>
+      {% if customer.address_line2 %}<div class="text-sm">{{ customer.address_line2 }}</div>{% endif %}
+      <div class="text-sm mt-1" style="color:var(--text-secondary)">{{ customer.city }}, {{ customer.state }} {{ customer.postal_code }}</div>
+      <div class="text-sm" style="color:var(--text-secondary)">{{ customer.country }}</div>
+    </div>
+  </div>
+  {% if customer.notes %}
+  <div class="mb-6">
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Notes" %}</div>
+    <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base)">
+      <div class="text-sm" style="color:var(--text-secondary)">{{ customer.notes|linebreaksbr }}</div>
+    </div>
+  </div>
+  {% endif %}
+  <div>
+    <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Order History" %}</div>
+    {% if orders %}
+    <div class="flex flex-col gap-2">
+      {% for order in orders %}
+      <div class="info-panel p-4 rounded-xl" style="background:var(--bg-base);display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div class="text-sm font-semibold">{{ order.order_number }}</div>
+          <div class="text-xs" style="color:var(--text-secondary)">{{ order.created_at|date:"M j, Y" }}</div>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span>
+          <span class="font-bold text-sm">{{ order.total_amount|currency }}</span>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-sm text-center py-4" style="color:var(--text-tertiary)">{% trans "No orders yet" %}</div>
+    {% endif %}
+  </div>
+</div>
+<div class="slide-footer">
+  <button hx-get="{% url 'customer-edit' customer.pk %}" hx-target="#modal-customer-body" hx-swap="innerHTML" onclick="closeSlide('slide-customer');openModal('modal-customer')" class="btn btn-secondary">{% trans "Edit" %}</button>
+  <button hx-get="{% url 'order-create' %}?customer={{ customer.pk }}" hx-target="#modal-order-body" hx-swap="innerHTML" onclick="closeSlide('slide-customer');openModal('modal-order')" class="btn btn-primary"><i class="fas fa-plus"></i> {% trans "New Order" %}</button>
+</div>
