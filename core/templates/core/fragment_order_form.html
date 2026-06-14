@@ -7,8 +7,14 @@
     </div>
     <button type="button" class="btn-icon" onclick="closeModal('modal-order')"><i class="fas fa-times"></i></button>
   </div>
-  <form method="post" action="{% if order %}{% url 'order-detail' order.pk %}{% else %}{% url 'order-create' %}{% endif %}" id="order-modal-form">
+  <form method="post"
+        action="{% if order %}{% url 'order-detail' order.pk %}{% else %}{% url 'order-create' %}{% endif %}"
+        hx-post="{% if order %}{% url 'order-detail' order.pk %}{% else %}{% url 'order-create' %}{% endif %}"
+        hx-target="#modal-order-body"
+        hx-swap="innerHTML"
+        id="order-modal-form">
     {% csrf_token %}
+    <input type="hidden" name="line_item_count" id="modal-line-item-count" value="{{ order.items.count|default:'0' }}">
     <div class="modal-body">
       <div class="mb-4">
         <label class="label">{% trans "Customer" %} <span class="req">*</span></label>
@@ -58,7 +64,7 @@
                   <td class="p-2.5"><input type="number" name="quantity_{{ forloop.counter }}" class="input text-sm" style="width:60px" value="{{ item.quantity }}" min="1" onchange="recalcModalTotals()"></td>
                   <td class="p-2.5"><input type="number" name="unit_price_{{ forloop.counter }}" class="input text-sm" style="width:90px" value="{{ item.unit_price }}" step="0.01" min="0" onchange="recalcModalTotals()"></td>
                   <td class="p-2.5 text-right font-semibold text-sm modal-line-total">{{ item.line_total|currency }}</td>
-                  <td class="p-2.5"><button type="button" class="btn-icon" onclick="this.closest('tr').remove();recalcModalTotals();if(!document.querySelectorAll('#modal-line-items tr').length)document.getElementById('modal-empty-line').style.display='';"><i class="fas fa-times"></i></button></td>
+                  <td class="p-2.5"><button type="button" class="btn-icon" onclick="removeModalLineItem(this)"><i class="fas fa-times"></i></button></td>
                 </tr>
                 {% endfor %}
               {% endif %}
@@ -128,9 +134,28 @@
       <td class="p-2.5"><input type="number" name="quantity_${lineCount}" class="input text-sm" style="width:60px" value="1" min="1" onchange="recalcModalTotals()"></td>
       <td class="p-2.5"><input type="number" name="unit_price_${lineCount}" class="input text-sm" style="width:90px" value="${firstProduct.price.toFixed(2)}" step="0.01" min="0" onchange="recalcModalTotals()"></td>
       <td class="p-2.5 text-right font-semibold text-sm modal-line-total">$0.00</td>
-      <td class="p-2.5"><button type="button" class="btn-icon" onclick="this.closest('tr').remove();recalcModalTotals();if(!document.querySelectorAll('#modal-line-items tr').length)document.getElementById('modal-empty-line').style.display='';"><i class="fas fa-times"></i></button></td>`;
+      <td class="p-2.5"><button type="button" class="btn-icon" onclick="removeModalLineItem(this)"><i class="fas fa-times"></i></button></td>`;
     tbody.appendChild(row);
+    const countInput = document.getElementById('modal-line-item-count');
+    if (countInput) countInput.value = lineCount;
     recalcModalTotals();
+  };
+
+  window.removeModalLineItem = function(btn) {
+    btn.closest('tr').remove();
+    recalcModalTotals();
+    const rows = document.querySelectorAll('#modal-line-items tr');
+    if (!rows.length) {
+      const emptyLine = document.getElementById('modal-empty-line');
+      if (emptyLine) emptyLine.style.display = '';
+    }
+    let maxIdx = 0;
+    rows.forEach(r => {
+      const idx = parseInt(r.dataset.line || '0');
+      if (idx > maxIdx) maxIdx = idx;
+    });
+    const countInput = document.getElementById('modal-line-item-count');
+    if (countInput) countInput.value = maxIdx;
   };
 
   window.updateModalSku = function(select, idx) {

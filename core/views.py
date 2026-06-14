@@ -1447,13 +1447,16 @@ def user_list(request):
     })
 
 
-@require_POST
 @role_required('Admin')
 def user_invite(request):
     """
+    GET:  render invite form fragment.
     POST: create a new User (is_active=True) and assign a Role.
     Redirects to user-list. Admin only.
     """
+    if request.method == 'GET':
+        return render(request, 'core/fragment_invite_form.html', {'roles': Role.objects.all()})
+
     data       = request.POST
     first_name = data.get('first_name', '').strip()
     last_name  = data.get('last_name', '').strip()

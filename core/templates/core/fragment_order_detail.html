@@ -107,13 +107,13 @@
   </div>
   {% endif %}
   <div class="flex flex-wrap gap-2">
-    {% if order.status == 'draft' and user.role.name != 'Staff' or user.role.name == 'Manager' or user.role.name == 'Admin' %}
+    {% if order.status == 'draft' and user.role.name in 'Staff,Manager,Admin' %}
     <form method="post" action="{% url 'order-submit' order.pk %}" class="inline">
       {% csrf_token %}
       <button type="submit" class="btn btn-primary btn-sm">{% trans "Submit for Review" %}</button>
     </form>
     {% endif %}
-    {% if order.status == 'pending' and user.role.name == 'Manager' or user.role.name == 'Admin' %}
+    {% if order.status == 'pending' and user.role.name in 'Manager,Admin' %}
     <form method="post" action="{% url 'order-confirm' order.pk %}" class="inline">
       {% csrf_token %}
       <button type="submit" class="btn btn-primary btn-sm">{% trans "Confirm Order" %}</button>
@@ -127,22 +127,28 @@
       onclick="openModal('modal-payment')">
       {% trans "Record Payment" %}
     </button>
-    <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline">
+    {% endif %}
+    {% if order.status == 'confirmed' and user.role.name in 'Manager,Admin' %}
+    <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline"
+          onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Cancel order {{ number }}?{% endblocktrans %}')">
       {% csrf_token %}
       <button type="submit" class="btn btn-danger btn-sm">{% trans "Cancel Order" %}</button>
     </form>
     {% endif %}
-    {% if order.status == 'paid' %}
+    {% if order.status == 'paid' and user.role.name in 'Staff,Manager,Admin' %}
     <form method="post" action="{% url 'order-ship' order.pk %}" class="inline">
       {% csrf_token %}
       <button type="submit" class="btn btn-primary btn-sm">{% trans "Mark Shipped" %}</button>
     </form>
-    <form method="post" action="{% url 'order-refund' order.pk %}" class="inline">
+    {% endif %}
+    {% if order.status == 'paid' and user.role.name == 'Admin' %}
+    <form method="post" action="{% url 'order-refund' order.pk %}" class="inline"
+          onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Issue refund for {{ number }}?{% endblocktrans %}')">
       {% csrf_token %}
       <button type="submit" class="btn btn-warning btn-sm">{% trans "Issue Refund" %}</button>
     </form>
     {% endif %}
-    {% if order.status == 'shipped' %}
+    {% if order.status == 'shipped' and user.role.name in 'Staff,Manager,Admin' %}
     <form method="post" action="{% url 'order-deliver' order.pk %}" class="inline">
       {% csrf_token %}
       <button type="submit" class="btn btn-success btn-sm">{% trans "Mark Delivered" %}</button>

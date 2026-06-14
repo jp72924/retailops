@@ -4,7 +4,7 @@
     <h3 class="font-semibold">{% if product %}{% trans "Edit Product" %}{% else %}{% trans "New Product" %}{% endif %}</h3>
     <button type="button" class="btn-icon" onclick="closeModal('modal-product')"><i class="fas fa-times"></i></button>
   </div>
-  <form method="post" action="{% if product %}{% url 'product-edit' product.pk %}{% else %}{% url 'product-create' %}{% endif %}" enctype="multipart/form-data">
+  <form method="post" id="product-form-modal" action="{% if product %}{% url 'product-edit' product.pk %}{% else %}{% url 'product-create' %}{% endif %}" enctype="multipart/form-data">
     {% csrf_token %}
     <div class="modal-body">
       <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">{% trans "Product Identity" %}</div>
@@ -103,7 +103,7 @@
       <h3 class="font-semibold">{% trans "New Category" %}</h3>
       <button type="button" class="btn-icon" onclick="closeModal('modal-inline-category')"><i class="fas fa-times"></i></button>
     </div>
-    <form method="post" action="{% url 'category-create' %}">
+    <form method="post" id="inline-category-form" action="{% url 'category-create' %}">
       {% csrf_token %}
       <div class="modal-body">
         <div class="form-group" style="margin-bottom:16px;">
@@ -118,7 +118,7 @@
         </div>
         <div class="form-group">
           <label class="label">{% trans "Parent Category" %}</label>
-          <select name="parent_category" class="input">
+          <select name="parent_id" class="input">
             <option value="">{% trans "— None (top-level) —" %}</option>
             {% for cat in categories %}
             <option value="{{ cat.pk }}" {% if form_data.parent_category|stringformat:"s" == cat.pk|stringformat:"s" %}selected{% endif %}>{{ cat.name }}</option>
@@ -134,3 +134,51 @@
     </form>
   </div>
 </div>
+
+<script>
+(function() {
+  const form = document.getElementById('inline-category-form');
+  if (!form) return;
+
+  form.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(form);
+    const csrfToken = form.querySelector('[name="csrfmiddlewaretoken"]')?.value || '';
+
+    fetch(form.action, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': csrfToken
+      },
+      body: formData
+    })
+    .then(response => {
+      if (!response.ok) {
+        return response.json().then(data => { throw data; });
+      }
+      return response.json();
+    })
+    .then(data => {
+      if (data.ok) {
+        const categorySelect = document.querySelector('#product-form-modal select[name="category"]');
+        if (categorySelect) {
+          const option = document.createElement('option');
+          option.value = data.id;
+          option.textContent = data.display_name || data.name;
+          option.selected = true;
+          categorySelect.appendChild(option);
+        }
+        form.reset();
+        closeModal('modal-inline-category');
+        showToast('{% trans "Category created and selected" %}', 'success');
+      } else {
+        showToast(data.error || '{% trans "Failed to create category" %}', 'error');
+      }
+    })
+    .catch(data => {
+      showToast(data.error || '{% trans "Failed to create category" %}', 'error');
+    });
+  });
+})();
+</script>

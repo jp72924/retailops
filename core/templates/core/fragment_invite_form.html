@@ -1,0 +1,43 @@
+{% load i18n %}
+<div class="modal-content" style="max-width:440px">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% trans "Invite Team Member" %}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-invite')"><i class="fas fa-times"></i></button>
+  </div>
+  <form method="post" action="{% url 'user-invite' %}" hx-post="{% url 'user-invite' %}" hx-target="#modal-invite-body" hx-swap="innerHTML">
+    {% csrf_token %}
+    <div class="modal-body">
+      <div class="form-grid form-grid-2" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label class="label">{% trans "First Name" %} <span class="req">*</span></label>
+          <input type="text" name="first_name" class="input" required>
+        </div>
+        <div class="form-group">
+          <label class="label">{% trans "Last Name" %} <span class="req">*</span></label>
+          <input type="text" name="last_name" class="input" required>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Email" %} <span class="req">*</span></label>
+        <input type="email" name="email" class="input" required>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Role" %} <span class="req">*</span></label>
+        <select name="role" class="input" required>
+          <option value="">{% trans "— Select —" %}</option>
+          {% for role in roles %}
+          <option value="{{ role.pk }}">{{ role.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="label">{% trans "Temporary Password" %} <span class="req">*</span></label>
+        <input type="password" name="password" class="input" required>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-invite')">{% trans "Cancel" %}</button>
+      <button type="submit" class="btn btn-primary">{% trans "Send Invite" %}</button>
+    </div>
+  </form>
+</div>

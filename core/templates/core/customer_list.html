@@ -146,4 +146,22 @@
     </div>
   </div>
 </div>
+
+<!-- Order Modal -->
+<div class="modal-overlay" id="modal-order">
+  <div id="modal-order-body">
+    <div class="modal-content xwide">
+      <div class="modal-header">
+        <h3 class="modal-title">{% trans "New Order" %}</h3>
+        <button type="button" class="btn-icon" onclick="closeModal('modal-order')"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="modal-body">
+        <div class="empty-state" style="padding:24px;">
+          <i class="fas fa-spinner fa-spin"></i>
+          <div>{% trans "Loading…" %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

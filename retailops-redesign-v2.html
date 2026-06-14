@@ -1,0 +1,1563 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetailOps — Redesigned</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        colors: {
+          primary: { 50:'#eef2ff',100:'#e0e7ff',200:'#c7d2fe',300:'#a5b4fc',400:'#818cf8',500:'#6366f1',600:'#4f46e5',700:'#4338ca',800:'#3730a3',900:'#312e81' },
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root {
+    --bg-base: #f8fafc; --bg-elevated: #ffffff; --bg-sidebar: #ffffff; --bg-hover: #f1f5f9; --bg-active: #eef2ff;
+    --text-primary: #0f172a; --text-secondary: #64748b; --text-tertiary: #94a3b8;
+    --border-color: #e2e8f0; --border-strong: #cbd5e1;
+    --primary: #4f46e5; --primary-soft: #eef2ff; --primary-hover: #4338ca;
+    --success: #10b981; --success-soft: #d1fae5; --warning: #f59e0b; --warning-soft: #fef3c7;
+    --danger: #ef4444; --danger-soft: #fee2e2; --info: #3b82f6; --info-soft: #dbeafe;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.04); --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.06), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.08), 0 8px 10px -6px rgb(0 0 0 / 0.08);
+    --radius-sm: 8px; --radius: 12px; --radius-lg: 16px;
+  }
+  [data-theme="dark"] {
+    --bg-base: #020617; --bg-elevated: #0f172a; --bg-sidebar: #0f172a; --bg-hover: #1e293b; --bg-active: #1e1b4b;
+    --text-primary: #f8fafc; --text-secondary: #94a3b8; --text-tertiary: #64748b;
+    --border-color: #1e293b; --border-strong: #334155;
+    --primary: #818cf8; --primary-soft: #1e1b4b; --primary-hover: #a5b4fc;
+    --success: #34d399; --success-soft: #064e3b; --warning: #fbbf24; --warning-soft: #78350f;
+    --danger: #f87171; --danger-soft: #450a0a; --info: #60a5fa; --info-soft: #1e3a8a;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3); --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.5);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.6), 0 8px 10px -6px rgb(0 0 0 / 0.6);
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-base); color: var(--text-primary); transition: background 0.3s, color 0.3s; overflow-x: hidden; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+  @keyframes slideInRight { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: translateX(0); } }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(120%) scale(0.9); } to { opacity: 1; transform: translateX(0) scale(1); } }
+  @keyframes toastOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(120%); } }
+  @keyframes pulse-dot { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.3); } }
+  @keyframes toastProgress { from { width: 100%; } to { width: 0%; } }
+  @keyframes ring { 0% { box-shadow: 0 0 0 0 rgba(79,70,229,0.4); } 70% { box-shadow: 0 0 0 6px rgba(79,70,229,0); } 100% { box-shadow: 0 0 0 0 rgba(79,70,229,0); } }
+  .animate-fade-in { animation: fadeIn 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .animate-scale-in { animation: scaleIn 0.3s cubic-bezier(0.16,1,0.3,1) forwards; }
+  .animate-slide-in { animation: slideInRight 0.4s cubic-bezier(0.16,1,0.3,1) forwards; }
+
+  .sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 50; width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border-color); display: flex; flex-direction: column; transition: width 0.35s cubic-bezier(0.16,1,0.3,1), background 0.3s; overflow: hidden; }
+  .sidebar.collapsed { width: 72px; }
+  .sidebar-brand { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 20px; flex-shrink: 0; border-bottom: 1px solid var(--border-color); }
+  .sidebar-brand .logo-icon { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%); display: grid; place-items: center; color: #fff; font-size: 14px; font-weight: 800; flex-shrink: 0; transition: transform 0.3s; }
+  .sidebar-brand:hover .logo-icon { transform: rotate(-6deg) scale(1.08); }
+  .sidebar-brand .logo-text { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); white-space: nowrap; opacity: 1; transition: opacity 0.2s; }
+  .sidebar.collapsed .sidebar-brand .logo-text { opacity: 0; width: 0; }
+  .sidebar-nav { flex: 1; padding: 12px 10px; overflow-y: auto; }
+  .sidebar-section { margin-bottom: 20px; }
+  .sidebar-section-title { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); padding: 0 12px; margin-bottom: 6px; white-space: nowrap; opacity: 1; transition: opacity 0.2s; }
+  .sidebar.collapsed .sidebar-section-title { opacity: 0; height: 0; margin: 0; padding: 0; overflow: hidden; }
+  .sidebar-item { position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 12px; margin-bottom: 2px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; white-space: nowrap; overflow: hidden; }
+  .sidebar-item::before { content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%) scaleY(0); width: 3px; height: 20px; background: var(--primary); border-radius: 0 4px 4px 0; transition: transform 0.25s cubic-bezier(0.16,1,0.3,1); }
+  .sidebar-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .sidebar-item:hover i { transform: scale(1.15) rotate(-3deg); }
+  .sidebar-item.active { background: var(--primary-soft); color: var(--primary); }
+  .sidebar-item.active::before { transform: translateY(-50%) scaleY(1); }
+  .sidebar-item i { width: 20px; text-align: center; font-size: 0.95rem; transition: transform 0.25s; flex-shrink: 0; }
+  .sidebar-item .label { opacity: 1; transition: opacity 0.15s; }
+  .sidebar.collapsed .sidebar-item .label { opacity: 0; width: 0; }
+  .sidebar-item .badge-count { margin-left: auto; background: var(--danger-soft); color: var(--danger); font-size: 0.65rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; opacity: 1; transition: opacity 0.2s; }
+  .sidebar.collapsed .sidebar-item .badge-count { opacity: 0; width: 0; overflow: hidden; }
+  .sidebar.collapsed .sidebar-item:hover::after { content: attr(data-label); position: absolute; left: 56px; top: 50%; transform: translateY(-50%); background: var(--text-primary); color: var(--bg-elevated); padding: 5px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-lg); z-index: 100; pointer-events: none; animation: fadeIn 0.15s forwards; }
+  .sidebar-footer { padding: 12px 10px; border-top: 1px solid var(--border-color); flex-shrink: 0; }
+  .sidebar-toggle { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px; border-radius: var(--radius-sm); background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+  .sidebar-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .sidebar-toggle i { transition: transform 0.35s; }
+  .sidebar.collapsed .sidebar-toggle i { transform: rotate(180deg); }
+  .sidebar.collapsed .sidebar-toggle span { opacity: 0; width: 0; overflow: hidden; }
+
+  .main-wrapper { margin-left: 260px; transition: margin-left 0.35s; min-height: 100vh; display: flex; flex-direction: column; }
+  .sidebar.collapsed ~ .main-wrapper { margin-left: 72px; }
+
+  .top-header { height: 64px; background: var(--bg-elevated); border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; padding: 0 28px; position: sticky; top: 0; z-index: 40; backdrop-filter: blur(12px); }
+  [data-theme="dark"] .top-header { background: rgba(15,23,42,0.85); }
+  .header-search { position: relative; width: 320px; }
+  .header-search input { width: 100%; padding: 8px 14px 8px 38px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-base); color: var(--text-primary); font-size: 0.85rem; font-family: inherit; transition: all 0.2s; }
+  .header-search input:focus { outline: none; border-color: var(--primary); background: var(--bg-elevated); box-shadow: 0 0 0 3px rgba(79,70,229,0.12); animation: ring 0.6s; }
+  .header-search i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 0.85rem; }
+  .header-actions { display: flex; align-items: center; gap: 8px; }
+  .header-btn { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: transparent; border: 1px solid transparent; color: var(--text-secondary); font-size: 0.9rem; cursor: pointer; transition: all 0.2s; position: relative; }
+  .header-btn:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-color); transform: translateY(-1px); }
+  .header-btn:active { transform: translateY(0) scale(0.95); }
+  .header-btn .dot { position: absolute; top: 7px; right: 7px; width: 8px; height: 8px; background: var(--danger); border-radius: 50%; border: 2px solid var(--bg-elevated); animation: pulse-dot 2s infinite; }
+  .header-avatar { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%); display: grid; place-items: center; color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
+  .header-avatar:hover { transform: scale(1.08); box-shadow: 0 0 0 3px rgba(79,70,229,0.2); }
+
+  .content-area { flex: 1; padding: 28px; }
+  .card { background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: var(--radius); box-shadow: var(--shadow-sm); transition: transform 0.25s, box-shadow 0.25s; }
+  .card:hover { box-shadow: var(--shadow-md); }
+  .card-body { padding: 20px; }
+  .card-header { padding: 16px 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 18px; border-radius: var(--radius-sm); font-size: 0.82rem; font-weight: 600; font-family: inherit; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; white-space: nowrap; }
+  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+  .btn:active { transform: translateY(0) scale(0.97); box-shadow: var(--shadow-sm); }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-secondary { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-color); }
+  .btn-secondary:hover { background: var(--bg-active); border-color: var(--primary); color: var(--primary); }
+  .btn-danger { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-soft); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-success { background: var(--success-soft); color: #065f46; border-color: var(--success-soft); }
+  .btn-success:hover { background: var(--success); color: #fff; }
+  .btn-warning { background: var(--warning-soft); color: #92400e; border-color: var(--warning-soft); }
+  .btn-warning:hover { background: var(--warning); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--text-secondary); }
+  .btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .btn-sm { padding: 6px 12px; font-size: 0.75rem; gap: 6px; }
+  .btn-icon { width: 32px; height: 32px; padding: 0; border-radius: 8px; background: transparent; border: 1px solid var(--border-color); color: var(--text-secondary); cursor: pointer; display: inline-grid; place-items: center; transition: all 0.2s; font-size: 0.8rem; }
+  .btn-icon:hover { background: var(--bg-hover); color: var(--text-primary); border-color: var(--border-strong); transform: translateY(-1px); }
+  .btn-icon:active { transform: scale(0.92); }
+
+  .input { width: 100%; padding: 9px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color); background: var(--bg-base); color: var(--text-primary); font-size: 0.85rem; font-family: inherit; transition: all 0.2s; }
+  .input:focus { outline: none; border-color: var(--primary); background: var(--bg-elevated); box-shadow: 0 0 0 3px rgba(79,70,229,0.12); animation: ring 0.6s; }
+  .input::placeholder { color: var(--text-tertiary); }
+  .input-group { position: relative; }
+  .input-group i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary); font-size: 0.85rem; pointer-events: none; }
+  .input-group .input { padding-left: 36px; }
+  .label { display: block; font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%2364748B' stroke-width='1.5' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+  textarea.input { resize: vertical; min-height: 80px; }
+
+  .table-container { background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  thead th { background: var(--bg-base); padding: 12px 16px; text-align: left; font-size: 0.7rem; font-weight: 700; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border-color); }
+  tbody tr { border-bottom: 1px solid var(--border-color); transition: background 0.15s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody td { padding: 14px 16px; color: var(--text-secondary); }
+  tbody tr:hover { background: var(--bg-hover); }
+  tbody tr:hover td { color: var(--text-primary); }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 999px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; white-space: nowrap; }
+  .badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; }
+  .badge-draft { background: var(--bg-hover); color: var(--text-secondary); } .badge-draft::before { background: var(--text-tertiary); }
+  .badge-pending { background: var(--warning-soft); color: #92400e; } .badge-pending::before { background: var(--warning); animation: pulse-dot 2s infinite; }
+  .badge-confirmed { background: var(--info-soft); color: #1d4ed8; } .badge-confirmed::before { background: var(--info); }
+  .badge-paid { background: var(--success-soft); color: #065f46; } .badge-paid::before { background: var(--success); }
+  .badge-shipped { background: #e0e7ff; color: #4338ca; } .badge-shipped::before { background: #6366f1; }
+  .badge-delivered { background: #d1fae5; color: #065f46; } .badge-delivered::before { background: #10b981; }
+  .badge-cancelled { background: var(--danger-soft); color: #991b1b; } .badge-cancelled::before { background: var(--danger); }
+  .badge-refunded { background: #ffedd5; color: #9a3412; } .badge-refunded::before { background: #f97316; }
+  [data-theme="dark"] .badge-confirmed { background: #1e3a8a; color: #93c5fd; }
+  [data-theme="dark"] .badge-shipped { background: #312e81; color: #a5b4fc; }
+
+  .stat-card { background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 24px; position: relative; overflow: hidden; transition: transform 0.25s, box-shadow 0.25s; }
+  .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, var(--primary) 0%, #7c3aed 100%); opacity: 0; transition: opacity 0.3s; }
+  .stat-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+  .stat-card:hover::before { opacity: 1; }
+  .stat-card .icon-wrap { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 1.1rem; margin-bottom: 16px; transition: transform 0.3s; }
+  .stat-card:hover .icon-wrap { transform: scale(1.1) rotate(-5deg); }
+
+  .modal-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(2,6,23,0.6); backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; padding: 24px; opacity: 0; transition: opacity 0.25s; }
+  .modal-overlay.open { display: flex; opacity: 1; }
+  .modal-overlay.open .modal-content { animation: scaleIn 0.3s forwards; }
+  .modal-content { background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); width: 100%; max-width: 520px; max-height: 90vh; overflow-y: auto; transform: scale(0.95); opacity: 0; }
+  .modal-content.wide { max-width: 720px; }
+  .modal-content.xwide { max-width: 860px; }
+  .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+  .modal-body { padding: 24px; }
+  .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; }
+
+  .slide-overlay { position: fixed; inset: 0; z-index: 200; background: rgba(2,6,23,0.5); backdrop-filter: blur(3px); display: none; opacity: 0; transition: opacity 0.25s; }
+  .slide-overlay.open { display: block; opacity: 1; }
+  .slide-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 540px; max-width: 100vw; background: var(--bg-elevated); border-left: 1px solid var(--border-color); box-shadow: var(--shadow-xl); z-index: 201; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.16,1,0.3,1); display: flex; flex-direction: column; }
+  .slide-panel.wide { width: 640px; }
+  .slide-overlay.open ~ .slide-panel, .slide-panel.open { transform: translateX(0); }
+  .slide-header { padding: 20px 28px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .slide-body { flex: 1; overflow-y: auto; padding: 24px 28px; }
+  .slide-footer { padding: 16px 28px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; flex-shrink: 0; }
+
+  .side-panel-alt { position: fixed; top: 0; right: 0; bottom: 0; width: 420px; max-width: 100vw; background: var(--bg-elevated); border-left: 1px solid var(--border-color); box-shadow: var(--shadow-xl); z-index: 202; transform: translateX(100%); transition: transform 0.35s cubic-bezier(0.16,1,0.3,1); display: flex; flex-direction: column; }
+  .side-panel-alt.open { transform: translateX(0); }
+  .sp-header { padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; justify-content: space-between; }
+  .sp-title { font-weight: 700; font-size: 1rem; }
+  .sp-body { padding: 20px; overflow-y: auto; flex: 1; }
+
+  .toast-stack { position: fixed; top: 20px; right: 20px; z-index: 300; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+  .toast-item { background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: var(--radius); padding: 14px 20px; box-shadow: var(--shadow-lg); font-size: 0.85rem; font-weight: 500; display: flex; align-items: center; gap: 12px; min-width: 300px; max-width: 400px; pointer-events: all; position: relative; overflow: hidden; animation: toastIn 0.4s forwards; }
+  .toast-item.closing { animation: toastOut 0.3s forwards; }
+  .toast-item::after { content: ''; position: absolute; bottom: 0; left: 0; height: 3px; background: var(--primary); width: 100%; animation: toastProgress 4s linear forwards; }
+  .toast-item.success { border-left: 3px solid var(--success); } .toast-item.success::after { background: var(--success); }
+  .toast-item.error { border-left: 3px solid var(--danger); } .toast-item.error::after { background: var(--danger); }
+  .toast-item.warning { border-left: 3px solid var(--warning); } .toast-item.warning::after { background: var(--warning); }
+
+  .tabs { display: inline-flex; gap: 2px; padding: 4px; background: var(--bg-base); border-radius: 10px; border: 1px solid var(--border-color); }
+  .tab { padding: 7px 16px; border-radius: 8px; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); cursor: pointer; border: none; background: transparent; transition: all 0.2s; font-family: inherit; }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { background: var(--bg-elevated); color: var(--primary); box-shadow: var(--shadow-sm); }
+
+  .empty-state { text-align: center; padding: 60px 24px; color: var(--text-tertiary); }
+  .empty-state i { font-size: 3rem; margin-bottom: 16px; opacity: 0.4; }
+
+  .toggle { width: 40px; height: 22px; border-radius: 11px; background: var(--border-strong); position: relative; cursor: pointer; transition: background 0.25s; flex-shrink: 0; }
+  .toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.25s cubic-bezier(0.16,1,0.3,1); }
+  .toggle.on { background: var(--primary); }
+  .toggle.on::after { transform: translateX(18px); }
+
+  .view { display: none; }
+  .view.active { display: block; animation: fadeIn 0.35s forwards; }
+
+  .dropdown { position: relative; }
+  .dropdown-menu { position: absolute; top: calc(100% + 6px); right: 0; background: var(--bg-elevated); border: 1px solid var(--border-color); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); min-width: 180px; padding: 6px; z-index: 100; opacity: 0; transform: scale(0.95) translateY(-4px); pointer-events: none; transition: all 0.15s; }
+  .dropdown.open .dropdown-menu { opacity: 1; transform: scale(1) translateY(0); pointer-events: all; }
+  .dropdown-item { padding: 8px 12px; border-radius: 6px; font-size: 0.82rem; font-weight: 500; color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.15s; }
+  .dropdown-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+  .dropdown-divider { height: 1px; background: var(--border-color); margin: 6px 0; }
+
+  .alert-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 0.875rem; }
+  .alert-warning { background: var(--warning-soft); border: 1px solid #fcd34d; color: #92400e; }
+  .alert-danger { background: var(--danger-soft); border: 1px solid #fca5a5; color: #991b1b; }
+  .alert-success { background: var(--success-soft); border: 1px solid #86efac; color: #14532d; }
+  .alert-info { background: var(--info-soft); border: 1px solid #93c5fd; color: #1d4ed8; }
+  [data-theme="dark"] .alert-warning { background: #78350f; border-color: #92400e; color: #fef3c7; }
+  [data-theme="dark"] .alert-danger { background: #450a0a; border-color: #7f1d1d; color: #fee2e2; }
+  [data-theme="dark"] .alert-success { background: #064e3b; border-color: #065f46; color: #d1fae5; }
+  [data-theme="dark"] .alert-info { background: #1e3a8a; border-color: #1d4ed8; color: #dbeafe; }
+
+  .info-panel { background: var(--bg-base); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 16px; }
+  .info-row { display: flex; gap: 8px; margin-bottom: 6px; font-size: 0.875rem; }
+  .info-row:last-child { margin-bottom: 0; }
+  .info-label { color: var(--text-tertiary); min-width: 100px; font-size: 0.8rem; flex-shrink: 0; }
+
+  .pay-hist-item { padding: 12px 0; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; }
+  .pay-hist-item:last-child { border-bottom: none; }
+  .pay-hist-num { font-weight: 600; color: var(--primary); font-family: monospace; }
+  .pay-hist-meta { color: var(--text-tertiary); font-size: 0.78rem; margin-top: 4px; }
+
+  .movement-item { padding: 10px 0; border-bottom: 1px solid var(--border-color); font-size: 0.82rem; }
+  .movement-item:last-child { border-bottom: none; }
+
+  .totals-box { background: var(--bg-base); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 16px 20px; }
+  .totals-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.875rem; }
+  .totals-row.total { font-weight: 700; font-size: 1.05rem; border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 4px; }
+
+  .product-thumb { width: 44px; height: 44px; border-radius: 8px; background: var(--bg-base); border: 1px solid var(--border-color); display: grid; place-items: center; color: var(--text-tertiary); font-size: 0.75rem; font-weight: 700; overflow: hidden; flex-shrink: 0; }
+  .product-thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .product-thumb-sm { width: 36px; height: 36px; font-size: 0.68rem; }
+
+  .radio-group-modern { display: flex; gap: 8px; flex-wrap: wrap; }
+  .radio-opt-modern { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
+  .radio-opt-modern:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
+
+  .form-check-modern { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; cursor: pointer; }
+  .form-check-modern input { accent-color: var(--primary); width: 16px; height: 16px; cursor: pointer; }
+
+  .pagination { display: flex; gap: 4px; align-items: center; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+  .pg-btn { padding: 6px 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer; font-size: 0.8rem; font-weight: 500; transition: all 0.15s; }
+  .pg-btn:hover:not(.active) { background: var(--bg-hover); }
+  .pg-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .pg-btn.disabled { opacity: 0.4; pointer-events: none; }
+
+  .image-upload-area { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 24px; text-align: center; transition: all 0.2s; cursor: pointer; }
+  .image-upload-area:hover { border-color: var(--primary); background: var(--primary-soft); }
+
+  @media(max-width:1024px){
+    .sidebar { transform: translateX(-100%); width: 260px !important; }
+    .sidebar.mobile-open { transform: translateX(0); }
+    .main-wrapper { margin-left: 0 !important; }
+    .slide-panel, .side-panel-alt { width: 100vw; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Toast Stack -->
+<div class="toast-stack" id="toast-stack"></div>
+
+<!-- ============================ AUTH VIEWS ============================ -->
+<!-- Login -->
+<div id="view-login" class="view active">
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: linear-gradient(135deg, var(--bg-base) 0%, var(--primary-soft) 100%);">
+    <div class="animate-scale-in" style="width:100%;max-width:420px">
+      <div class="text-center mb-8">
+        <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary) 0%,#7c3aed 100%);display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;margin:0 auto 20px;box-shadow:0 8px 24px rgba(79,70,229,0.3)">R</div>
+        <h1 class="text-2xl font-bold mb-1">Welcome back</h1>
+        <p class="text-sm" style="color:var(--text-secondary)">Sign in to RetailOps dashboard</p>
+      </div>
+      <div class="card" style="box-shadow:var(--shadow-xl)">
+        <div class="card-body" style="padding:32px">
+          <form onsubmit="return handleLogin(event)">
+            <div class="mb-5"><label class="label">Email</label><input type="email" id="login-email" class="input" placeholder="admin@retailops.com" value="admin@retailops.com" required></div>
+            <div class="mb-5"><label class="label">Password</label><input type="password" id="login-password" class="input" placeholder="••••••••" value="password" required></div>
+            <div class="flex items-center justify-between mb-6">
+              <label class="flex items-center gap-2 text-sm cursor-pointer" style="color:var(--text-secondary)"><input type="checkbox" checked class="accent-indigo-500"> Remember me</label>
+              <a href="#" onclick="navTo('password-reset')" class="text-sm font-semibold hover:underline" style="color:var(--primary)">Forgot password?</a>
+            </div>
+            <button type="submit" class="btn btn-primary w-full" style="padding:12px">Sign In</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Password Reset Request -->
+<div id="view-password-reset" class="view">
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: linear-gradient(135deg, var(--bg-base) 0%, var(--primary-soft) 100%);">
+    <div class="animate-scale-in" style="width:100%;max-width:420px">
+      <div class="text-center mb-8">
+        <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary) 0%,#7c3aed 100%);display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;margin:0 auto 20px;box-shadow:0 8px 24px rgba(79,70,229,0.3)">R</div>
+        <h1 class="text-2xl font-bold mb-1">Reset password</h1>
+        <p class="text-sm" style="color:var(--text-secondary)">Enter your email and we'll send you a reset link</p>
+      </div>
+      <div class="card" style="box-shadow:var(--shadow-xl)">
+        <div class="card-body" style="padding:32px">
+          <form onsubmit="return handlePasswordResetRequest(event)">
+            <div class="mb-6"><label class="label">Email Address</label><input type="email" id="pr-email" class="input" placeholder="you@company.com" required autofocus></div>
+            <button type="submit" class="btn btn-primary w-full" style="padding:12px">Send Reset Link</button>
+          </form>
+          <div class="text-center mt-5 text-sm" style="color:var(--text-secondary)"><a href="#" onclick="navTo('login')" class="font-semibold hover:underline" style="color:var(--primary)">← Back to Sign In</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Password Reset Done -->
+<div id="view-password-reset-done" class="view">
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: linear-gradient(135deg, var(--bg-base) 0%, var(--primary-soft) 100%);">
+    <div class="animate-scale-in" style="width:100%;max-width:460px">
+      <div class="card" style="box-shadow:var(--shadow-xl)">
+        <div class="card-body" style="padding:40px;text-align:center">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success);display:grid;place-items:center;font-size:1.5rem;margin:0 auto 20px;"><i class="fas fa-envelope"></i></div>
+          <h2 class="text-lg font-bold mb-2">Check your email</h2>
+          <p class="text-sm mb-6" style="color:var(--text-secondary)">If that address belongs to an active account, a password reset link has been sent. The link expires after 24 hours.</p>
+          <div class="p-4 rounded-xl text-left text-sm mb-6" style="background:var(--bg-base)">
+            <div class="font-semibold mb-2 text-xs uppercase tracking-wider" style="color:var(--text-tertiary)">Development — Console Backend</div>
+            <p style="color:var(--text-secondary)">The email was printed to the terminal. Look for the block starting with <code>Content-Type: text/plain</code> and find the line beginning with <code>http://</code>.</p>
+          </div>
+          <a href="#" onclick="navTo('login')" class="btn btn-primary w-full">Back to Sign In</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Password Reset Confirm -->
+<div id="view-password-reset-confirm" class="view">
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: linear-gradient(135deg, var(--bg-base) 0%, var(--primary-soft) 100%);">
+    <div class="animate-scale-in" style="width:100%;max-width:420px">
+      <div class="text-center mb-8">
+        <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--primary) 0%,#7c3aed 100%);display:grid;place-items:center;color:#fff;font-size:22px;font-weight:800;margin:0 auto 20px;box-shadow:0 8px 24px rgba(79,70,229,0.3)">R</div>
+        <h1 class="text-2xl font-bold mb-1">Set new password</h1>
+        <p class="text-sm" style="color:var(--text-secondary)">Choose a strong password for your account</p>
+      </div>
+      <div class="card" style="box-shadow:var(--shadow-xl)">
+        <div class="card-body" style="padding:32px">
+          <form onsubmit="return handlePasswordResetConfirm(event)">
+            <div class="mb-5"><label class="label">New Password</label><input type="password" id="prc-pass1" class="input" placeholder="••••••••" required></div>
+            <div class="mb-6"><label class="label">Confirm Password</label><input type="password" id="prc-pass2" class="input" placeholder="••••••••" required></div>
+            <button type="submit" class="btn btn-primary w-full" style="padding:12px">Set New Password</button>
+          </form>
+          <div class="text-center mt-5 text-sm" style="color:var(--text-secondary)"><a href="#" onclick="navTo('login')" class="font-semibold hover:underline" style="color:var(--primary)">← Back to Sign In</a></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Password Reset Complete -->
+<div id="view-password-reset-complete" class="view">
+  <div class="min-h-screen flex items-center justify-center p-6" style="background: linear-gradient(135deg, var(--bg-base) 0%, var(--primary-soft) 100%);">
+    <div class="animate-scale-in" style="width:100%;max-width:420px">
+      <div class="card" style="box-shadow:var(--shadow-xl)">
+        <div class="card-body" style="padding:40px;text-align:center">
+          <div style="width:64px;height:64px;border-radius:50%;background:var(--success-soft);color:var(--success);display:grid;place-items:center;font-size:1.5rem;margin:0 auto 20px;"><i class="fas fa-check"></i></div>
+          <h2 class="text-lg font-bold mb-2">Password reset successfully</h2>
+          <p class="text-sm mb-6" style="color:var(--text-secondary)">Your password has been updated. You can now sign in with your new password.</p>
+          <a href="#" onclick="navTo('login')" class="btn btn-primary w-full">Sign In</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ APP SHELL ============================ -->
+<div id="app-shell" class="view">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo-icon">R</div>
+      <span class="logo-text">RetailOps</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Overview</div>
+        <div class="sidebar-item active" data-label="Dashboard" onclick="navTo('dashboard')"><i class="fas fa-chart-pie"></i><span class="label">Dashboard</span></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Operations</div>
+        <div class="sidebar-item" data-label="Orders" onclick="navTo('orders')"><i class="fas fa-shopping-bag"></i><span class="label">Orders</span><span class="badge-count">8</span></div>
+        <div class="sidebar-item" data-label="Customers" onclick="navTo('customers')"><i class="fas fa-users"></i><span class="label">Customers</span></div>
+        <div class="sidebar-item" data-label="Inventory" onclick="navTo('inventory')"><i class="fas fa-boxes"></i><span class="label">Inventory</span><span class="badge-count">3</span></div>
+        <div class="sidebar-item" data-label="Payments" onclick="navTo('payments')"><i class="fas fa-credit-card"></i><span class="label">Payments</span></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Catalog</div>
+        <div class="sidebar-item" data-label="Categories" onclick="navTo('categories')"><i class="fas fa-tags"></i><span class="label">Categories</span></div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-section-title">Administration</div>
+        <div class="sidebar-item" data-label="Staff" onclick="navTo('users')"><i class="fas fa-user-shield"></i><span class="label">Staff</span></div>
+        <div class="sidebar-item" data-label="Settings" onclick="navTo('settings')"><i class="fas fa-cog"></i><span class="label">Settings</span></div>
+      </div>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="sidebar-toggle" onclick="toggleSidebar()"><i class="fas fa-chevron-left"></i><span>Collapse</span></button>
+    </div>
+  </aside>
+
+  <div class="main-wrapper">
+    <header class="top-header">
+      <div class="flex items-center gap-4">
+        <button class="header-btn lg:hidden" onclick="toggleMobileSidebar()"><i class="fas fa-bars"></i></button>
+        <div class="header-search hidden md:block">
+          <i class="fas fa-search"></i>
+          <input type="text" placeholder="Search orders, customers, products…" onkeydown="if(event.key==='Enter')showToast('Search results updated','success')">
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="header-btn" onclick="toggleTheme()" title="Toggle theme"><i class="fas fa-moon" id="theme-icon"></i></button>
+        <button class="header-btn" onclick="showToast('No new notifications','info')" title="Notifications"><i class="fas fa-bell"></i><span class="dot"></span></button>
+        <div class="dropdown" id="user-dropdown">
+          <button class="header-avatar" onclick="toggleDropdown('user-dropdown')">AD</button>
+          <div class="dropdown-menu">
+            <div class="dropdown-item"><i class="fas fa-user text-xs"></i> Profile</div>
+            <div class="dropdown-item" onclick="navTo('settings')"><i class="fas fa-cog text-xs"></i> Settings</div>
+            <div class="dropdown-divider"></div>
+            <div class="dropdown-item" onclick="handleLogout()"><i class="fas fa-sign-out-alt text-xs"></i> Sign out</div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="content-area">
+      <!-- ===== DASHBOARD ===== -->
+      <div id="view-dashboard" class="view active">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Dashboard</h1><p class="text-sm" style="color:var(--text-secondary)">Welcome back, Alex. Here's what's happening today.</p></div>
+          <button onclick="openOrderModal()" class="btn btn-primary"><i class="fas fa-plus"></i> New Order</button>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div class="stat-card animate-slide-in" style="animation-delay:0ms">
+            <div class="icon-wrap" style="background:var(--primary-soft);color:var(--primary)"><i class="fas fa-shopping-bag"></i></div>
+            <div class="text-2xl font-bold mb-1">42</div>
+            <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">Orders This Month</div>
+            <div class="text-xs" style="color:var(--success)"><i class="fas fa-arrow-up mr-1"></i>+12% vs last month</div>
+          </div>
+          <div class="stat-card animate-slide-in" style="animation-delay:60ms">
+            <div class="icon-wrap" style="background:var(--success-soft);color:var(--success)"><i class="fas fa-dollar-sign"></i></div>
+            <div class="text-2xl font-bold mb-1">$12,450</div>
+            <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">Revenue</div>
+            <div class="text-xs" style="color:var(--success)"><i class="fas fa-arrow-up mr-1"></i>+8% vs last month</div>
+          </div>
+          <div class="stat-card animate-slide-in" style="animation-delay:120ms">
+            <div class="icon-wrap" style="background:var(--warning-soft);color:var(--warning)"><i class="fas fa-clock"></i></div>
+            <div class="text-2xl font-bold mb-1">7</div>
+            <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">Pending Payments</div>
+            <div class="text-xs" style="color:var(--warning)"><i class="fas fa-exclamation-circle mr-1"></i>Needs attention</div>
+          </div>
+          <div class="stat-card animate-slide-in" style="animation-delay:180ms">
+            <div class="icon-wrap" style="background:var(--danger-soft);color:var(--danger)"><i class="fas fa-box-open"></i></div>
+            <div class="text-2xl font-bold mb-1">3</div>
+            <div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">Low Stock Items</div>
+            <div class="text-xs" style="color:var(--danger)"><i class="fas fa-arrow-down mr-1"></i>Restock soon</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2">
+            <div class="card">
+              <div class="card-header">
+                <div class="flex items-center gap-3">
+                  <h3 class="font-semibold text-sm">Recent Orders</h3>
+                  <div class="tabs">
+                    <button class="tab active" onclick="dashTab(this,'orders')">Orders</button>
+                    <button class="tab" onclick="dashTab(this,'alerts')">Alerts</button>
+                  </div>
+                </div>
+                <a href="#" onclick="navTo('orders')" class="text-xs font-semibold hover:underline" style="color:var(--primary)">View all</a>
+              </div>
+              <div id="dash-tab-orders">
+                <table>
+                  <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Status</th><th>Total</th></tr></thead>
+                  <tbody id="dash-orders-body"></tbody>
+                </table>
+              </div>
+              <div id="dash-tab-alerts" style="display:none">
+                <div class="p-5 flex flex-col gap-3" id="dash-alerts-body"></div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="card">
+              <div class="card-header"><h3 class="font-semibold text-sm">Quick Actions</h3></div>
+              <div class="card-body flex flex-col gap-2">
+                <button onclick="openOrderModal()" class="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-[var(--bg-hover)] group">
+                  <div class="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 grid place-items-center text-sm group-hover:scale-110 transition-transform"><i class="fas fa-plus"></i></div>
+                  <div><div class="text-sm font-semibold">New Order</div><div class="text-xs" style="color:var(--text-tertiary)">Create a sales order</div></div>
+                </button>
+                <button onclick="openCustomerModal()" class="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-[var(--bg-hover)] group">
+                  <div class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 grid place-items-center text-sm group-hover:scale-110 transition-transform"><i class="fas fa-user-plus"></i></div>
+                  <div><div class="text-sm font-semibold">Register Customer</div><div class="text-xs" style="color:var(--text-tertiary)">Add to your directory</div></div>
+                </button>
+                <button onclick="openProductModal()" class="flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:bg-[var(--bg-hover)] group">
+                  <div class="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 grid place-items-center text-sm group-hover:scale-110 transition-transform"><i class="fas fa-box"></i></div>
+                  <div><div class="text-sm font-semibold">Add Product</div><div class="text-xs" style="color:var(--text-tertiary)">Update inventory</div></div>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== ORDERS ===== -->
+      <div id="view-orders" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Orders</h1><p class="text-sm" style="color:var(--text-secondary)">Manage and track all sales orders</p></div>
+          <button onclick="openOrderModal()" class="btn btn-primary"><i class="fas fa-plus"></i> New Order</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mb-5">
+          <div class="input-group" style="width:240px"><i class="fas fa-search"></i><input type="text" id="order-search" class="input" placeholder="Search orders…" oninput="renderOrders()"></div>
+          <select id="order-status-filter" class="input select" style="width:150px" onchange="renderOrders()"><option value="">All Statuses</option><option value="draft">Draft</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="paid">Paid</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option><option value="refunded">Refunded</option></select>
+          <input type="date" id="order-date-from" class="input" style="width:auto" title="From" onchange="renderOrders()">
+          <input type="date" id="order-date-to" class="input" style="width:auto" title="To" onchange="renderOrders()">
+          <button onclick="renderOrders()" class="btn btn-secondary btn-sm">Filter</button>
+          <button onclick="clearOrderFilters()" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Order</th><th>Customer</th><th>Date</th><th>Status</th><th>Items</th><th>Total</th><th style="width:140px"></th></tr></thead>
+            <tbody id="orders-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="orders-pagination"></div>
+      </div>
+
+      <!-- ===== CUSTOMERS ===== -->
+      <div id="view-customers" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Customers</h1><p class="text-sm" style="color:var(--text-secondary)">124 customers registered</p></div>
+          <button onclick="openCustomerModal()" class="btn btn-primary"><i class="fas fa-plus"></i> Add Customer</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mb-5">
+          <div class="input-group" style="width:320px"><i class="fas fa-search"></i><input type="text" id="customer-search" class="input" placeholder="Search customers…" oninput="renderCustomers()"></div>
+          <button onclick="renderCustomers()" class="btn btn-secondary btn-sm">Search</button>
+          <button onclick="document.getElementById('customer-search').value='';renderCustomers()" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Customer</th><th>Contact</th><th>Location</th><th>Orders</th><th>Joined</th><th style="width:120px"></th></tr></thead>
+            <tbody id="customers-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="customers-pagination"></div>
+      </div>
+
+      <!-- ===== INVENTORY ===== -->
+      <div id="view-inventory" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Inventory</h1><p class="text-sm" style="color:var(--text-secondary)">Track stock levels and movements</p></div>
+          <button onclick="openProductModal()" class="btn btn-primary"><i class="fas fa-plus"></i> Add Product</button>
+        </div>
+        <div id="inv-low-stock-banner" class="alert-banner alert-warning" style="display:none">
+          <i class="fas fa-exclamation-triangle"></i>
+          <span id="inv-banner-text"></span>
+          <button onclick="document.getElementById('inv-low-stock-banner').style.display='none'" class="ml-auto bg-transparent border-none cursor-pointer text-inherit opacity-60 hover:opacity-100"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mb-5">
+          <div class="input-group" style="width:240px"><i class="fas fa-search"></i><input type="text" id="inv-search" class="input" placeholder="Search products…" oninput="renderInventory()"></div>
+          <select id="inv-category-filter" class="input select" style="width:160px" onchange="renderInventory()"><option value="">All Categories</option></select>
+          <select id="inv-stock-filter" class="input select" style="width:160px" onchange="renderInventory()"><option value="">All Stock</option><option value="ok">In Stock</option><option value="low">Low Stock</option><option value="out">Out of Stock</option></select>
+          <button onclick="renderInventory()" class="btn btn-secondary btn-sm">Filter</button>
+          <button onclick="document.getElementById('inv-search').value='';document.getElementById('inv-category-filter').value='';document.getElementById('inv-stock-filter').value='';renderInventory()" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Price</th><th>Stock</th><th style="width:160px"></th></tr></thead>
+            <tbody id="inventory-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="inventory-pagination"></div>
+      </div>
+
+      <!-- ===== PAYMENTS ===== -->
+      <div id="view-payments" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Payments</h1><p class="text-sm" style="color:var(--text-secondary)">All recorded payments</p></div>
+        </div>
+        <div class="flex flex-wrap items-center gap-3 mb-5">
+          <div class="input-group" style="width:240px"><i class="fas fa-search"></i><input type="text" id="payment-search" class="input" placeholder="Search payments…" oninput="renderPayments()"></div>
+          <select id="payment-method-filter" class="input select" style="width:150px" onchange="renderPayments()"><option value="">All Methods</option><option value="cash">Cash</option><option value="card">Card</option><option value="bank_transfer">Bank Transfer</option><option value="check">Check</option><option value="mobile_payment">Mobile Payment</option></select>
+          <select id="payment-status-filter" class="input select" style="width:150px" onchange="renderPayments()"><option value="">All Statuses</option><option value="confirmed">Confirmed</option><option value="pending">Pending</option><option value="refunded">Refunded</option></select>
+          <input type="date" id="payment-date-from" class="input" style="width:auto" title="From" onchange="renderPayments()">
+          <input type="date" id="payment-date-to" class="input" style="width:auto" title="To" onchange="renderPayments()">
+          <button onclick="renderPayments()" class="btn btn-secondary btn-sm">Filter</button>
+          <button onclick="clearPaymentFilters()" class="btn btn-ghost btn-sm">Clear</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Payment</th><th>Order</th><th>Customer</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th style="width:60px"></th></tr></thead>
+            <tbody id="payments-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="payments-pagination"></div>
+      </div>
+
+      <!-- ===== CATEGORIES ===== -->
+      <div id="view-categories" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Categories</h1><p class="text-sm" style="color:var(--text-secondary)">Organize your product catalog</p></div>
+          <button onclick="openCategoryModal()" class="btn btn-primary"><i class="fas fa-plus"></i> New Category</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Name</th><th>Type</th><th>Parent</th><th>Products</th><th style="width:120px"></th></tr></thead>
+            <tbody id="categories-table-body"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="categories-pagination"></div>
+      </div>
+
+      <!-- ===== USERS ===== -->
+      <div id="view-users" class="view">
+        <div class="flex items-center justify-between mb-6">
+          <div><h1 class="text-xl font-bold mb-0.5">Staff</h1><p class="text-sm" style="color:var(--text-secondary)">Manage team members and roles</p></div>
+          <button onclick="openInviteModal()" class="btn btn-primary"><i class="fas fa-user-plus"></i> Invite</button>
+        </div>
+        <div class="table-container">
+          <table>
+            <thead><tr><th>Member</th><th>Role</th><th>Status</th><th>Last Active</th><th style="width:120px"></th></tr></thead>
+            <tbody id="users-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ===== SETTINGS ===== -->
+      <div id="view-settings" class="view">
+        <div class="mb-6">
+          <h1 class="text-xl font-bold mb-0.5">Settings</h1>
+          <p class="text-sm" style="color:var(--text-secondary)">Manage preferences and system configuration</p>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          <div class="xl:col-span-2 flex flex-col gap-5">
+            <!-- Regional -->
+            <div class="card">
+              <div class="card-header"><h3 class="font-semibold text-sm">Regional Preferences</h3></div>
+              <div class="card-body grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div><label class="label">Time Zone</label><select class="input select"><option>UTC</option><option selected>America/Caracas</option><option>America/New_York</option></select><p class="text-xs mt-1.5" style="color:var(--text-tertiary)">All dates and times will display in this timezone.</p></div>
+                <div><label class="label">Language</label><select class="input select"><option selected>English</option><option>Español</option></select></div>
+              </div>
+            </div>
+            <!-- Currency -->
+            <div class="card">
+              <div class="card-header"><div><h3 class="font-semibold text-sm">Currency Settings</h3><p class="text-xs mt-0.5" style="color:var(--text-tertiary)">System-wide — applies to all users</p></div></div>
+              <div class="card-body">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-4">
+                  <div><label class="label">Currency Code <span class="normal-case font-normal" style="color:var(--text-tertiary)">(ISO 4217)</span></label><input type="text" class="input" value="USD" maxlength="3"></div>
+                  <div><label class="label">Symbol</label><input type="text" class="input" value="$" maxlength="4"></div>
+                  <div><label class="label">Decimal Places</label><select class="input select"><option>0</option><option>1</option><option selected>2</option><option>3</option></select></div>
+                </div>
+                <p class="text-xs mb-5" style="color:var(--text-tertiary)">Preview: amounts will display as <strong style="color:var(--text-primary)">$1,234.00</strong></p>
+                <div class="flex items-center justify-between p-4 rounded-xl mb-5" style="background:var(--bg-base)">
+                  <div class="flex items-center gap-3">
+                    <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+                    <div><div class="text-sm font-semibold">Secondary Currency</div><div class="text-xs" style="color:var(--text-secondary)">Display conversion alongside primary</div></div>
+                  </div>
+                  <span class="text-sm font-mono font-semibold" style="color:var(--primary)">$1 ≈ Bs.36.50</span>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mb-4">
+                  <div><label class="label">Secondary Code</label><input type="text" class="input" value="VES" maxlength="3"></div>
+                  <div><label class="label">Secondary Symbol</label><input type="text" class="input" value="Bs." maxlength="4"></div>
+                  <div><label class="label">Secondary Decimals</label><select class="input select"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+                  <div><label class="label">Exchange Rate</label><input type="number" class="input" value="36.50" step="0.00000001" min="0"><p class="text-xs mt-1" style="color:var(--text-tertiary)">Units of secondary per 1 primary.</p></div>
+                </div>
+                <div class="flex items-center gap-3 mb-4">
+                  <div class="toggle" onclick="this.classList.toggle('on')"></div>
+                  <div><div class="text-sm font-semibold">Auto-update from external source</div><div class="text-xs" style="color:var(--text-secondary)">Fetches the rate from the URL below on a schedule</div></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
+                  <div><label class="label">Rate Source URL</label><input type="url" class="input" value="https://ve.dolarapi.com/v1/dolares/oficial" placeholder="https://..."></div>
+                  <div><label class="label">Rate JSON Field</label><input type="text" class="input" value="promedio" placeholder="e.g. data.rate"><p class="text-xs mt-1" style="color:var(--text-tertiary)">Dotted path to the numeric rate.</p></div>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap">
+                  <button type="button" onclick="showToast('Exchange rate refreshed to 36.52','success')" class="btn btn-secondary btn-sm"><i class="fas fa-sync-alt mr-1"></i> Update now</button>
+                  <span class="text-xs" style="color:var(--text-tertiary)">Last updated: Jun 7, 2026</span>
+                </div>
+              </div>
+            </div>
+            <!-- OCR Settings -->
+            <div class="card">
+              <div class="card-header"><div><h3 class="font-semibold text-sm">Receipt OCR Settings</h3><p class="text-xs mt-0.5" style="color:var(--text-tertiary)">VEPay verification for kiosk receipts</p></div></div>
+              <div class="card-body">
+                <div class="flex items-center gap-3 mb-5">
+                  <div class="toggle on" id="ocr-main-toggle" onclick="this.classList.toggle('on')"></div>
+                  <div><div class="text-sm font-semibold">Enable receipt OCR verification</div><div class="text-xs" style="color:var(--text-secondary)">Mobile payment and bank transfer receipts can be verified through the VEPay proxy</div></div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+                  <div><label class="label">Provider</label><select class="input select"><option selected>VEPay</option></select></div>
+                  <div><label class="label">VEPay Base URL</label><input type="url" class="input" placeholder="https://your-vepay-instance.example.com"></div>
+                </div>
+                <div class="mb-5">
+                  <label class="label">API Key</label>
+                  <div id="ocr-key-display" class="flex items-center gap-3 flex-wrap">
+                    <input type="text" class="input" value="***" readonly style="max-width:260px">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="showOcrKeyInput()">Replace key</button>
+                  </div>
+                  <div id="ocr-key-input" class="mt-2 hidden" style="max-width:360px">
+                    <input type="password" class="input" placeholder="Paste new VEPay API key">
+                    <p class="text-xs mt-1" style="color:var(--text-tertiary)">Leave blank to clear the stored key.</p>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+                  <div><label class="label">Timeout Seconds</label><input type="number" class="input" value="30" min="1"></div>
+                  <div><label class="label">Max File Size (MB)</label><input type="number" class="input" value="8" min="1"></div>
+                  <div><label class="label">Receipt Retention (Days)</label><input type="number" class="input" value="90" min="1"></div>
+                </div>
+                <div class="mb-4">
+                  <label class="label">Payment Methods</label>
+                  <div class="flex gap-4 mt-2">
+                    <label class="form-check-modern"><input type="checkbox" checked class="accent-indigo-500"> Mobile Payment</label>
+                    <label class="form-check-modern"><input type="checkbox" checked class="accent-indigo-500"> Bank Transfer</label>
+                  </div>
+                </div>
+                <div class="flex gap-4 mb-4 flex-wrap">
+                  <label class="form-check-modern"><input type="checkbox" class="accent-indigo-500"> Require amount to match outstanding balance</label>
+                  <label class="form-check-modern"><input type="checkbox" checked class="accent-indigo-500"> Require VEPay complete validation</label>
+                </div>
+                <div class="mb-5">
+                  <label class="form-check-modern"><input type="checkbox" class="accent-indigo-500"> Require receipt image for kiosk mobile payment and bank transfer</label>
+                  <p class="text-xs mt-1 ml-6" style="color:var(--text-tertiary)">When enabled, kiosk customers must upload a receipt image before these payments can be submitted.</p>
+                </div>
+                <div class="flex items-center gap-3 flex-wrap pt-4" style="border-top:1px solid var(--border-color)">
+                  <button type="button" onclick="testOcrConnection()" class="btn btn-secondary btn-sm"><i class="fas fa-plug mr-1"></i> Test connection</button>
+                  <span id="ocr-health" class="badge badge-draft" style="text-transform:none;letter-spacing:0">Not tested</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col gap-5">
+            <div class="card">
+              <div class="card-header"><h3 class="font-semibold text-sm">Appearance</h3></div>
+              <div class="card-body flex flex-col gap-3">
+                <div class="flex items-center justify-between p-3 rounded-lg" style="background:var(--bg-base)">
+                  <div class="flex items-center gap-3"><i class="fas fa-moon" style="color:var(--text-secondary)"></i><span class="text-sm font-medium">Dark Mode</span></div>
+                  <div class="toggle" id="settings-theme-toggle" onclick="toggleTheme();this.classList.toggle('on')"></div>
+                </div>
+                <div class="flex items-center justify-between p-3 rounded-lg" style="background:var(--bg-base)">
+                  <div class="flex items-center gap-3"><i class="fas fa-bell" style="color:var(--text-secondary)"></i><span class="text-sm font-medium">Notifications</span></div>
+                  <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+                </div>
+              </div>
+            </div>
+            <div class="card">
+              <div class="card-body text-center py-8">
+                <div class="w-16 h-16 rounded-full mx-auto mb-3 flex items-center justify-center text-xl font-bold text-white" style="background:linear-gradient(135deg,var(--primary) 0%,#7c3aed 100%)">AD</div>
+                <div class="font-semibold text-sm">Alex Doe</div>
+                <div class="text-xs mb-4" style="color:var(--text-secondary)">admin@retailops.com</div>
+                <button class="btn btn-secondary btn-sm w-full">Edit Profile</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-6">
+          <button onclick="showToast('Settings saved successfully','success')" class="btn btn-primary"><i class="fas fa-save"></i> Save Changes</button>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ============================ MODALS ============================ -->
+<!-- Order Modal -->
+<div class="modal-overlay" id="modal-order">
+  <div class="modal-content xwide">
+    <div class="modal-header">
+      <div><h3 class="font-semibold" id="order-modal-title">New Order</h3><p class="text-xs mt-0.5" style="color:var(--text-secondary)">Create a new sales order</p></div>
+      <button class="btn-icon" onclick="closeModal('modal-order')"><i class="fas fa-times"></i></button>
+    </div>
+    <form onsubmit="return handleOrderSave(event)">
+      <div class="modal-body">
+        <div class="mb-4"><label class="label">Customer <span class="text-red-500">*</span></label><select id="om-customer" class="input select" required><option value="">— Select customer —</option></select></div>
+        <div class="mb-4">
+          <div class="flex items-center justify-between mb-2"><label class="label">Line Items</label><button type="button" onclick="addModalLineItem()" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add Item</button></div>
+          <div class="border rounded-xl overflow-hidden" style="border-color:var(--border-color)">
+            <table class="text-sm w-full">
+              <thead><tr style="background:var(--bg-base)"><th class="p-2.5 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-tertiary)">Product</th><th class="p-2.5 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-tertiary)">SKU</th><th class="p-2.5 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-tertiary)">Qty</th><th class="p-2.5 text-left text-xs font-bold uppercase tracking-wider" style="color:var(--text-tertiary)">Price</th><th class="p-2.5 text-right text-xs font-bold uppercase tracking-wider" style="color:var(--text-tertiary)">Total</th><th class="p-2.5" style="width:40px"></th></tr></thead>
+              <tbody id="modal-line-items"></tbody>
+            </table>
+            <div id="modal-empty-line" class="p-6 text-center text-sm" style="color:var(--text-tertiary)">No items yet. Click "Add Item" to begin.</div>
+          </div>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div><label class="label">Subtotal</label><div class="input" style="background:var(--bg-base)" id="om-subtotal-display">$0.00</div></div>
+          <div><label class="label">Tax ($)</label><input type="number" id="om-tax" class="input" value="0" step="0.01" min="0" onchange="recalcModalTotals()"></div>
+          <div><label class="label">Discount ($)</label><input type="number" id="om-discount" class="input" value="0" step="0.01" min="0" onchange="recalcModalTotals()"></div>
+          <div class="text-right self-end"><div class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:var(--text-tertiary)">Grand Total</div><div class="text-2xl font-bold" style="color:var(--primary)" id="om-total">$0.00</div></div>
+        </div>
+        <div class="mt-4"><label class="label">Notes</label><textarea id="om-notes" class="input" rows="2" placeholder="Internal notes about this order…"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-order')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Order</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Customer Modal -->
+<div class="modal-overlay" id="modal-customer">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <div><h3 class="font-semibold" id="customer-modal-title">New Customer</h3></div>
+      <button class="btn-icon" onclick="closeModal('modal-customer')"><i class="fas fa-times"></i></button>
+    </div>
+    <form onsubmit="return handleCustomerSave(event)">
+      <div class="modal-body">
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Personal Information</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label class="label">First Name <span class="text-red-500">*</span></label><input type="text" id="cm-fname" class="input" required></div>
+          <div><label class="label">Last Name <span class="text-red-500">*</span></label><input type="text" id="cm-lname" class="input" required></div>
+          <div><label class="label">Email <span class="text-red-500">*</span></label><input type="email" id="cm-email" class="input" required></div>
+          <div><label class="label">Phone</label><input type="tel" id="cm-phone" class="input" placeholder="04XX-XXXXXXX"></div>
+          <div><label class="label">ID Number</label><input type="text" id="cm-national_id" class="input" placeholder="V12345678" maxlength="20"></div>
+          <div><label class="label">Date of Birth</label><input type="date" id="cm-dob" class="input"></div>
+          <div><label class="label">Gender</label><select id="cm-gender" class="input select"><option value="">— Not specified —</option><option value="M">Male</option><option value="F">Female</option></select></div>
+        </div>
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Address</div>
+        <div class="flex flex-col gap-4 mb-4">
+          <div><label class="label">Address Line 1 <span class="text-red-500">*</span></label><input type="text" id="cm-address1" class="input" placeholder="Street address" required></div>
+          <div><label class="label">Address Line 2</label><input type="text" id="cm-address2" class="input" placeholder="Apartment, suite, unit…"></div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div><label class="label">City <span class="text-red-500">*</span></label><input type="text" id="cm-city" class="input" required></div>
+            <div><label class="label">State <span class="text-red-500">*</span></label><input type="text" id="cm-state" class="input" required></div>
+            <div><label class="label">Postal Code <span class="text-red-500">*</span></label><input type="text" id="cm-postal" class="input" required></div>
+          </div>
+          <div><label class="label">Country <span class="text-red-500">*</span></label><input type="text" id="cm-country" class="input" value="Venezuela" required></div>
+        </div>
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Notes</div>
+        <div><label class="label">Internal Notes</label><textarea id="cm-notes" class="input" rows="2" placeholder="Any additional notes…"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-customer')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Customer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Product Modal -->
+<div class="modal-overlay" id="modal-product">
+  <div class="modal-content wide">
+    <div class="modal-header">
+      <div><h3 class="font-semibold" id="product-modal-title">New Product</h3></div>
+      <button class="btn-icon" onclick="closeModal('modal-product')"><i class="fas fa-times"></i></button>
+    </div>
+    <form onsubmit="return handleProductSave(event)">
+      <div class="modal-body">
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Product Identity</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label class="label">SKU <span class="text-red-500">*</span></label><input type="text" id="pm-sku" class="input" placeholder="SKU-0001" required></div>
+          <div><label class="label">Name <span class="text-red-500">*</span></label><input type="text" id="pm-name" class="input" required></div>
+          <div>
+            <label class="label">Category <span class="text-red-500">*</span></label>
+            <div class="flex gap-2">
+              <select id="pm-category" class="input select flex-1" required><option value="">— Select —</option></select>
+              <button type="button" onclick="openInlineCategoryModal()" class="btn btn-secondary btn-sm whitespace-nowrap" title="New Category"><i class="fas fa-plus"></i></button>
+            </div>
+          </div>
+          <div><label class="label">Unit of Measure <span class="text-red-500">*</span></label><select id="pm-unit" class="input select" required><option value="unit">Unit</option><option value="kg">Kilogram</option><option value="g">Gram</option><option value="l">Liter</option><option value="ml">Milliliter</option><option value="m">Meter</option><option value="box">Box</option><option value="pack">Pack</option></select></div>
+        </div>
+        <div class="mb-4"><label class="label">Description</label><textarea id="pm-description" class="input" rows="2" placeholder="Optional product description…"></textarea></div>
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Product Image</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+          <div class="md:col-span-1">
+            <div class="image-upload-area" onclick="showToast('Image upload simulated','success')">
+              <i class="fas fa-cloud-upload-alt text-2xl mb-2" style="color:var(--text-tertiary)"></i>
+              <div class="text-sm font-semibold">Upload Image</div>
+              <div class="text-xs mt-1" style="color:var(--text-tertiary)">JPEG, PNG, WebP. Max 5MB</div>
+            </div>
+          </div>
+          <div class="md:col-span-2 flex flex-col gap-3">
+            <div><label class="label">External Image URL</label><input type="url" id="pm-external-url" class="input" placeholder="https://example.com/image.jpg"></div>
+            <label class="form-check-modern"><input type="checkbox" id="pm-remove-image" class="accent-indigo-500"> Remove uploaded image</label>
+            <p class="text-xs" style="color:var(--text-tertiary)">Active products require either an uploaded image or an external image URL.</p>
+          </div>
+        </div>
+        <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Pricing &amp; Stock</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div><label class="label">Unit Price ($) <span class="text-red-500">*</span></label><input type="number" id="pm-price" class="input" step="0.01" min="0" required></div>
+          <div><label class="label">Low Stock Threshold <span class="text-red-500">*</span></label><input type="number" id="pm-threshold" class="input" value="10" min="0" required></div>
+        </div>
+        <div class="mb-4"><label class="form-check-modern"><input type="checkbox" id="pm-active" class="accent-indigo-500" checked> Product is active (visible and orderable)</label></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-product')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Product</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Inline Category Modal -->
+<div class="modal-overlay" id="modal-inline-category">
+  <div class="modal-content" style="max-width:420px">
+    <div class="modal-header"><h3 class="font-semibold">New Category</h3><button class="btn-icon" onclick="closeModal('modal-inline-category')"><i class="fas fa-times"></i></button></div>
+    <form onsubmit="return handleInlineCategorySave(event)">
+      <div class="modal-body">
+        <div class="mb-4"><label class="label">Name <span class="text-red-500">*</span></label><input type="text" id="icm-name" class="input" required maxlength="150"></div>
+        <div class="mb-4"><label class="label">Description</label><textarea id="icm-desc" class="input" rows="2"></textarea></div>
+        <div><label class="label">Parent Category</label><select id="icm-parent" class="input select"><option value="">— None (top-level) —</option></select></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-inline-category')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Category Modal -->
+<div class="modal-overlay" id="modal-category">
+  <div class="modal-content" style="max-width:420px">
+    <div class="modal-header"><h3 class="font-semibold" id="category-modal-title">New Category</h3><button class="btn-icon" onclick="closeModal('modal-category')"><i class="fas fa-times"></i></button></div>
+    <form onsubmit="return handleCategorySave(event)">
+      <div class="modal-body">
+        <div class="mb-4"><label class="label">Name <span class="text-red-500">*</span></label><input type="text" id="catm-name" class="input" required maxlength="150"></div>
+        <div class="mb-4"><label class="label">Description</label><textarea id="catm-desc" class="input" rows="2"></textarea></div>
+        <div><label class="label">Parent Category</label><select id="catm-parent" class="input select"><option value="">— None (top-level) —</option></select></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-category')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Payment Modal -->
+<div class="modal-overlay" id="modal-payment">
+  <div class="modal-content" style="max-width:420px">
+    <div class="modal-header"><h3 class="font-semibold">Record Payment</h3><button class="btn-icon" onclick="closeModal('modal-payment')"><i class="fas fa-times"></i></button></div>
+    <form onsubmit="return handlePaymentSave(event)">
+      <div class="modal-body">
+        <div class="mb-4"><label class="label">Amount <span class="text-red-500">*</span></label><input type="number" id="paym-amount" class="input" step="0.01" min="0.01" required><p class="text-xs mt-1" style="color:var(--text-tertiary)">Outstanding balance: <span id="paym-balance" class="font-semibold">$0.00</span></p></div>
+        <div class="mb-4"><label class="label">Method <span class="text-red-500">*</span></label>
+          <div class="radio-group-modern mt-2">
+            <label class="radio-opt-modern"><input type="radio" name="paym-method" value="cash" checked onchange="togglePaymRef()"> Cash</label>
+            <label class="radio-opt-modern"><input type="radio" name="paym-method" value="bank_transfer" onchange="togglePaymRef()"> Bank Transfer</label>
+            <label class="radio-opt-modern"><input type="radio" name="paym-method" value="card" onchange="togglePaymRef()"> Card</label>
+            <label class="radio-opt-modern"><input type="radio" name="paym-method" value="check" onchange="togglePaymRef()"> Check</label>
+            <label class="radio-opt-modern"><input type="radio" name="paym-method" value="mobile_payment" onchange="togglePaymRef()"> Mobile</label>
+          </div>
+        </div>
+        <div class="mb-4" id="paym-ref-group" style="display:none"><label class="label">Reference Number</label><input type="text" id="paym-ref" class="input" placeholder="Transaction ID, check #, etc."><p class="text-xs mt-1" style="color:var(--text-tertiary)">Required for bank transfer, card, and check payments.</p></div>
+        <div><label class="label">Notes</label><textarea id="paym-notes" class="input" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-payment')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-success">Record</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Adjust Stock Modal -->
+<div class="modal-overlay" id="modal-adjust">
+  <div class="modal-content" style="max-width:420px">
+    <div class="modal-header"><h3 class="font-semibold">Adjust Stock</h3><button class="btn-icon" onclick="closeModal('modal-adjust')"><i class="fas fa-times"></i></button></div>
+    <form onsubmit="return handleAdjustSave(event)">
+      <div class="modal-body">
+        <div class="mb-4" id="adj-product-select-wrap"><label class="label">Product <span class="text-red-500">*</span></label><select id="adj-product" class="input select" required></select></div>
+        <div class="mb-4" id="adj-product-label-wrap" style="display:none"><label class="label">Product</label><div id="adj-product-label" class="font-semibold text-sm py-2"></div></div>
+        <div class="mb-4"><label class="label">Movement Type <span class="text-red-500">*</span></label><select id="adj-type" class="input select" required><option value="purchase">Purchase — add stock received from supplier</option><option value="adjustment">Adjustment — correct a counting error</option><option value="return">Return — stock returned from a customer</option></select></div>
+        <div class="mb-4"><label class="label">Quantity <span class="text-red-500">*</span> <span class="text-xs font-normal" style="color:var(--text-tertiary)">(positive = add, negative = deduct)</span></label><input type="number" id="adj-qty" class="input" step="1" required placeholder="e.g. 50 or -10"></div>
+        <div><label class="label">Notes <span class="text-xs font-normal" style="color:var(--text-tertiary)">(optional)</span></label><textarea id="adj-notes" class="input" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-adjust')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Record Adjustment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Invite Modal -->
+<div class="modal-overlay" id="modal-invite">
+  <div class="modal-content" style="max-width:440px">
+    <div class="modal-header"><h3 class="font-semibold">Invite Team Member</h3><button class="btn-icon" onclick="closeModal('modal-invite')"><i class="fas fa-times"></i></button></div>
+    <form onsubmit="return handleInviteSave(event)">
+      <div class="modal-body">
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div><label class="label">First Name <span class="text-red-500">*</span></label><input type="text" id="im-fname" class="input" required></div>
+          <div><label class="label">Last Name <span class="text-red-500">*</span></label><input type="text" id="im-lname" class="input" required></div>
+        </div>
+        <div class="mb-4"><label class="label">Email <span class="text-red-500">*</span></label><input type="email" id="im-email" class="input" required></div>
+        <div class="mb-4"><label class="label">Role <span class="text-red-500">*</span></label><select id="im-role" class="input select" required><option value="">— Select —</option><option>Admin</option><option>Manager</option><option>Staff</option></select></div>
+        <div><label class="label">Temporary Password <span class="text-red-500">*</span></label><input type="password" id="im-pass" class="input" required></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('modal-invite')" class="btn btn-secondary">Cancel</button>
+        <button type="submit" class="btn btn-primary">Send Invite</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- User Edit Modal -->
+<div class="modal-overlay" id="modal-user-edit">
+  <div class="modal-content wide">
+    <div class="modal-header"><h3 class="font-semibold" id="user-modal-title">Edit User</h3><button class="btn-icon" onclick="closeModal('modal-user-edit')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Account Details</div>
+          <form onsubmit="return handleUserSave(event)" class="flex flex-col gap-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div><label class="label">First Name <span class="text-red-500">*</span></label><input type="text" id="um-fname" class="input" required></div>
+              <div><label class="label">Last Name <span class="text-red-500">*</span></label><input type="text" id="um-lname" class="input" required></div>
+            </div>
+            <div><label class="label">Email <span class="text-red-500">*</span></label><input type="email" id="um-email" class="input" required></div>
+            <div><label class="label">Role <span class="text-red-500">*</span></label><select id="um-role" class="input select" required><option value="">— Select —</option><option>Admin</option><option>Manager</option><option>Staff</option></select></div>
+            <label class="form-check-modern"><input type="checkbox" id="um-active" class="accent-indigo-500" checked> Account is active</label>
+            <div class="pt-3" style="border-top:1px solid var(--border-color)"><button type="submit" class="btn btn-primary">Save Changes</button></div>
+          </form>
+        </div>
+        <div>
+          <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Change Password</div>
+          <form onsubmit="return handleUserPassword(event)" class="flex flex-col gap-4">
+            <div><label class="label">New Password <span class="text-red-500">*</span></label><input type="password" id="um-pass1" class="input" placeholder="At least 8 characters" required></div>
+            <div><label class="label">Confirm Password <span class="text-red-500">*</span></label><input type="password" id="um-pass2" class="input" required></div>
+            <div class="pt-3" style="border-top:1px solid var(--border-color)"><button type="submit" class="btn btn-warning">Set Password</button></div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ SLIDE-OVER PANELS ============================ -->
+<!-- Order Detail -->
+<div class="slide-overlay" id="slide-order-overlay" onclick="closeSlide('slide-order')"></div>
+<div class="slide-panel wide" id="slide-order">
+  <div class="slide-header">
+    <div>
+      <div class="flex items-center gap-3 mb-1">
+        <span class="td-mono font-bold text-lg" id="so-number">ORD-001</span>
+        <span id="so-status"></span>
+      </div>
+      <div class="text-xs" style="color:var(--text-secondary)">Created by <span id="so-creator">Alex</span> · <span id="so-date">Jun 1</span><span id="so-confirmed-info"></span></div>
+    </div>
+    <button class="btn-icon" onclick="closeSlide('slide-order')"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="slide-body">
+    <div class="mb-6">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Customer</div>
+      <div class="p-4 rounded-xl" style="background:var(--bg-base)" id="so-customer"></div>
+    </div>
+    <div class="mb-6">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Line Items</div>
+      <div class="border rounded-xl overflow-hidden" style="border-color:var(--border-color)">
+        <table class="text-sm w-full"><thead><tr style="background:var(--bg-base)"><th class="p-2.5 text-left text-xs font-bold uppercase">Product</th><th class="p-2.5 text-left text-xs font-bold uppercase">SKU</th><th class="p-2.5 text-left text-xs font-bold uppercase">Qty</th><th class="p-2.5 text-right text-xs font-bold uppercase">Price</th><th class="p-2.5 text-right text-xs font-bold uppercase">Total</th></tr></thead><tbody id="so-items"></tbody></table>
+      </div>
+      <div class="mt-3 p-4 rounded-xl" style="background:var(--bg-base)">
+        <div class="flex justify-between text-sm mb-1" style="color:var(--text-secondary)"><span>Subtotal</span><span id="so-subtotal">$0.00</span></div>
+        <div class="flex justify-between text-sm mb-1" style="color:var(--text-secondary)"><span>Tax</span><span id="so-tax">$0.00</span></div>
+        <div class="flex justify-between text-sm mb-1" style="color:var(--text-secondary)"><span>Discount</span><span id="so-discount">$0.00</span></div>
+        <div class="flex justify-between font-bold text-base mt-2 pt-2" style="color:var(--text-primary);border-top:1px solid var(--border-color)"><span>Total</span><span id="so-total">$0.00</span></div>
+      </div>
+    </div>
+    <div class="mb-6" id="so-notes-section" style="display:none">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Order Notes</div>
+      <div class="p-4 rounded-xl text-sm" style="background:var(--bg-base);color:var(--text-secondary)" id="so-notes"></div>
+    </div>
+    <div class="mb-6" id="so-payments-section">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Payments</div>
+      <div id="so-payments" class="flex flex-col gap-2"></div>
+    </div>
+    <div id="so-actions" class="flex flex-wrap gap-2"></div>
+  </div>
+</div>
+
+<!-- Customer Detail -->
+<div class="slide-overlay" id="slide-customer-overlay" onclick="closeSlide('slide-customer')"></div>
+<div class="slide-panel" id="slide-customer">
+  <div class="slide-header">
+    <div><h3 class="font-semibold" id="sc-name">Customer</h3><p class="text-xs mt-0.5" style="color:var(--text-secondary)">Customer since <span id="sc-since"></span></p></div>
+    <button class="btn-icon" onclick="closeSlide('slide-customer')"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="slide-body">
+    <div class="mb-6"><div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Contact</div><div class="p-4 rounded-xl" style="background:var(--bg-base)" id="sc-contact"></div></div>
+    <div class="mb-6"><div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Address</div><div class="p-4 rounded-xl" style="background:var(--bg-base)" id="sc-address"></div></div>
+    <div class="mb-6" id="sc-notes-section" style="display:none"><div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Notes</div><div class="p-4 rounded-xl text-sm" style="background:var(--bg-base);color:var(--text-secondary)" id="sc-notes"></div></div>
+    <div><div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Order History</div><div id="sc-orders" class="flex flex-col gap-2"></div></div>
+  </div>
+  <div class="slide-footer">
+    <button onclick="closeSlide('slide-customer');openCustomerModal(currentSlideCustomer)" class="btn btn-secondary">Edit</button>
+    <button onclick="closeSlide('slide-customer');openOrderModal(currentSlideCustomer)" class="btn btn-primary"><i class="fas fa-plus"></i> New Order</button>
+  </div>
+</div>
+
+<!-- Payment Detail -->
+<div class="slide-overlay" id="slide-payment-overlay" onclick="closeSlide('slide-payment')"></div>
+<div class="slide-panel" id="slide-payment">
+  <div class="slide-header">
+    <div><h3 class="font-semibold td-mono" id="sp-number">PAY-001</h3><p class="text-xs mt-0.5" style="color:var(--text-secondary)">Recorded on <span id="sp-date"></span> by <span id="sp-by"></span></p></div>
+    <button class="btn-icon" onclick="closeSlide('slide-payment')"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="slide-body">
+    <div class="mb-6">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Payment Details</div>
+      <div class="p-4 rounded-xl" style="background:var(--bg-base)" id="sp-details"></div>
+    </div>
+    <div class="mb-6">
+      <div class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:var(--text-tertiary)">Linked Order</div>
+      <div class="p-4 rounded-xl" style="background:var(--bg-base)" id="sp-order"></div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <button onclick="closeSlide('slide-payment');openOrderSlide(currentSlidePaymentOrder)" class="btn btn-secondary">View Order</button>
+  </div>
+</div>
+
+<!-- Movement History Side Panel -->
+<div class="slide-overlay" id="slide-movement-overlay" onclick="closeSlide('slide-movement')"></div>
+<div class="side-panel-alt" id="slide-movement">
+  <div class="sp-header"><div class="sp-title" id="mv-title">Movement History</div><button class="btn-icon" onclick="closeSlide('slide-movement')"><i class="fas fa-times"></i></button></div>
+  <div class="sp-body" id="mv-body">
+    <div class="text-muted text-sm text-center py-6">Select a product to view movements.</div>
+  </div>
+</div>
+
+<script>
+// ============================ DATA ============================
+const customers=[
+  {id:1,first_name:'John',last_name:'Doe',email:'john@example.com',phone:'0412-3456789',national_id:'V12345678',date_of_birth:'1985-06-15',gender:'M',address_line1:'123 Main St',address_line2:'Apt 4B',city:'Caracas',state:'Dtto. Capital',postal_code:'1010',country:'Venezuela',notes:'VIP customer',created_at:'2024-01-15'},
+  {id:2,first_name:'Jane',last_name:'Smith',email:'jane@example.com',phone:'0424-9876543',national_id:'V87654321',date_of_birth:'1990-03-22',gender:'F',address_line1:'456 Oak Ave',address_line2:'',city:'Maracaibo',state:'Zulia',postal_code:'4001',country:'Venezuela',notes:'',created_at:'2024-02-10'},
+  {id:3,first_name:'Carlos',last_name:'Rodriguez',email:'carlos@example.com',phone:'0416-5551212',national_id:'V11223344',date_of_birth:'1978-11-08',gender:'M',address_line1:'789 Pine Rd',address_line2:'Suite 100',city:'Valencia',state:'Carabobo',postal_code:'2001',country:'Venezuela',notes:'Corporate account',created_at:'2024-03-05'},
+  {id:4,first_name:'Maria',last_name:'Gonzalez',email:'maria@example.com',phone:'',national_id:'',date_of_birth:'',gender:'',address_line1:'321 Elm St',address_line2:'',city:'Barquisimeto',state:'Lara',postal_code:'3001',country:'Venezuela',notes:'',created_at:'2024-04-20'},
+  {id:5,first_name:'Luis',last_name:'Hernandez',email:'luis@example.com',phone:'0412-9998888',national_id:'V55667788',date_of_birth:'1995-01-30',gender:'M',address_line1:'555 Cedar Ln',address_line2:'',city:'Maturin',state:'Monagas',postal_code:'6201',country:'Venezuela',notes:'',created_at:'2024-05-12'},
+];
+const categories=[
+  {id:1,name:'Electronics',description:'Gadgets and devices',parent_category:null,product_count:12},
+  {id:2,name:'Computers',description:'Laptops and desktops',parent_category:1,product_count:5},
+  {id:3,name:'Accessories',description:'Cables, cases, etc.',parent_category:1,product_count:7},
+  {id:4,name:'Tools',description:'Hardware tools',parent_category:null,product_count:8},
+  {id:5,name:'Office Supplies',description:'Paper, pens, etc.',parent_category:null,product_count:15},
+  {id:6,name:'Furniture',description:'Office furniture',parent_category:null,product_count:6},
+];
+const products=[
+  {id:1,sku:'SKU-001',name:'Wireless Mouse',category_id:3,unit_of_measure:'unit',description:'Ergonomic wireless mouse',unit_price:29.99,low_stock_threshold:10,current_stock:45,is_active:true,has_image:true},
+  {id:2,sku:'SKU-002',name:'USB-C Cable 2m',category_id:3,unit_of_measure:'unit',description:'Fast charging cable',unit_price:12.50,low_stock_threshold:20,current_stock:8,is_active:true,has_image:false},
+  {id:3,sku:'SKU-003',name:'Laptop Stand',category_id:6,unit_of_measure:'unit',description:'Aluminum laptop stand',unit_price:49.99,low_stock_threshold:5,current_stock:0,is_active:true,has_image:true},
+  {id:4,sku:'SKU-004',name:'Mechanical Keyboard',category_id:2,unit_of_measure:'unit',description:'RGB mechanical keyboard',unit_price:89.99,low_stock_threshold:8,current_stock:12,is_active:true,has_image:true},
+  {id:5,sku:'SKU-005',name:'Webcam HD',category_id:1,unit_of_measure:'unit',description:'1080p webcam',unit_price:59.99,low_stock_threshold:6,current_stock:3,is_active:true,has_image:false},
+  {id:6,sku:'SKU-006',name:'Desk Lamp LED',category_id:6,unit_of_measure:'unit',description:'Adjustable LED lamp',unit_price:34.99,low_stock_threshold:10,current_stock:22,is_active:true,has_image:true},
+  {id:7,sku:'SKU-007',name:'Power Strip 6-outlet',category_id:3,unit_of_measure:'unit',description:'Surge protector',unit_price:19.99,low_stock_threshold:15,current_stock:50,is_active:true,has_image:true},
+  {id:8,sku:'SKU-008',name:'Notebook A4 (5pk)',category_id:5,unit_of_measure:'pack',description:'Pack of 5 notebooks',unit_price:8.99,low_stock_threshold:30,current_stock:100,is_active:true,has_image:true},
+  {id:9,sku:'SKU-009',name:'Hammer 16oz',category_id:4,unit_of_measure:'unit',description:'Claw hammer',unit_price:14.99,low_stock_threshold:8,current_stock:15,is_active:true,has_image:true},
+  {id:10,sku:'SKU-010',name:'Screwdriver Set',category_id:4,unit_of_measure:'unit',description:'6-piece set',unit_price:24.99,low_stock_threshold:10,current_stock:7,is_active:true,has_image:true},
+];
+const orders=[
+  {id:1,order_number:'ORD-2024-001',customer_id:1,status:'delivered',created_at:'2024-06-01',confirmed_at:'2024-06-01',paid_at:'2024-06-01',shipped_at:'2024-06-02',delivered_at:'2024-06-03',discount_amount:5.00,tax_amount:0.00,subtotal:150.00,total_amount:145.00,notes:'',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:1,quantity:2,unit_price:29.99,line_total:59.98},{product_id:2,quantity:3,unit_price:12.50,line_total:37.50},{product_id:4,quantity:1,unit_price:89.99,line_total:89.99}],payments:[{id:1,payment_number:'PAY-001',amount:145.00,payment_method:'cash',status:'confirmed',reference_number:'',notes:'',recorded_by:'Alex Doe',created_at:'2024-06-01'}]},
+  {id:2,order_number:'ORD-2024-002',customer_id:2,status:'paid',created_at:'2024-06-02',confirmed_at:'2024-06-02',paid_at:'2024-06-02',shipped_at:'',delivered_at:'',discount_amount:0.00,tax_amount:0.00,subtotal:89.99,total_amount:89.99,notes:'',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:4,quantity:1,unit_price:89.99,line_total:89.99}],payments:[{id:2,payment_number:'PAY-002',amount:89.99,payment_method:'card',status:'confirmed',reference_number:'TXN-998877',notes:'',recorded_by:'Alex Doe',created_at:'2024-06-02'}]},
+  {id:3,order_number:'ORD-2024-003',customer_id:3,status:'confirmed',created_at:'2024-06-03',confirmed_at:'2024-06-03',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:10.00,tax_amount:0.00,subtotal:109.98,total_amount:99.98,notes:'Corporate discount applied',created_by:'Alex Doe',confirmed_by:'Manager Mike',items:[{product_id:1,quantity:1,unit_price:29.99,line_total:29.99},{product_id:6,quantity:2,unit_price:34.99,line_total:69.99}],payments:[]},
+  {id:4,order_number:'ORD-2024-004',customer_id:1,status:'shipped',created_at:'2024-06-04',confirmed_at:'2024-06-04',paid_at:'2024-06-04',shipped_at:'2024-06-05',delivered_at:'',discount_amount:0.00,tax_amount:0.00,subtotal:59.99,total_amount:59.99,notes:'',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:5,quantity:1,unit_price:59.99,line_total:59.99}],payments:[{id:3,payment_number:'PAY-003',amount:59.99,payment_method:'bank_transfer',status:'confirmed',reference_number:'BT-554433',notes:'',recorded_by:'Alex Doe',created_at:'2024-06-04'}]},
+  {id:5,order_number:'ORD-2024-005',customer_id:4,status:'draft',created_at:'2024-06-05',confirmed_at:'',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:0.00,tax_amount:0.00,subtotal:39.98,total_amount:39.98,notes:'',created_by:'Alex Doe',confirmed_by:'',items:[{product_id:9,quantity:1,unit_price:14.99,line_total:14.99},{product_id:10,quantity:1,unit_price:24.99,line_total:24.99}],payments:[]},
+  {id:6,order_number:'ORD-2024-006',customer_id:5,status:'pending',created_at:'2024-06-06',confirmed_at:'',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:0.00,tax_amount:0.00,subtotal:52.97,total_amount:52.97,notes:'',created_by:'Alex Doe',confirmed_by:'',items:[{product_id:6,quantity:1,unit_price:34.99,line_total:34.99},{product_id:8,quantity:2,unit_price:8.99,line_total:17.98}],payments:[]},
+  {id:7,order_number:'ORD-2024-007',customer_id:2,status:'cancelled',created_at:'2024-06-01',confirmed_at:'2024-06-01',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:0.00,tax_amount:0.00,subtotal:19.99,total_amount:19.99,notes:'Customer requested cancellation',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:7,quantity:1,unit_price:19.99,line_total:19.99}],payments:[]},
+  {id:8,order_number:'ORD-2024-008',customer_id:3,status:'refunded',created_at:'2024-05-28',confirmed_at:'2024-05-28',paid_at:'2024-05-28',shipped_at:'2024-05-29',delivered_at:'2024-05-30',discount_amount:0.00,tax_amount:0.00,subtotal:12.50,total_amount:12.50,notes:'Defective item',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:2,quantity:1,unit_price:12.50,line_total:12.50}],payments:[{id:4,payment_number:'PAY-004',amount:12.50,payment_method:'cash',status:'refunded',reference_number:'',notes:'Refund issued',recorded_by:'Alex Doe',created_at:'2024-06-01'}]},
+];
+const users=[
+  {id:1,first_name:'Alex',last_name:'Doe',email:'admin@retailops.com',role:'Admin',is_active:true,last_login:'Today'},
+  {id:2,first_name:'Manager',last_name:'Mike',email:'manager@retailops.com',role:'Manager',is_active:true,last_login:'Jun 5'},
+  {id:3,first_name:'Staff',last_name:'Sam',email:'staff@retailops.com',role:'Staff',is_active:true,last_login:'Jun 4'},
+  {id:4,first_name:'Inactive',last_name:'Ivy',email:'inactive@retailops.com',role:'Staff',is_active:false,last_login:'Never'},
+];
+const movements=[
+  {product_id:1,date:'2024-06-05',type:'Sale',quantity:-2,reference_type:'SalesOrder',reference_id:1,notes:'Stock deducted on confirmation of ORD-2024-001',created_by:'Alex Doe'},
+  {product_id:1,date:'2024-06-01',type:'Purchase',quantity:50,reference_type:'ManualAdjustment',reference_id:0,notes:'Initial stock purchase',created_by:'Alex Doe'},
+  {product_id:2,date:'2024-06-05',type:'Sale',quantity:-3,reference_type:'SalesOrder',reference_id:1,notes:'Stock deducted on confirmation of ORD-2024-001',created_by:'Alex Doe'},
+  {product_id:3,date:'2024-06-03',type:'Sale',quantity:-1,reference_type:'SalesOrder',reference_id:3,notes:'Stock deducted on confirmation of ORD-2024-003',created_by:'Manager Mike'},
+  {product_id:5,date:'2024-06-04',type:'Sale',quantity:-1,reference_type:'SalesOrder',reference_id:4,notes:'Stock deducted on confirmation of ORD-2024-004',created_by:'Alex Doe'},
+];
+
+// ============================ UTILS ============================
+const $=id=>document.getElementById(id);
+function fmtCurrency(n){return '$'+Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function fmtDate(d){return new Date(d).toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'});}
+function getC(id){return customers.find(c=>c.id===id)||{};}
+function getP(id){return products.find(p=>p.id===id)||{};}
+function getCat(id){return categories.find(c=>c.id===id)||{};}
+function statusBadge(s){const cls={draft:'badge-draft',pending:'badge-pending',confirmed:'badge-confirmed',paid:'badge-paid',shipped:'badge-shipped',delivered:'badge-delivered',cancelled:'badge-cancelled',refunded:'badge-refunded'};return`<span class="badge ${cls[s]||''}">${s.charAt(0).toUpperCase()+s.slice(1)}</span>`;}
+function methodLabel(m){return({cash:'Cash',card:'Card',bank_transfer:'Bank Transfer',check:'Check',mobile_payment:'Mobile Payment'})[m]||m;}
+
+function showToast(msg,type='success'){
+  const stack=$('toast-stack');
+  const toast=document.createElement('div');
+  const icons={success:'check-circle',error:'times-circle',warning:'exclamation-circle',info:'info-circle'};
+  const colors={success:'text-emerald-500',error:'text-red-500',warning:'text-amber-500',info:'text-blue-500'};
+  toast.className=`toast-item ${type}`;
+  toast.innerHTML=`<i class="fas fa-${icons[type]} ${colors[type]}"></i><span style="color:var(--text-primary)">${msg}</span>`;
+  stack.appendChild(toast);
+  setTimeout(()=>{toast.classList.add('closing');setTimeout(()=>toast.remove(),350);},4000);
+}
+
+// ============================ THEME ============================
+function toggleTheme(){
+  const html=document.documentElement;
+  const isDark=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',isDark?'light':'dark');
+  $('theme-icon').className=isDark?'fas fa-moon':'fas fa-sun';
+  const st=$('settings-theme-toggle');if(st)st.classList.toggle('on',!isDark);
+}
+
+// ============================ SIDEBAR ============================
+function toggleSidebar(){const sb=$('sidebar');sb.classList.toggle('collapsed');}
+function toggleMobileSidebar(){const sb=$('sidebar');sb.classList.toggle('mobile-open');}
+
+// ============================ ROUTING ============================
+const authViews=['login','password-reset','password-reset-done','password-reset-confirm','password-reset-complete'];
+function navTo(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(l=>l.classList.remove('active'));
+  const viewMap={dashboard:'dashboard',orders:'orders',customers:'customers',inventory:'inventory',payments:'payments',categories:'categories',users:'users',settings:'settings'};
+  if(authViews.includes(view)){
+    authViews.forEach(v=>$(`view-${v}`)?.classList.remove('active'));
+    $(`view-${view}`)?.classList.add('active');
+    $('app-shell').classList.remove('active');
+  }else{
+    authViews.forEach(v=>$(`view-${v}`)?.classList.remove('active'));
+    $('app-shell').classList.add('active');
+    const t=$(`view-${view}`);if(t)t.classList.add('active');
+  }
+  const itemMap={dashboard:0,orders:1,customers:2,inventory:3,payments:4,categories:5,users:6,settings:7};
+  const idx=itemMap[view];if(idx!=null)document.querySelectorAll('.sidebar-item')[idx]?.classList.add('active');
+  if(view==='dashboard')renderDashboard();
+  if(view==='orders')renderOrders();
+  if(view==='customers')renderCustomers();
+  if(view==='inventory')renderInventory();
+  if(view==='payments')renderPayments();
+  if(view==='categories')renderCategories();
+  if(view==='users')renderUsers();
+  window.scrollTo(0,0);
+}
+
+// ============================ AUTH ============================
+function handleLogin(e){e.preventDefault();const email=$('login-email').value,pass=$('login-password').value;if(email==='admin@retailops.com'&&pass==='password'){showToast('Welcome back, Alex!');navTo('dashboard');}else{showToast('Invalid credentials','error');}return false;}
+function handleLogout(){showToast('Signed out');navTo('login');}
+function handlePasswordResetRequest(e){e.preventDefault();showToast('Reset link sent','success');navTo('password-reset-done');return false;}
+function handlePasswordResetConfirm(e){e.preventDefault();const p1=$('prc-pass1').value,p2=$('prc-pass2').value;if(p1!==p2){showToast('Passwords do not match','error');return false;}if(p1.length<8){showToast('Password must be at least 8 characters','error');return false;}showToast('Password updated','success');navTo('password-reset-complete');return false;}
+
+// ============================ DASHBOARD ============================
+function renderDashboard(){
+  $('dash-orders-body').innerHTML=orders.slice(0,5).map(o=>{const c=getC(o.customer_id);return`<tr><td class="td-mono font-medium"><a href="#" onclick="openOrderSlide(${o.id});return false" style="color:var(--primary)">${o.order_number}</a></td><td>${c.first_name} ${c.last_name}</td><td>${fmtDate(o.created_at)}</td><td>${statusBadge(o.status)}</td><td class="font-semibold">${fmtCurrency(o.total_amount)}</td></tr>`;}).join('');
+  const low=products.filter(p=>p.current_stock<=p.low_stock_threshold);
+  $('dash-alerts-body').innerHTML=low.map(p=>`<div class="flex items-center justify-between p-3 rounded-xl text-sm ${p.current_stock===0?'bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-900/30':'bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-900/30'}"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-lg grid place-items-center text-xs ${p.current_stock===0?'bg-red-100 text-red-600':'bg-amber-100 text-amber-600'}"><i class="fas fa-box"></i></div><div><div class="font-semibold">${p.name}</div><div class="text-xs" style="color:var(--text-tertiary)">${p.sku}</div></div></div>${p.current_stock===0?'<span class="badge badge-cancelled">Out</span>':`<span class="badge badge-pending">${p.current_stock} left</span>`}</div>`).join('');
+}
+function dashTab(el,tab){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');$('dash-tab-orders').style.display=tab==='orders'?'block':'none';$('dash-tab-alerts').style.display=tab==='alerts'?'block':'none';}
+
+// ============================ PAGINATION ============================
+function renderPagination(containerId,currentPage,totalPages,callback){
+  const c=$(containerId);if(totalPages<=1){c.innerHTML='';return;}
+  let html=`<span class="pg-info">Page ${currentPage} of ${totalPages}</span>`;
+  html+=`<button class="pg-btn ${currentPage===1?'disabled':''}" ${currentPage===1?'':'onclick="'+callback+'('+(currentPage-1)+')"'}>‹</button>`;
+  for(let i=1;i<=totalPages;i++){if(i===1||i===totalPages||(i>=currentPage-1&&i<=currentPage+1)){html+=`<button class="pg-btn ${i===currentPage?'active':''}" onclick="${callback}(${i})">${i}</button>`;}else if(i===currentPage-2||i===currentPage+2){html+=`<span class="px-1 text-xs" style="color:var(--text-tertiary)">…</span>`;}}
+  html+=`<button class="pg-btn ${currentPage===totalPages?'disabled':''}" ${currentPage===totalPages?'':'onclick="'+callback+'('+(currentPage+1)+')"'}>›</button>`;
+  c.innerHTML=html;
+}
+
+// ============================ ORDERS ============================
+let orderPage=1;
+const ORDERS_PER_PAGE=5;
+function renderOrders(page=1){
+  orderPage=page;
+  const q=$('order-search').value.toLowerCase(),s=$('order-status-filter').value,df=$('order-date-from').value,dt=$('order-date-to').value;
+  let f=orders.filter(o=>{const c=getC(o.customer_id);return(!q||o.order_number.toLowerCase().includes(q)||(c.first_name+' '+c.last_name).toLowerCase().includes(q))&&(!s||o.status===s)&&(!df||new Date(o.created_at)>=new Date(df))&&(!dt||new Date(o.created_at)<=new Date(dt));});
+  const totalPages=Math.ceil(f.length/ORDERS_PER_PAGE)||1;
+  const start=(page-1)*ORDERS_PER_PAGE;
+  const pageItems=f.slice(start,start+ORDERS_PER_PAGE);
+  const tb=$('orders-table-body');
+  if(!pageItems.length){tb.innerHTML=`<tr><td colspan="7"><div class="empty-state"><i class="fas fa-shopping-bag"></i><div class="font-semibold">No orders found</div></div></td></tr>`;}
+  else{tb.innerHTML=pageItems.map(o=>{const c=getC(o.customer_id);return`<tr><td class="td-mono font-medium"><a href="#" onclick="openOrderSlide(${o.id});return false" style="color:var(--primary)">${o.order_number}</a></td><td><a href="#" onclick="openCustomerSlide(${o.customer_id});return false" style="color:var(--text-primary)" class="hover:underline">${c.first_name} ${c.last_name}</a></td><td>${fmtDate(o.created_at)}</td><td>${statusBadge(o.status)}</td><td>${o.items.length}</td><td class="font-semibold">${fmtCurrency(o.total_amount)}</td><td><button onclick="openOrderSlide(${o.id})" class="btn-icon mr-1" title="View"><i class="fas fa-eye"></i></button>${o.status==='draft'||o.status==='pending'?`<button onclick="openOrderModal(${o.id})" class="btn-icon mr-1" title="Edit"><i class="fas fa-pen"></i></button>`:''}${o.status==='draft'?`<button onclick="deleteOrder(${o.id})" class="btn-icon" title="Delete"><i class="fas fa-trash"></i></button>`:''}</td></tr>`;}).join('');}
+  renderPagination('orders-pagination',page,totalPages,'renderOrders');
+}
+function clearOrderFilters(){document.getElementById('order-search').value='';document.getElementById('order-status-filter').value='';document.getElementById('order-date-from').value='';document.getElementById('order-date-to').value='';renderOrders();}
+function deleteOrder(id){if(!confirm('Delete this order?'))return;showToast('Order deleted');renderOrders();}
+
+// ============================ ORDER SLIDE + MODAL ============================
+let editingOrderId=null;
+function openOrderSlide(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  $('so-number').textContent=o.order_number;
+  $('so-status').innerHTML=statusBadge(o.status);
+  $('so-creator').textContent=o.created_by;
+  $('so-date').textContent=fmtDate(o.created_at);
+  $('so-confirmed-info').textContent=o.confirmed_by?` · Confirmed by ${o.confirmed_by} ${fmtDate(o.confirmed_at)}`:'';
+  const c=getC(o.customer_id);
+  $('so-customer').innerHTML=`<div class="flex items-center gap-3"><div class="w-10 h-10 rounded-full grid place-items-center text-sm font-bold text-white" style="background:linear-gradient(135deg,var(--primary),#7c3aed)">${c.first_name[0]}${c.last_name[0]}</div><div><div class="font-semibold text-sm">${c.first_name} ${c.last_name}</div><div class="text-xs" style="color:var(--text-secondary)">${c.email}</div></div></div><div class="mt-3 pt-3" style="border-top:1px solid var(--border-color)"><div class="flex justify-between text-sm"><span style="color:var(--text-secondary)">Phone</span><span>${c.phone||'—'}</span></div>${c.national_id?`<div class="flex justify-between text-sm mt-1"><span style="color:var(--text-secondary)">ID</span><span>${c.national_id}</span></div>`:''}<div class="flex justify-between text-sm mt-1"><span style="color:var(--text-secondary)">Address</span><span>${c.address_line1}, ${c.city}</span></div></div>`;
+  $('so-items').innerHTML=o.items.map(it=>{const p=getP(it.product_id);return`<tr class="border-b" style="border-color:var(--border-color)"><td class="p-2.5"><div class="flex items-center gap-2"><div class="product-thumb product-thumb-sm">${p.has_image?'<img src="https://placehold.co/36x36/4f46e5/fff?text=P">':'IMG'}</div><span class="font-medium text-sm">${p.name}</span></div></td><td class="p-2.5 td-mono text-xs" style="color:var(--text-tertiary)">${p.sku}</td><td class="p-2.5 text-sm">${it.quantity}</td><td class="p-2.5 text-sm">${fmtCurrency(it.unit_price)}</td><td class="p-2.5 text-sm text-right font-semibold">${fmtCurrency(it.line_total)}</td></tr>`;}).join('');
+  $('so-subtotal').textContent=fmtCurrency(o.subtotal);
+  $('so-tax').textContent=fmtCurrency(o.tax_amount);
+  $('so-discount').textContent=fmtCurrency(o.discount_amount);
+  $('so-total').textContent=fmtCurrency(o.total_amount);
+  if(o.notes){$('so-notes-section').style.display='';$('so-notes').textContent=o.notes;}else{$('so-notes-section').style.display='none';}
+  if(o.payments.length){$('so-payments-section').style.display='';$('so-payments').innerHTML=o.payments.map(p=>`<div class="p-3 rounded-xl flex items-center justify-between" style="background:var(--bg-base)"><div><div class="text-sm font-semibold"><a href="#" onclick="openPaymentSlide(${p.id});return false" style="color:var(--primary)">${p.payment_number}</a></div><div class="text-xs" style="color:var(--text-secondary)">${methodLabel(p.payment_method)} · ${p.recorded_by}</div></div><div class="font-bold">${fmtCurrency(p.amount)}</div></div>`).join('')+`<div class="mt-2 pt-2 flex justify-between text-sm" style="border-top:1px solid var(--border-color)"><span style="color:var(--text-secondary)">Outstanding</span><strong class="${o.total_amount>o.payments.reduce((a,p)=>a+p.amount,0)?'text-red-500':'text-emerald-500'}">${fmtCurrency(Math.max(0,o.total_amount-o.payments.reduce((a,p)=>a+p.amount,0)))}</strong></div>`;}else{$('so-payments-section').style.display='none';}
+  let acts='';
+  if(o.status==='draft')acts+=`<button onclick="transitionOrder(${o.id},'submit')" class="btn btn-primary btn-sm">Submit for Review</button>`;
+  if(o.status==='pending')acts+=`<button onclick="transitionOrder(${o.id},'confirm')" class="btn btn-primary btn-sm">Confirm Order</button>`;
+  if(o.status==='confirmed')acts+=`<button onclick="openPaymentModalFor(${o.id})" class="btn btn-success btn-sm">Record Payment</button>`;
+  if(o.status==='paid')acts+=`<button onclick="transitionOrder(${o.id},'ship')" class="btn btn-primary btn-sm">Mark Shipped</button>`;
+  if(o.status==='shipped')acts+=`<button onclick="transitionOrder(${o.id},'deliver')" class="btn btn-success btn-sm">Mark Delivered</button>`;
+  if(o.status==='confirmed')acts+=`<button onclick="transitionOrder(${o.id},'cancel')" class="btn btn-danger btn-sm">Cancel Order</button>`;
+  if(o.status==='paid')acts+=`<button onclick="transitionOrder(${o.id},'refund')" class="btn btn-warning btn-sm">Issue Refund</button>`;
+  $('so-actions').innerHTML=acts;
+  openSlide('slide-order');
+}
+function transitionOrder(id,action){
+  const o=orders.find(x=>x.id===id);const map={submit:'pending',confirm:'confirmed',ship:'shipped',deliver:'delivered',cancel:'cancelled',refund:'refunded'};
+  const labels={submit:'submitted',confirm:'confirmed',ship:'shipped',deliver:'delivered',cancel:'cancelled',refund:'refunded'};
+  if(!confirm(`Mark order as ${labels[action]}?`))return;
+  o.status=map[action];if(action==='confirm')o.confirmed_by='Manager Mike',o.confirmed_at=new Date().toISOString().split('T')[0];if(action==='ship')o.shipped_at=new Date().toISOString().split('T')[0];if(action==='deliver')o.delivered_at=new Date().toISOString().split('T')[0];if(action==='refund'||action==='cancel')o.payments.forEach(p=>p.status='refunded');
+  showToast(`Order ${labels[action]}`,'success');openOrderSlide(id);renderOrders();
+}
+function openOrderModal(editId){
+  editingOrderId=editId||null;
+  $('order-modal-title').textContent=editId?'Edit Order':'New Order';
+  const sel=$('om-customer');sel.innerHTML='<option value="">— Select customer —</option>'+customers.map(c=>`<option value="${c.id}">${c.first_name} ${c.last_name}</option>`).join('');
+  $('modal-line-items').innerHTML='';$('modal-empty-line').style.display='';
+  $('om-tax').value='0';$('om-discount').value='0';$('om-subtotal-display').textContent='$0.00';$('om-total').textContent='$0.00';$('om-notes').value='';
+  if(editId){const o=orders.find(x=>x.id===editId);sel.value=o.customer_id;o.items.forEach(it=>addModalLineItem(it.product_id,it.quantity,it.unit_price));$('om-tax').value=o.tax_amount;$('om-discount').value=o.discount_amount;recalcModalTotals();$('om-notes').value=o.notes||'';}
+  openModal('modal-order');
+}
+function addModalLineItem(pid,qty,price){
+  const tbody=$('modal-line-items');$('modal-empty-line').style.display='none';
+  const row=document.createElement('tr');row.className='border-b';row.style.borderColor='var(--border-color)';
+  const opts=products.filter(p=>p.is_active).map(p=>`<option value="${p.id}" data-sku="${p.sku}" data-price="${p.unit_price}" ${p.id==pid?'selected':''}>${p.name}</option>`).join('');
+  const first=products.find(p=>p.id==pid)||products.find(p=>p.is_active)||{};
+  row.innerHTML=`<td class="p-2.5"><div class="flex items-center gap-2"><div class="product-thumb product-thumb-sm">${first.has_image?'<img src="https://placehold.co/36x36/4f46e5/fff?text=P">':'IMG'}</div><select class="input select text-sm" style="min-width:140px" onchange="recalcModalTotals()">${opts}</select></div></td><td class="p-2.5 td-mono text-xs" style="color:var(--text-tertiary)">${first.sku||'—'}</td><td class="p-2.5"><input type="number" class="input text-sm" style="width:60px" value="${qty||1}" min="1" onchange="recalcModalTotals()"></td><td class="p-2.5"><input type="number" class="input text-sm" style="width:90px" value="${price||first.unit_price||0}" step="0.01" min="0" onchange="recalcModalTotals()"></td><td class="p-2.5 text-right font-semibold text-sm modal-line-total">$0.00</td><td class="p-2.5"><button type="button" class="btn-icon" onclick="this.closest('tr').remove();recalcModalTotals();if(!document.querySelectorAll('#modal-line-items tr').length)$('modal-empty-line').style.display='';"><i class="fas fa-times"></i></button></td>`;
+  tbody.appendChild(row);recalcModalTotals();
+}
+function recalcModalTotals(){
+  let sub=0;document.querySelectorAll('#modal-line-items tr').forEach(row=>{const sel=row.querySelector('select');const price=parseFloat(sel?.options[sel.selectedIndex].dataset.price||0);const qty=parseFloat(row.querySelectorAll('input[type="number"]')[0]?.value||1);const total=price*qty;row.querySelector('.modal-line-total').textContent=fmtCurrency(total);sub+=total;});
+  const tax=parseFloat($('om-tax')?.value||0);const disc=parseFloat($('om-discount')?.value||0);$('om-subtotal-display').textContent=fmtCurrency(sub);$('om-total').textContent=fmtCurrency(Math.max(0,sub+tax-disc));
+}
+function handleOrderSave(e){e.preventDefault();closeModal('modal-order');showToast(editingOrderId?'Order updated':'Order created','success');renderOrders();return false;}
+
+// ============================ CUSTOMERS ============================
+let customerPage=1;
+const CUSTOMERS_PER_PAGE=5;
+function renderCustomers(page=1){
+  customerPage=page;
+  const q=$('customer-search').value.toLowerCase();
+  let f=customers.filter(c=>!q||(c.first_name+' '+c.last_name).toLowerCase().includes(q)||c.email.toLowerCase().includes(q));
+  const totalPages=Math.ceil(f.length/CUSTOMERS_PER_PAGE)||1;
+  const start=(page-1)*CUSTOMERS_PER_PAGE;
+  const pageItems=f.slice(start,start+CUSTOMERS_PER_PAGE);
+  const tb=$('customers-table-body');
+  if(!pageItems.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty-state"><i class="fas fa-users"></i><div class="font-semibold">No customers found</div></div></td></tr>`;}
+  else{tb.innerHTML=pageItems.map(c=>{const cOrders=orders.filter(o=>o.customer_id===c.id);return`<tr><td><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full grid place-items-center text-xs font-bold text-white" style="background:linear-gradient(135deg,var(--primary),#7c3aed)">${c.first_name[0]}${c.last_name[0]}</div><div><div class="font-semibold text-sm">${c.first_name} ${c.last_name}</div><div class="text-xs" style="color:var(--text-tertiary)">${c.email}</div></div></div></td><td>${c.phone||'—'}</td><td>${c.city}, ${c.country}</td><td>${cOrders.length}</td><td>${fmtDate(c.created_at)}</td><td><button onclick="openCustomerSlide(${c.id})" class="btn-icon mr-1" title="View"><i class="fas fa-eye"></i></button><button onclick="openCustomerModal(${c.id})" class="btn-icon mr-1" title="Edit"><i class="fas fa-pen"></i></button><button onclick="deleteCustomer(${c.id})" class="btn-icon" title="Delete"><i class="fas fa-trash"></i></button></td></tr>`;}).join('');}
+  renderPagination('customers-pagination',page,totalPages,'renderCustomers');
+}
+function deleteCustomer(id){if(!confirm('Delete customer?'))return;showToast('Customer deleted');renderCustomers();}
+let currentSlideCustomer=null;
+function openCustomerSlide(id){
+  currentSlideCustomer=id;const c=getC(id);
+  $('sc-name').textContent=c.first_name+' '+c.last_name;$('sc-since').textContent=fmtDate(c.created_at);
+  $('sc-contact').innerHTML=`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Email</span><a href="mailto:${c.email}" class="font-medium">${c.email}</a></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Phone</span><span class="font-medium">${c.phone||'—'}</span></div>${c.national_id?`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">ID</span><span class="font-medium">${c.national_id}</span></div>`:''}${c.date_of_birth?`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">DOB</span><span class="font-medium">${fmtDate(c.date_of_birth)}</span></div>`:''}${c.gender?`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Gender</span><span class="font-medium">${c.gender==='M'?'Male':'Female'}</span></div>`:''}`;
+  $('sc-address').innerHTML=`<div class="text-sm font-medium">${c.address_line1}</div>${c.address_line2?`<div class="text-sm">${c.address_line2}</div>`:''}<div class="text-sm mt-1" style="color:var(--text-secondary)">${c.city}, ${c.state} ${c.postal_code}</div><div class="text-sm" style="color:var(--text-secondary)">${c.country}</div>`;
+  if(c.notes){$('sc-notes-section').style.display='';$('sc-notes').textContent=c.notes;}else{$('sc-notes-section').style.display='none';}
+  const cOrders=orders.filter(o=>o.customer_id===id);
+  $('sc-orders').innerHTML=cOrders.length?cOrders.map(o=>`<div class="p-3 rounded-xl flex items-center justify-between" style="background:var(--bg-base)"><div><div class="text-sm font-semibold">${o.order_number}</div><div class="text-xs" style="color:var(--text-secondary)">${fmtDate(o.created_at)}</div></div><div class="flex items-center gap-3">${statusBadge(o.status)}<span class="font-bold text-sm">${fmtCurrency(o.total_amount)}</span></div></div>`).join(''):'<div class="text-sm text-center py-4" style="color:var(--text-tertiary)">No orders yet</div>';
+  openSlide('slide-customer');
+}
+let editingCustomerId=null;
+function openCustomerModal(editId){
+  editingCustomerId=editId||null;
+  $('customer-modal-title').textContent=editId?'Edit Customer':'New Customer';
+  const c=editId?getC(editId):{};
+  $('cm-fname').value=c.first_name||'';$('cm-lname').value=c.last_name||'';$('cm-email').value=c.email||'';
+  $('cm-phone').value=c.phone||'';$('cm-national_id').value=c.national_id||'';$('cm-dob').value=c.date_of_birth||'';
+  $('cm-gender').value=c.gender||'';$('cm-address1').value=c.address_line1||'';$('cm-address2').value=c.address_line2||'';
+  $('cm-city').value=c.city||'';$('cm-state').value=c.state||'';$('cm-postal').value=c.postal_code||'';
+  $('cm-country').value=c.country||'Venezuela';$('cm-notes').value=c.notes||'';
+  openModal('modal-customer');
+}
+function handleCustomerSave(e){e.preventDefault();closeModal('modal-customer');showToast(editingCustomerId?'Customer updated':'Customer created','success');renderCustomers();return false;}
+
+// ============================ INVENTORY ============================
+let invPage=1;
+const INV_PER_PAGE=5;
+function renderInventory(page=1){
+  invPage=page;
+  const q=$('inv-search').value.toLowerCase(),cat=$('inv-category-filter').value,stock=$('inv-stock-filter').value;
+  let f=products.filter(p=>{const matchQ=!q||p.sku.toLowerCase().includes(q)||p.name.toLowerCase().includes(q);const matchCat=!cat||p.category_id==+cat;const matchStock=!stock||(stock==='out'&&p.current_stock<=0)||(stock==='low'&&p.current_stock>0&&p.current_stock<=p.low_stock_threshold)||(stock==='ok'&&p.current_stock>p.low_stock_threshold);return matchQ&&matchCat&&matchStock;});
+  const lowCount=products.filter(p=>p.current_stock<=p.low_stock_threshold).length;
+  if(lowCount){$('inv-low-stock-banner').style.display='';$('inv-banner-text').innerHTML=`<strong>${lowCount} product${lowCount>1?'s':''}</strong> ${lowCount>1?'are':'is'} below the low-stock threshold — restock soon.`;}
+  else{$('inv-low-stock-banner').style.display='none';}
+  const totalPages=Math.ceil(f.length/INV_PER_PAGE)||1;
+  const start=(page-1)*INV_PER_PAGE;
+  const pageItems=f.slice(start,start+INV_PER_PAGE);
+  const tb=$('inventory-table-body');
+  if(!pageItems.length){tb.innerHTML=`<tr><td colspan="6"><div class="empty-state"><i class="fas fa-boxes"></i><div class="font-semibold">No products found</div></div></td></tr>`;}
+  else{tb.innerHTML=pageItems.map(p=>`<tr><td><div class="flex items-center gap-3"><div class="product-thumb">${p.has_image?'<img src="https://placehold.co/44x44/4f46e5/fff?text=P">':'IMG'}</div><div><div class="font-semibold text-sm">${p.name}</div>${!p.is_active?'<span class="badge badge-cancelled ml-1">Inactive</span>':!p.has_image?'<span class="badge badge-pending ml-1">Missing image</span>':''}</div></div></td><td class="td-mono text-xs">${p.sku}</td><td>${getCat(p.category_id).name}</td><td class="font-semibold">${fmtCurrency(p.unit_price)}</td><td>${p.current_stock<=0?`<span class="text-red-500 font-bold">${p.current_stock}</span>`:p.current_stock<=p.low_stock_threshold?`<span class="text-amber-500 font-bold">${p.current_stock}</span>`:`<span class="text-emerald-500 font-bold">${p.current_stock}</span>`} <span class="text-xs" style="color:var(--text-tertiary)">/ ${p.low_stock_threshold}</span></td><td><button onclick="openProductModal(${p.id})" class="btn-icon mr-1" title="Edit"><i class="fas fa-pen"></i></button><button onclick="openAdjustModal(${p.id})" class="btn-icon mr-1" title="Adjust"><i class="fas fa-sliders-h"></i></button><button onclick="loadMovements(${p.id})" class="btn-icon" title="Movements"><i class="fas fa-history"></i></button></td></tr>`).join('');}
+  renderPagination('inventory-pagination',page,totalPages,'renderInventory');
+  const catSel=$('inv-category-filter');if(catSel.options.length<=1)categories.forEach(c=>{const o=document.createElement('option');o.value=c.id;o.textContent=c.name;catSel.appendChild(o);});
+}
+let editingProductId=null;
+function openProductModal(editId){
+  editingProductId=editId||null;
+  $('product-modal-title').textContent=editId?'Edit Product':'New Product';
+  const p=editId?getP(editId):{};
+  $('pm-sku').value=p.sku||'';$('pm-name').value=p.name||'';$('pm-description').value=p.description||'';
+  $('pm-price').value=p.unit_price||'';$('pm-threshold').value=p.low_stock_threshold||10;
+  $('pm-active').checked=p.is_active!==false;
+  const csel=$('pm-category');csel.innerHTML='<option value="">— Select —</option>'+categories.map(c=>`<option value="${c.id}" ${c.id===p.category_id?'selected':''}>${c.name}</option>`).join('');
+  const icsel=$('icm-parent');icsel.innerHTML='<option value="">— None (top-level) —</option>'+categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  openModal('modal-product');
+}
+function handleProductSave(e){e.preventDefault();closeModal('modal-product');showToast(editingProductId?'Product updated':'Product created','success');renderInventory();return false;}
+function openInlineCategoryModal(){openModal('modal-inline-category');}
+function handleInlineCategorySave(e){e.preventDefault();closeModal('modal-inline-category');showToast('Category created and selected','success');return false;}
+function openAdjustModal(productId){
+  const sel=$('adj-product');sel.innerHTML='<option value="">— Select —</option>'+products.map(p=>`<option value="${p.id}" ${p.id===productId?'selected':''}>${p.sku} — ${p.name}</option>`).join('');
+  if(productId){$('adj-product-select-wrap').style.display='none';$('adj-product-label-wrap').style.display='';$('adj-product-label').textContent=getP(productId).sku+' — '+getP(productId).name;}
+  else{$('adj-product-select-wrap').style.display='';$('adj-product-label-wrap').style.display='none';$('adj-product-label').textContent='';}
+  openModal('modal-adjust');
+}
+function handleAdjustSave(e){e.preventDefault();closeModal('modal-adjust');showToast('Stock adjusted','success');renderInventory();return false;}
+function loadMovements(productId){
+  const p=getP(productId);
+  $('mv-title').textContent=p.sku+' — '+p.name;
+  const pm=movements.filter(m=>m.product_id===productId);
+  let html=`<div class="text-xs mb-3" style="color:var(--text-secondary)">Current stock: <strong class="${p.current_stock<=0?'text-red-500':p.current_stock<=p.low_stock_threshold?'text-amber-500':'text-emerald-500'}">${p.current_stock}</strong></div>`;
+  if(!pm.length){html+='<div class="text-sm italic" style="color:var(--text-tertiary)">No movements recorded.</div>';}
+  else{html+=pm.map(m=>`<div class="movement-item"><div class="flex justify-between"><span><strong>${m.type}</strong> · ${m.reference_type} #${m.reference_id}</span><span class="${m.quantity>=0?'text-emerald-500':'text-red-500'} font-semibold">${m.quantity>=0?'+':''}${m.quantity}</span></div><div class="pay-hist-meta">${fmtDate(m.date)} · ${m.created_by}</div>${m.notes?`<div class="pay-hist-meta">${m.notes}</div>`:''}</div>`).join('');}
+  $('mv-body').innerHTML=html;
+  openSlide('slide-movement');
+}
+
+// ============================ PAYMENTS ============================
+let paymentPage=1;
+const PAYMENTS_PER_PAGE=5;
+function renderPayments(page=1){
+  paymentPage=page;
+  const q=$('payment-search').value.toLowerCase(),m=$('payment-method-filter').value,st=$('payment-status-filter').value,df=$('payment-date-from').value,dt=$('payment-date-to').value;
+  const all=orders.flatMap(o=>o.payments.map(p=>({...p,order:o,customer:getC(o.customer_id)})));
+  let f=all.filter(p=>{const matchQ=!q||p.payment_number.toLowerCase().includes(q)||p.order.order_number.toLowerCase().includes(q);const matchM=!m||p.payment_method===m;const matchSt=!st||p.status===st;const matchDate=(!df||new Date(p.created_at)>=new Date(df))&&(!dt||new Date(p.created_at)<=new Date(dt));return matchQ&&matchM&&matchSt&&matchDate;});
+  const totalPages=Math.ceil(f.length/PAYMENTS_PER_PAGE)||1;
+  const start=(page-1)*PAYMENTS_PER_PAGE;
+  const pageItems=f.slice(start,start+PAYMENTS_PER_PAGE);
+  const tb=$('payments-table-body');
+  if(!pageItems.length){tb.innerHTML=`<tr><td colspan="8"><div class="empty-state"><i class="fas fa-credit-card"></i><div class="font-semibold">No payments found</div></div></td></tr>`;}
+  else{tb.innerHTML=pageItems.map(p=>`<tr><td class="td-mono font-medium"><a href="#" onclick="openPaymentSlide(${p.id});return false" style="color:var(--primary)">${p.payment_number}</a></td><td class="td-mono text-xs">${p.order.order_number}</td><td>${p.customer.first_name} ${p.customer.last_name}</td><td class="font-semibold">${fmtCurrency(p.amount)}</td><td>${methodLabel(p.payment_method)}</td><td><span class="badge ${p.status==='confirmed'?'badge-paid':'badge-cancelled'}">${p.status.charAt(0).toUpperCase()+p.status.slice(1)}</span></td><td>${fmtDate(p.created_at)}</td><td><button onclick="openPaymentSlide(${p.id})" class="btn-icon" title="View"><i class="fas fa-eye"></i></button></td></tr>`).join('');}
+  renderPagination('payments-pagination',page,totalPages,'renderPayments');
+}
+function clearPaymentFilters(){document.getElementById('payment-search').value='';document.getElementById('payment-method-filter').value='';document.getElementById('payment-status-filter').value='';document.getElementById('payment-date-from').value='';document.getElementById('payment-date-to').value='';renderPayments();}
+let currentSlidePaymentOrder=null;
+function openPaymentSlide(id){
+  const all=orders.flatMap(o=>o.payments.map(p=>({...p,order:o,customer:getC(o.customer_id)})));
+  const p=all.find(x=>x.id===id);if(!p)return;
+  currentSlidePaymentOrder=p.order.id;
+  $('sp-number').textContent=p.payment_number;
+  $('sp-date').textContent=fmtDate(p.created_at);
+  $('sp-by').textContent=p.recorded_by;
+  $('sp-details').innerHTML=`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Amount</span><span class="font-bold text-lg">${fmtCurrency(p.amount)}</span></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Method</span><span class="font-medium">${methodLabel(p.payment_method)}</span></div>${p.reference_number?`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Reference</span><span class="td-mono font-medium">${p.reference_number}</span></div>`:''}<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Date</span><span class="font-medium">${fmtDate(p.created_at)}</span></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Recorded By</span><span class="font-medium">${p.recorded_by}</span></div>${p.notes?`<div class="mt-2 pt-2 text-sm" style="border-top:1px solid var(--border-color);color:var(--text-secondary)">${p.notes}</div>`:''}`;
+  $('sp-order').innerHTML=`<div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Order #</span><a href="#" onclick="openOrderSlide(${p.order.id});return false" class="td-mono font-medium" style="color:var(--primary)">${p.order.order_number}</a></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Status</span>${statusBadge(p.order.status)}</div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Customer</span><a href="#" onclick="openCustomerSlide(${p.customer.id});return false" class="font-medium">${p.customer.first_name} ${p.customer.last_name}</a></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Order Total</span><span class="font-medium">${fmtCurrency(p.order.total_amount)}</span></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Amount Paid</span><span class="font-medium">${fmtCurrency(p.order.payments.reduce((a,pp)=>a+pp.amount,0))}</span></div><div class="flex justify-between text-sm py-1"><span style="color:var(--text-secondary)">Outstanding</span><strong class="${p.order.total_amount>p.order.payments.reduce((a,pp)=>a+pp.amount,0)?'text-red-500':'text-emerald-500'}">${fmtCurrency(Math.max(0,p.order.total_amount-p.order.payments.reduce((a,pp)=>a+pp.amount,0)))}</strong></div>`;
+  openSlide('slide-payment');
+}
+function openPaymentModalFor(orderId){const o=orders.find(x=>x.id===orderId);$('paym-amount').value=Math.max(0,o.total_amount-o.payments.reduce((a,p)=>a+p.amount,0)).toFixed(2);$('paym-balance').textContent=fmtCurrency(Math.max(0,o.total_amount-o.payments.reduce((a,p)=>a+p.amount,0)));openModal('modal-payment');}
+function togglePaymRef(){const checked=document.querySelector('[name="paym-method"]:checked').value;$('paym-ref-group').style.display=['bank_transfer','card','check'].includes(checked)?'':'none';}
+function handlePaymentSave(e){e.preventDefault();closeModal('modal-payment');showToast('Payment recorded','success');return false;}
+
+// ============================ CATEGORIES ============================
+let catPage=1;
+const CATS_PER_PAGE=5;
+function renderCategories(page=1){
+  catPage=page;
+  const totalPages=Math.ceil(categories.length/CATS_PER_PAGE)||1;
+  const start=(page-1)*CATS_PER_PAGE;
+  const pageItems=categories.slice(start,start+CATS_PER_PAGE);
+  const tb=$('categories-table-body');
+  tb.innerHTML=pageItems.map(c=>`<tr><td><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-lg grid place-items-center text-xs" style="background:var(--bg-base)"><i class="fas fa-tag"></i></div><div><div class="font-semibold text-sm">${c.name}</div><div class="text-xs" style="color:var(--text-tertiary)">${c.description||''}</div></div></div></td><td>${c.parent_category?'<span class="badge badge-pending">Subcategory</span>':'<span class="badge badge-active">Parent</span>'}</td><td>${c.parent_category?getCat(c.parent_category).name:'—'}</td><td>${c.product_count}</td><td><button onclick="openCategoryModal(${c.id})" class="btn-icon mr-1"><i class="fas fa-pen"></i></button><button onclick="deleteCategory(${c.id})" class="btn-icon"><i class="fas fa-trash"></i></button></td></tr>`).join('');
+  renderPagination('categories-pagination',page,totalPages,'renderCategories');
+}
+let editingCategoryId=null;
+function openCategoryModal(editId){
+  editingCategoryId=editId||null;
+  $('category-modal-title').textContent=editId?'Edit Category':'New Category';
+  const c=editId?getCat(editId):{};
+  $('catm-name').value=c.name||'';$('catm-desc').value=c.description||'';
+  const psel=$('catm-parent');psel.innerHTML='<option value="">— None (top-level) —</option>'+categories.filter(x=>x.id!==editId).map(x=>`<option value="${x.id}" ${x.id===c.parent_category?'selected':''}>${x.name}</option>`).join('');
+  openModal('modal-category');
+}
+function handleCategorySave(e){e.preventDefault();closeModal('modal-category');showToast(editingCategoryId?'Category updated':'Category created','success');renderCategories();return false;}
+function deleteCategory(id){if(!confirm('Delete category?'))return;showToast('Category deleted');renderCategories();}
+
+// ============================ USERS ============================
+function renderUsers(){
+  const tb=$('users-table-body');
+  tb.innerHTML=users.map(u=>`<tr style="${u.is_active?'':'opacity:0.5'}"><td><div class="flex items-center gap-3"><div class="w-9 h-9 rounded-full grid place-items-center text-xs font-bold text-white" style="background:linear-gradient(135deg,${u.role==='Admin'?'var(--primary),#7c3aed':u.role==='Manager'?'#10b981,#059669':'#64748b,#475569'})">${u.first_name[0]}${u.last_name[0]}</div><div><div class="font-semibold text-sm">${u.first_name} ${u.last_name}</div><div class="text-xs" style="color:var(--text-tertiary)">${u.email}</div></div></div></td><td><span class="badge ${u.role==='Admin'?'badge-confirmed':u.role==='Manager'?'badge-paid':'badge-draft'}">${u.role}</span></td><td>${u.is_active?'<span class="badge badge-paid">Active</span>':'<span class="badge badge-cancelled">Inactive</span>'}</td><td style="color:var(--text-tertiary)">${u.last_login}</td><td><button onclick="openUserEditModal(${u.id})" class="btn-icon mr-1" title="Edit"><i class="fas fa-pen"></i></button>${u.id!==1?`<button onclick="toggleUser(${u.id})" class="btn-icon" title="${u.is_active?'Deactivate':'Activate'}"><i class="fas fa-${u.is_active?'ban':'check'}"></i></button>`:''}</td></tr>`).join('');
+}
+function toggleUser(id){const u=users.find(x=>x.id===id);u.is_active=!u.is_active;showToast(`${u.first_name} ${u.is_active?'activated':'deactivated'}`);renderUsers();}
+function openInviteModal(){openModal('modal-invite');}
+function handleInviteSave(e){e.preventDefault();closeModal('modal-invite');showToast('Invitation sent','success');renderUsers();return false;}
+function openUserEditModal(id){
+  const u=users.find(x=>x.id===id);if(!u)return;
+  $('user-modal-title').textContent='Edit '+u.first_name+' '+u.last_name;
+  $('um-fname').value=u.first_name;$('um-lname').value=u.last_name;$('um-email').value=u.email;
+  $('um-role').value=u.role;$('um-active').checked=u.is_active;
+  openModal('modal-user-edit');
+}
+function handleUserSave(e){e.preventDefault();closeModal('modal-user-edit');showToast('User updated','success');renderUsers();return false;}
+function handleUserPassword(e){e.preventDefault();const p1=$('um-pass1').value,p2=$('um-pass2').value;if(p1!==p2){showToast('Passwords do not match','error');return false;}if(p1.length<8){showToast('Password must be at least 8 characters','error');return false;}showToast('Password updated','success');$('um-pass1').value='';$('um-pass2').value='';return false;}
+
+// ============================ SETTINGS HELPERS ============================
+function showOcrKeyInput(){
+  $('ocr-key-display').classList.add('hidden');
+  $('ocr-key-input').classList.remove('hidden');
+}
+function testOcrConnection(){
+  const status=$('ocr-health');
+  status.className='badge badge-pending';status.textContent='Checking…';
+  setTimeout(()=>{status.className='badge badge-paid';status.textContent='Connected';showToast('VEPay connection successful','success');},1500);
+}
+
+// ============================ MODAL / SLIDE HELPERS ============================
+function openModal(id){$(id).classList.add('open');}
+function closeModal(id){$(id).classList.remove('open');}
+function openSlide(id){$(id+'-overlay').classList.add('open');$(id).classList.add('open');}
+function closeSlide(id){$(id+'-overlay').classList.remove('open');$(id).classList.remove('open');}
+function toggleDropdown(id){$(id).classList.toggle('open');}
+document.addEventListener('click',e=>{document.querySelectorAll('.dropdown.open').forEach(d=>{if(!d.contains(e.target))d.classList.remove('open');});});
+
+// ============================ INIT ============================
+document.addEventListener('DOMContentLoaded',()=>{});
+</script>
+</body>
+</html>

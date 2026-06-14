@@ -1,0 +1,44 @@
+{% load i18n %}
+<div class="modal-content" style="max-width:420px">
+  <div class="modal-header">
+    <h3 class="font-semibold">{% trans "Adjust Stock" %}</h3>
+    <button type="button" class="btn-icon" onclick="closeModal('modal-adjust')"><i class="fas fa-times"></i></button>
+  </div>
+  <form method="post" action="{% url 'inventory-adjust' %}">
+    {% csrf_token %}
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Product" %} <span class="req">*</span></label>
+        <select name="product_id" class="input" required>
+          <option value="">{% trans "— Select product —" %}</option>
+          {% for product in products %}
+          <option value="{{ product.pk }}">{{ product.sku }} — {{ product.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">{% trans "Movement Type" %} <span class="req">*</span></label>
+        <select name="movement_type" class="input" required>
+          <option value="purchase">{% trans "Purchase — add stock received from supplier" %}</option>
+          <option value="adjustment">{% trans "Adjustment — correct a counting error" %}</option>
+          <option value="return">{% trans "Return — stock returned from a customer" %}</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="label">
+          {% trans "Quantity" %} <span class="req">*</span>
+          <span style="font-weight:400;color:var(--text-tertiary);font-size:0.8rem;">{% trans "(positive = add, negative = deduct)" %}</span>
+        </label>
+        <input type="number" name="quantity" class="input" step="1" required placeholder="{% trans 'e.g. 50 or -10' %}">
+      </div>
+      <div class="form-group">
+        <label class="label">{% trans "Notes" %} <span style="font-weight:400;color:var(--text-tertiary);font-size:0.8rem;">{% trans "(optional)" %}</span></label>
+        <textarea name="notes" class="input" rows="2" placeholder="{% trans 'Reason for adjustment, PO number, etc.' %}"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('modal-adjust')">{% trans "Cancel" %}</button>
+      <button type="submit" class="btn btn-primary">{% trans "Record Adjustment" %}</button>
+    </div>
+  </form>
+</div>

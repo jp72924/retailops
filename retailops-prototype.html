@@ -1,0 +1,1369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RetailOps Prototype</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          primary: '#2563EB',
+          secondary: '#1E293B',
+          success: '#16A34A',
+          warning: '#D97706',
+          danger: '#DC2626',
+          surface: '#FFFFFF',
+          background: '#F8FAFC',
+          border: '#E2E8F0',
+          muted: '#64748B',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  :root { --primary:#2563EB; --secondary:#1E293B; --success:#16A34A; --warning:#D97706; --danger:#DC2626; --background:#F8FAFC; --surface:#FFFFFF; --text:#0F172A; --muted:#64748B; --border:#E2E8F0; }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:0.9rem;color:var(--text);background:var(--background)}
+  a{color:var(--primary);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .app-nav{background:var(--secondary);height:56px;display:flex;align-items:center;padding:0 24px;position:sticky;top:0;z-index:100}
+  .app-nav .logo{color:#fff;font-weight:700;font-size:1.1rem;margin-right:32px;display:flex;align-items:center;gap:8px;text-decoration:none}
+  .nav-links{display:flex;flex:1}
+  .nav-link{color:#94A3B8;padding:0 16px;height:56px;display:flex;align-items:center;font-size:0.875rem;border-bottom:2px solid transparent;transition:all .15s;text-decoration:none;cursor:pointer}
+  .nav-link:hover{color:#fff;text-decoration:none}
+  .nav-link.active{color:#fff;border-bottom-color:var(--primary)}
+  .nav-right{display:flex;align-items:center;gap:12px;margin-left:auto}
+  .user-badge{display:flex;align-items:center;gap:8px;color:#CBD5E1;font-size:0.8rem}
+  .avatar{width:32px;height:32px;background:var(--primary);border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:0.75rem;flex-shrink:0}
+  .role-tag{background:#334155;color:#94A3B8;padding:2px 8px;border-radius:10px;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em}
+  .role-tag.admin{background:var(--primary);color:#fff}
+  .role-tag.manager{background:var(--success);color:#fff}
+  .page{max-width:1280px;margin:0 auto;padding:24px}
+  .page-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:24px;gap:16px}
+  .page-header-actions{display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+  .stat-label{font-size:0.8rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:8px}
+  .stat-value{font-size:1.75rem;font-weight:700;line-height:1}
+  .stat-sub{font-size:0.8rem;color:var(--muted);margin-top:6px}
+  .table-wrap{border:1px solid var(--border);border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+  table{width:100%;border-collapse:collapse;font-size:0.875rem}
+  thead th{background:var(--background);padding:10px 16px;text-align:left;font-size:0.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;border-bottom:1px solid var(--border);font-weight:600}
+  tbody tr{border-bottom:1px solid var(--border);background:var(--surface);transition:background .1s}
+  tbody tr:last-child{border-bottom:none}
+  tbody tr:nth-child(even){background:#FAFBFC}
+  tbody tr:hover{background:#EFF6FF}
+  tbody td{padding:12px 16px;vertical-align:middle}
+  .td-mono{font-family:'SF Mono','Consolas',monospace;font-size:0.82rem}
+  .badge{display:inline-flex;align-items:center;padding:2px 10px;border-radius:12px;font-size:0.72rem;font-weight:600;text-transform:uppercase;letter-spacing:0.04em;white-space:nowrap}
+  .badge-draft{background:#F1F5F9;color:#64748B}
+  .badge-pending{background:#FEF3C7;color:#92400E}
+  .badge-confirmed{background:#DBEAFE;color:#1D4ED8}
+  .badge-paid{background:#DCFCE7;color:#15803D}
+  .badge-shipped{background:#E0E7FF;color:#4338CA}
+  .badge-delivered{background:#D1FAE5;color:#065F46}
+  .badge-cancelled{background:#FEE2E2;color:#B91C1C}
+  .badge-refunded{background:#FFEDD5;color:#C2410C}
+  .badge-admin{background:#DBEAFE;color:#1D4ED8}
+  .badge-manager{background:#DCFCE7;color:#15803D}
+  .badge-staff{background:#F1F5F9;color:#475569}
+  .badge-active{background:#DCFCE7;color:#15803D}
+  .badge-inactive{background:#FEE2E2;color:#B91C1C}
+  .filter-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,0.1)}
+  .pagination{display:flex;gap:4px;align-items:center;justify-content:flex-end;margin-top:16px;flex-wrap:wrap}
+  .pg-btn{padding:5px 10px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--muted);cursor:pointer;font-size:0.8rem;text-decoration:none}
+  .pg-btn:hover:not(.active){background:var(--background)}
+  .pg-btn.active{background:var(--primary);border-color:var(--primary);color:#fff}
+  .pg-btn.disabled{opacity:0.4;pointer-events:none}
+  .empty-state{text-align:center;padding:48px 24px;color:var(--muted)}
+  .alert-banner{display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:8px;margin-bottom:16px;font-size:0.875rem}
+  .alert-warning{background:#FEF3C7;border:1px solid #FCD34D;color:#92400E}
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,0.5);z-index:1000;display:none;align-items:center;justify-content:center;padding:24px}
+  .modal-overlay.open{display:flex}
+  .modal{background:var(--surface);border-radius:8px;box-shadow:0 20px 40px rgba(0,0,0,0.2);width:100%;max-width:560px;max-height:90vh;overflow-y:auto}
+  .modal-header{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .modal-title{font-size:1.1rem;font-weight:700}
+  .modal-close{background:none;border:none;font-size:1.25rem;cursor:pointer;color:var(--muted);line-height:1}
+  .modal-body{padding:24px}
+  .modal-footer{padding:16px 24px;border-top:1px solid var(--border);display:flex;gap:12px;justify-content:flex-end}
+  .side-panel{position:fixed;top:0;right:-420px;width:420px;height:100vh;background:var(--surface);box-shadow:-4px 0 20px rgba(0,0,0,0.12);z-index:500;transition:right .3s ease;display:flex;flex-direction:column}
+  .side-panel.open{right:0}
+  .sp-header{padding:20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .sp-title{font-weight:700;font-size:1rem}
+  .sp-body{padding:20px;overflow-y:auto;flex:1}
+  .toast-container{position:fixed;top:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+  .toast{background:var(--secondary);color:#fff;padding:12px 20px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.2);font-size:0.875rem;display:flex;align-items:center;gap:10px;min-width:280px;pointer-events:all;opacity:0;transform:translateX(120%);transition:all .3s ease}
+  .toast.show{opacity:1;transform:translateX(0)}
+  .toast.success{border-left:4px solid var(--success)}
+  .toast.error{border-left:4px solid var(--danger)}
+  .toast.warning{border-left:4px solid var(--warning)}
+  .dash-grid{display:grid;grid-template-columns:1fr 280px;gap:24px}
+  .quick-actions{display:flex;flex-direction:column;gap:8px}
+  .qa-btn{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:0.875rem;font-weight:500;transition:all .15s;color:var(--text);text-decoration:none}
+  .qa-btn:hover{background:#EFF6FF;border-color:var(--primary);color:var(--primary);text-decoration:none}
+  .info-panel{background:var(--background);border:1px solid var(--border);border-radius:8px;padding:16px}
+  .info-row{display:flex;gap:8px;margin-bottom:6px;font-size:0.875rem}
+  .info-label{color:var(--muted);min-width:100px;font-size:0.8rem;flex-shrink:0}
+  .pay-hist-item{padding:12px 0;border-bottom:1px solid var(--border);font-size:0.85rem}
+  .pay-hist-item:last-child{border-bottom:none}
+  .pay-hist-num{font-weight:600;color:var(--primary);font-family:monospace}
+  .pay-hist-meta{color:var(--muted);font-size:0.78rem;margin-top:4px}
+  .movement-item{padding:10px 0;border-bottom:1px solid var(--border);font-size:0.82rem}
+  .movement-item:last-child{border-bottom:none}
+  .line-items-table input,.line-items-table select{padding:6px 8px;font-size:0.82rem;border:1px solid var(--border);border-radius:4px}
+  .totals-box{background:var(--background);border:1px solid var(--border);border-radius:8px;padding:16px 20px}
+  .totals-row{display:flex;justify-content:space-between;padding:6px 0;font-size:0.875rem}
+  .totals-row.total{font-weight:700;font-size:1.05rem;border-top:1px solid var(--border);padding-top:10px;margin-top:4px}
+  .product-thumb{width:44px;aspect-ratio:1/1;display:grid;place-items:center;background:var(--background);border:1px solid var(--border);border-radius:4px;color:var(--muted);font-size:0.75rem;font-weight:700}
+  .product-thumb img{width:100%;height:100%;object-fit:cover;border-radius:4px}
+  .stock-ok{color:var(--success);font-weight:600}
+  .stock-low{color:var(--warning);font-weight:600}
+  .stock-out{color:var(--danger);font-weight:600}
+  .radio-group{display:flex;gap:8px;flex-wrap:wrap}
+  .radio-opt{display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:0.875rem;transition:all .15s}
+  .radio-opt:has(input:checked){border-color:var(--primary);background:#EFF6FF;color:var(--primary)}
+  @media(max-width:768px){
+    .dash-grid{grid-template-columns:1fr}
+    .stat-grid{grid-template-columns:1fr 1fr}
+    .nav-links{display:none}
+    .side-panel{width:100%;right:-100%}
+    .page-header{flex-direction:column}
+  }
+  .view{display:none}
+  .view.active{display:block}
+  .login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:var(--background)}
+  .login-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,0.08);width:100%;max-width:400px;padding:40px}
+  .login-logo{text-align:center;margin-bottom:28px}
+  .login-logo .brand{font-size:1.75rem;font-weight:800;color:var(--secondary)}
+  .login-logo .brand .dot{color:var(--primary)}
+  .login-logo .tagline{font-size:0.8rem;color:var(--muted);margin-top:4px}
+  .form-group{display:flex;flex-direction:column;gap:4px;margin-bottom:16px}
+  .form-label{font-size:0.8rem;font-weight:600;color:var(--secondary)}
+  .form-control{padding:8px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:0.875rem;font-family:inherit;color:var(--text);background:var(--surface);width:100%;transition:border-color .15s,box-shadow .15s}
+  .form-control:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,0.15)}
+  .form-section{margin-bottom:24px}
+  .form-section-title{font-size:0.875rem;font-weight:700;color:var(--secondary);margin-bottom:16px;padding-bottom:8px;border-bottom:1px solid var(--border);text-transform:uppercase;letter-spacing:0.04em}
+  .form-actions{display:flex;gap:12px;padding-top:16px;border-top:1px solid var(--border);margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- Toast Container -->
+<div id="toast-container" class="toast-container"></div>
+
+<!-- ============================ LOGIN VIEW ============================ -->
+<div id="view-login" class="view active">
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="brand">&#9632;<span class="dot">R</span>etailOps</div>
+        <div class="tagline">Unified Retail &amp; Order Management</div>
+      </div>
+      <div id="login-error" class="hidden mb-5 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-sm flex items-center gap-2">
+        <i class="fas fa-times"></i> <span id="login-error-text">Invalid email or password.</span>
+      </div>
+      <form id="login-form" onsubmit="return handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label" for="login-email">Email Address</label>
+          <input type="email" id="login-email" class="form-control" placeholder="you@company.com" required autofocus value="admin@retailops.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="login-password">Password</label>
+          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required value="password">
+        </div>
+        <label class="flex items-center gap-2 text-sm mb-5 cursor-pointer">
+          <input type="checkbox" class="accent-primary"> Remember me
+        </label>
+        <button type="submit" class="block w-full bg-primary text-white border-none rounded-md py-2.5 text-sm font-semibold cursor-pointer hover:bg-blue-700 transition">Sign In</button>
+      </form>
+      <div class="text-center mt-5 text-sm text-muted">
+        <a href="#" onclick="showToast('Reset link sent to your email','success')">Forgot password?</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ APP SHELL ============================ -->
+<div id="app-shell" class="view">
+  <nav class="app-nav">
+    <a href="#" onclick="navTo('dashboard')" class="logo">&#9632;<span style="color:var(--primary)">R</span>etailOps</a>
+    <div class="nav-links" id="nav-links">
+      <a href="#" onclick="navTo('dashboard')" class="nav-link active" data-view="dashboard">Dashboard</a>
+      <a href="#" onclick="navTo('orders')" class="nav-link" data-view="orders">Orders</a>
+      <a href="#" onclick="navTo('customers')" class="nav-link" data-view="customers">Customers</a>
+      <a href="#" onclick="navTo('inventory')" class="nav-link" data-view="inventory">Inventory</a>
+      <a href="#" onclick="navTo('categories')" class="nav-link" data-view="categories">Categories</a>
+      <a href="#" onclick="navTo('payments')" class="nav-link" data-view="payments">Payments</a>
+      <a href="#" onclick="navTo('users')" class="nav-link" data-view="users">Users</a>
+      <a href="#" onclick="navTo('settings')" class="nav-link" data-view="settings">Settings</a>
+    </div>
+    <div class="nav-right">
+      <div class="nav-fx" title="Current exchange rate">
+        <span style="font-weight:700;color:var(--primary);font-size:0.65rem;letter-spacing:0.05em;text-transform:uppercase">FX</span>
+        <span style="font-variant-numeric:tabular-nums">$1 ≈ Bs.36.50</span>
+      </div>
+      <div class="user-badge">
+        <div class="avatar">AD</div>
+        <div>
+          <div style="color:#fff;font-size:0.82rem;font-weight:500">Alex Doe</div>
+          <span class="role-tag admin">Admin</span>
+        </div>
+      </div>
+      <button onclick="handleLogout()" class="px-3 py-1.5 rounded-md text-xs border border-slate-600 text-slate-400 hover:border-red-500 hover:text-red-500 transition bg-transparent cursor-pointer">Logout</button>
+    </div>
+  </nav>
+
+  <!-- ============================ DASHBOARD ============================ -->
+  <div id="view-dashboard" class="view active">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Dashboard</div>
+          <div class="text-sm text-muted mt-0.5">Welcome back, Alex. Here's what's happening today.</div>
+        </div>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-card" style="border-left:4px solid var(--primary)">
+          <div class="stat-label">Orders This Month</div>
+          <div class="stat-value" style="color:var(--primary)">42</div>
+          <div class="stat-sub">Sales orders created</div>
+        </div>
+        <div class="stat-card" style="border-left:4px solid var(--success)">
+          <div class="stat-label">Revenue This Month</div>
+          <div class="stat-value" style="color:var(--success)">$12,450.00</div>
+          <div class="stat-sub">From paid orders</div>
+        </div>
+        <div class="stat-card" style="border-left:4px solid var(--warning)">
+          <div class="stat-label">Pending Payments</div>
+          <div class="stat-value" style="color:var(--warning)">7</div>
+          <div class="stat-sub">Orders awaiting payment</div>
+        </div>
+        <div class="stat-card" style="border-left:4px solid var(--danger)">
+          <div class="stat-label">Low Stock Items</div>
+          <div class="stat-value" style="color:var(--danger)">3</div>
+          <div class="stat-sub">Below threshold</div>
+        </div>
+      </div>
+      <div class="dash-grid">
+        <div style="display:flex;flex-direction:column;gap:24px">
+          <div class="bg-white border border-border rounded-lg shadow-sm">
+            <div class="flex items-center justify-between p-4 border-b border-border">
+              <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:6px;overflow:hidden">
+                <button id="tab-btn-orders" onclick="dashTab('orders')" class="px-3 py-1.5 text-xs font-medium bg-primary text-white border-none" style="border-radius:0">Recent Orders</button>
+                <button id="tab-btn-alerts" onclick="dashTab('alerts')" class="px-3 py-1.5 text-xs font-medium bg-white text-text border-none" style="border-radius:0">Inventory Alerts</button>
+              </div>
+              <a href="#" onclick="navTo('orders')" class="text-primary text-sm hover:underline">View all →</a>
+            </div>
+            <div id="dash-tab-orders">
+              <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+                <table>
+                  <thead><tr><th>Order #</th><th>Customer</th><th>Date</th><th>Status</th><th>Total</th></tr></thead>
+                  <tbody id="dash-orders-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <div id="dash-tab-alerts" style="display:none" class="p-5">
+              <div id="dash-alerts-body" class="flex flex-col gap-2.5"></div>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:24px">
+          <div class="bg-white border border-border rounded-lg shadow-sm">
+            <div class="p-4 border-b border-border font-semibold text-sm">Quick Actions</div>
+            <div class="p-3">
+              <div class="quick-actions">
+                <a href="#" onclick="navTo('orders');setTimeout(()=>openOrderCreate(),100)" class="qa-btn"><i class="fas fa-plus text-primary"></i> New Order</a>
+                <a href="#" onclick="navTo('customers');setTimeout(()=>openCustomerCreate(),100)" class="qa-btn"><i class="fas fa-user text-primary"></i> Register Customer</a>
+                <a href="#" onclick="navTo('payments')" class="qa-btn"><i class="fas fa-credit-card text-primary"></i> View Payments</a>
+                <a href="#" onclick="navTo('inventory')" class="qa-btn"><i class="fas fa-box text-primary"></i> Inventory</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ ORDERS LIST ============================ -->
+  <div id="view-orders" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Sales Orders</div>
+          <div class="text-sm text-muted">Manage and track all sales orders</div>
+        </div>
+        <div class="page-header-actions">
+          <button onclick="openOrderCreate()" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition"><i class="fas fa-plus mr-1"></i> New Order</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="order-search" class="form-control" style="width:auto;min-width:180px" placeholder="🔍 Search order # or customer…" oninput="renderOrders()">
+        <select id="order-status-filter" class="form-control" style="width:auto;min-width:140px" onchange="renderOrders()">
+          <option value="">All Statuses</option>
+          <option value="draft">Draft</option>
+          <option value="pending">Pending</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="paid">Paid</option>
+          <option value="shipped">Shipped</option>
+          <option value="delivered">Delivered</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <button onclick="renderOrders()" class="bg-primary text-white px-3 py-1.5 rounded-md text-xs font-medium">Filter</button>
+        <button onclick="document.getElementById('order-search').value='';document.getElementById('order-status-filter').value='';renderOrders()" class="bg-white border border-border text-text px-3 py-1.5 rounded-md text-xs font-medium hover:bg-gray-50">Clear</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Order #</th><th>Customer</th><th>Date</th><th>Status</th><th>Items</th><th>Total</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="orders-table-body"></tbody>
+        </table>
+      </div>
+      <div id="orders-pagination" class="pagination"></div>
+    </div>
+  </div>
+
+  <!-- ============================ ORDER DETAIL / CREATE ============================ -->
+  <div id="view-order-detail" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold" id="od-title">New Order</div>
+          <div class="text-sm text-muted" id="od-subtitle">Create a new sales order</div>
+        </div>
+        <div class="page-header-actions" id="od-actions"></div>
+      </div>
+      <form id="order-form" onsubmit="return handleOrderSave(event)">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div class="lg:col-span-2 flex flex-col gap-6">
+            <!-- Customer -->
+            <div class="bg-white border border-border rounded-lg shadow-sm">
+              <div class="p-4 border-b border-border flex items-center justify-between">
+                <div class="font-semibold text-sm">Customer</div>
+                <span class="text-xs text-muted" id="od-customer-hint">Select a customer for this order</span>
+              </div>
+              <div class="p-5" id="od-customer-panel">
+                <div class="form-group" id="od-customer-select-wrap">
+                  <label class="form-label">Customer <span class="text-danger">*</span></label>
+                  <select id="od-customer" class="form-control" required>
+                    <option value="">— Select customer —</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <!-- Line Items -->
+            <div class="bg-white border border-border rounded-lg shadow-sm">
+              <div class="p-4 border-b border-border flex items-center justify-between">
+                <div class="font-semibold text-sm">Line Items</div>
+                <button type="button" onclick="addLineItem()" class="bg-primary text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-700" id="od-add-item-btn"><i class="fas fa-plus mr-1"></i> Add Item</button>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="line-items-table w-full">
+                  <thead>
+                    <tr><th>Product</th><th>SKU</th><th style="width:80px">Qty</th><th style="width:130px">Unit Price</th><th style="width:120px">Line Total</th><th style="width:40px"></th></tr>
+                  </thead>
+                  <tbody id="line-items-body"></tbody>
+                </table>
+              </div>
+              <div class="p-4 border-t border-border">
+                <div style="max-width:300px;margin-left:auto">
+                  <div class="totals-box">
+                    <div class="totals-row"><span>Subtotal</span><span id="od-subtotal">$0.00</span></div>
+                    <div class="totals-row"><span>Tax</span><span>$0.00</span></div>
+                    <div class="totals-row"><span>Discount</span><input type="number" id="od-discount" class="form-control" value="0.00" step="0.01" min="0" style="width:100px;text-align:right;padding:4px 8px" onchange="recalcTotals()"></div>
+                    <div class="totals-row total"><span>Grand Total</span><span id="od-grand-total">$0.00</span></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <!-- Notes -->
+            <div class="bg-white border border-border rounded-lg shadow-sm">
+              <div class="p-4 border-b border-border font-semibold text-sm">Order Notes</div>
+              <div class="p-5">
+                <textarea id="od-notes" class="form-control" rows="3" placeholder="Internal notes about this order…"></textarea>
+              </div>
+            </div>
+          </div>
+          <div class="flex flex-col gap-6">
+            <div class="bg-white border border-border rounded-lg shadow-sm" id="od-payment-card" style="display:none">
+              <div class="p-4 border-b border-border flex items-center justify-between">
+                <div class="font-semibold text-sm">Payments</div>
+                <button type="button" onclick="openPaymentModal()" class="bg-success text-white px-3 py-1 rounded text-xs font-medium hover:bg-green-700"><i class="fas fa-plus mr-1"></i> Record</button>
+              </div>
+              <div class="p-5" id="od-payments-list"></div>
+            </div>
+            <div class="bg-white border border-border rounded-lg shadow-sm" id="od-info-card" style="display:none">
+              <div class="p-4 border-b border-border font-semibold text-sm">Order Info</div>
+              <div class="p-5">
+                <div class="info-panel" id="od-info-panel"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="line-item-count" value="0">
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================ CUSTOMERS LIST ============================ -->
+  <div id="view-customers" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Customers</div>
+          <div class="text-sm text-muted">124 customers registered</div>
+        </div>
+        <div class="page-header-actions">
+          <button onclick="openCustomerCreate()" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition"><i class="fas fa-plus mr-1"></i> Register Customer</button>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="customer-search" class="form-control" style="width:auto;min-width:220px" placeholder="🔍 Search name, email, ID or phone…" oninput="renderCustomers()">
+        <button onclick="renderCustomers()" class="bg-primary text-white px-3 py-1.5 rounded-md text-xs font-medium">Search</button>
+        <button onclick="document.getElementById('customer-search').value='';renderCustomers()" class="bg-white border border-border text-text px-3 py-1.5 rounded-md text-xs font-medium hover:bg-gray-50">Clear</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Name</th><th>ID Number</th><th>Email</th><th>Phone</th><th>City</th><th>Country</th><th>Registered</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="customers-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CUSTOMER DETAIL ============================ -->
+  <div id="view-customer-detail" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold" id="cd-name">Customer Name</div>
+          <div class="text-sm text-muted" id="cd-since">Customer since Jan 1, 2024</div>
+        </div>
+        <div class="page-header-actions">
+          <button onclick="openCustomerEdit(currentCustomerId)" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Edit</button>
+          <button onclick="openOrderCreate(currentCustomerId)" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition"><i class="fas fa-plus mr-1"></i> New Order</button>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-white border border-border rounded-lg shadow-sm">
+          <div class="p-4 border-b border-border font-semibold text-sm">Contact Details</div>
+          <div class="p-5"><div class="info-panel" id="cd-contact"></div></div>
+        </div>
+        <div class="bg-white border border-border rounded-lg shadow-sm">
+          <div class="p-4 border-b border-border font-semibold text-sm">Address</div>
+          <div class="p-5"><div class="info-panel" id="cd-address"></div></div>
+        </div>
+      </div>
+      <div class="bg-white border border-border rounded-lg shadow-sm">
+        <div class="p-4 border-b border-border flex items-center justify-between">
+          <div class="font-semibold text-sm">Order History</div>
+          <button onclick="openOrderCreate(currentCustomerId)" class="bg-primary text-white px-3 py-1 rounded text-xs font-medium hover:bg-blue-700"><i class="fas fa-plus mr-1"></i> New Order</button>
+        </div>
+        <div class="table-wrap" style="border:none;border-radius:0;box-shadow:none">
+          <table>
+            <thead><tr><th>Order #</th><th>Date</th><th>Status</th><th>Items</th><th>Total</th><th>Actions</th></tr></thead>
+            <tbody id="cd-orders"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CUSTOMER FORM ============================ -->
+  <div id="view-customer-form" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold" id="cf-title">Register Customer</div>
+          <div class="text-sm text-muted" id="cf-subtitle">Add a new customer to the system</div>
+        </div>
+        <a href="#" onclick="navTo('customers')" class="text-muted text-sm hover:underline">← Back</a>
+      </div>
+      <div class="bg-white border border-border rounded-lg shadow-sm" style="max-width:800px">
+        <div class="p-6">
+          <form onsubmit="return handleCustomerSave(event)">
+            <div class="form-section">
+              <div class="form-section-title">Personal Information</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group"><label class="form-label">First Name <span class="text-danger">*</span></label><input type="text" id="cf-first_name" class="form-control" required></div>
+                <div class="form-group"><label class="form-label">Last Name <span class="text-danger">*</span></label><input type="text" id="cf-last_name" class="form-control" required></div>
+                <div class="form-group"><label class="form-label">Email Address <span class="text-danger">*</span></label><input type="email" id="cf-email" class="form-control" required></div>
+                <div class="form-group"><label class="form-label">Phone Number</label><input type="tel" id="cf-phone" class="form-control"></div>
+                <div class="form-group"><label class="form-label">ID Number</label><input type="text" id="cf-national_id" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Date of Birth</label><input type="date" id="cf-dob" class="form-control"></div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">Address</div>
+              <div class="flex flex-col gap-4">
+                <div class="form-group"><label class="form-label">Address Line 1 <span class="text-danger">*</span></label><input type="text" id="cf-address1" class="form-control" required></div>
+                <div class="form-group"><label class="form-label">Address Line 2</label><input type="text" id="cf-address2" class="form-control"></div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="form-group"><label class="form-label">City <span class="text-danger">*</span></label><input type="text" id="cf-city" class="form-control" required></div>
+                  <div class="form-group"><label class="form-label">State <span class="text-danger">*</span></label><input type="text" id="cf-state" class="form-control" required></div>
+                  <div class="form-group"><label class="form-label">Postal Code <span class="text-danger">*</span></label><input type="text" id="cf-postal" class="form-control" required></div>
+                </div>
+                <div class="form-group"><label class="form-label">Country <span class="text-danger">*</span></label><input type="text" id="cf-country" class="form-control" value="United States" required></div>
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">Notes</div>
+              <div class="form-group"><label class="form-label">Internal Notes</label><textarea id="cf-notes" class="form-control" rows="3"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Save</button>
+              <button type="button" onclick="navTo('customers')" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ PAYMENTS ============================ -->
+  <div id="view-payments" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Payments</div>
+          <div class="text-sm text-muted">All recorded payments</div>
+        </div>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="payment-search" class="form-control" style="width:auto;min-width:180px" placeholder="🔍 Search payment # or order #…" oninput="renderPayments()">
+        <select id="payment-method-filter" class="form-control" style="width:auto;min-width:140px" onchange="renderPayments()">
+          <option value="">All Methods</option>
+          <option value="cash">Cash</option>
+          <option value="bank_transfer">Bank Transfer</option>
+          <option value="card">Card</option>
+          <option value="check">Check</option>
+          <option value="mobile_payment">Mobile Payment</option>
+        </select>
+        <button onclick="renderPayments()" class="bg-primary text-white px-3 py-1.5 rounded-md text-xs font-medium">Filter</button>
+        <button onclick="document.getElementById('payment-search').value='';document.getElementById('payment-method-filter').value='';renderPayments()" class="bg-white border border-border text-text px-3 py-1.5 rounded-md text-xs font-medium hover:bg-gray-50">Clear</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Payment #</th><th>Order #</th><th>Customer</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="payments-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ PAYMENT DETAIL ============================ -->
+  <div id="view-payment-detail" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold td-mono" id="pd-number">PAY-001</div>
+          <div class="text-sm text-muted" id="pd-meta">Recorded on Jun 5, 2024 by Admin</div>
+        </div>
+        <button onclick="navTo('orders');setTimeout(()=>openOrderDetail(currentPaymentOrderId),100)" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">← Back to Order</button>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6" style="max-width:900px">
+        <div class="bg-white border border-border rounded-lg shadow-sm">
+          <div class="p-4 border-b border-border font-semibold text-sm">Payment Details</div>
+          <div class="p-5"><div class="info-panel" id="pd-details"></div></div>
+        </div>
+        <div class="bg-white border border-border rounded-lg shadow-sm">
+          <div class="p-4 border-b border-border flex items-center justify-between">
+            <div class="font-semibold text-sm">Linked Order</div>
+            <button onclick="navTo('orders');setTimeout(()=>openOrderDetail(currentPaymentOrderId),100)" class="text-primary text-xs hover:underline">View Order →</button>
+          </div>
+          <div class="p-5"><div class="info-panel" id="pd-order"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ INVENTORY ============================ -->
+  <div id="view-inventory" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Inventory</div>
+          <div class="text-sm text-muted">Track stock levels and product movements</div>
+        </div>
+        <div class="page-header-actions">
+          <button onclick="openAdjustModal()" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Adjust Stock</button>
+          <button onclick="openProductCreate()" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition"><i class="fas fa-plus mr-1"></i> Add Product</button>
+        </div>
+      </div>
+      <div class="alert-banner alert-warning" id="low-stock-banner">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span><strong>3 products</strong> are below the low-stock threshold — restock soon.</span>
+        <button onclick="document.getElementById('low-stock-banner').style.display='none'" class="ml-auto bg-transparent border-none cursor-pointer text-inherit opacity-60 hover:opacity-100"><i class="fas fa-times"></i></button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="inv-search" class="form-control" style="width:auto;min-width:180px" placeholder="🔍 Search SKU or product name…" oninput="renderInventory()">
+        <select id="inv-category-filter" class="form-control" style="width:auto;min-width:140px" onchange="renderInventory()">
+          <option value="">All Categories</option>
+        </select>
+        <select id="inv-stock-filter" class="form-control" style="width:auto;min-width:140px" onchange="renderInventory()">
+          <option value="">All Stock Status</option>
+          <option value="ok">In Stock</option>
+          <option value="low">Low Stock</option>
+          <option value="out">Out of Stock</option>
+        </select>
+        <button onclick="renderInventory()" class="bg-primary text-white px-3 py-1.5 rounded-md text-xs font-medium">Filter</button>
+        <button onclick="document.getElementById('inv-search').value='';document.getElementById('inv-category-filter').value='';document.getElementById('inv-stock-filter').value='';renderInventory()" class="bg-white border border-border text-text px-3 py-1.5 rounded-md text-xs font-medium hover:bg-gray-50">Clear</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>SKU</th><th>Product Name</th><th>Category</th><th>Unit</th><th>Unit Price</th><th>Stock Level</th><th>Actions</th></tr>
+          </thead>
+          <tbody id="inventory-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ PRODUCT FORM ============================ -->
+  <div id="view-product-form" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold" id="pf-title">Add Product</div>
+          <div class="text-sm text-muted" id="pf-subtitle">Add a new product to inventory</div>
+        </div>
+        <a href="#" onclick="navTo('inventory')" class="text-muted text-sm hover:underline">← Back to Inventory</a>
+      </div>
+      <div class="bg-white border border-border rounded-lg shadow-sm" style="max-width:720px">
+        <div class="p-6">
+          <form onsubmit="return handleProductSave(event)">
+            <div class="form-section">
+              <div class="form-section-title">Product Identity</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group"><label class="form-label">SKU <span class="text-danger">*</span></label><input type="text" id="pf-sku" class="form-control" required></div>
+                <div class="form-group"><label class="form-label">Product Name <span class="text-danger">*</span></label><input type="text" id="pf-name" class="form-control" required></div>
+                <div class="form-group">
+                  <label class="form-label">Category <span class="text-danger">*</span></label>
+                  <select id="pf-category" class="form-control" required><option value="">— Select category —</option></select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Unit of Measure <span class="text-danger">*</span></label>
+                  <select id="pf-unit" class="form-control" required>
+                    <option value="unit">Unit</option>
+                    <option value="kg">Kilogram</option>
+                    <option value="g">Gram</option>
+                    <option value="l">Liter</option>
+                    <option value="ml">Milliliter</option>
+                    <option value="m">Meter</option>
+                    <option value="box">Box</option>
+                    <option value="pack">Pack</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group mt-4"><label class="form-label">Description</label><textarea id="pf-description" class="form-control" rows="2"></textarea></div>
+            </div>
+            <div class="form-section">
+              <div class="form-section-title">Pricing &amp; Stock</div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="form-group"><label class="form-label">Unit Price ($) <span class="text-danger">*</span></label><input type="number" id="pf-price" class="form-control" step="0.01" min="0" required></div>
+                <div class="form-group"><label class="form-label">Low Stock Threshold <span class="text-danger">*</span></label><input type="number" id="pf-threshold" class="form-control" min="0" value="10" required></div>
+              </div>
+              <div class="mt-4"><label class="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" id="pf-active" class="accent-primary" checked> Product is active (visible and orderable)</label></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Save</button>
+              <button type="button" onclick="navTo('inventory')" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CATEGORIES ============================ -->
+  <div id="view-categories" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Product Categories</div>
+          <div class="text-sm text-muted">6 categories registered</div>
+        </div>
+        <div class="page-header-actions">
+          <button onclick="openCategoryCreate()" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition"><i class="fas fa-plus mr-1"></i> New Category</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Type</th><th>Parent</th><th>Products</th><th>Actions</th></tr></thead>
+          <tbody id="categories-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ CATEGORY FORM ============================ -->
+  <div id="view-category-form" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold" id="catf-title">New Category</div>
+          <div class="text-sm text-muted" id="catf-subtitle">Add a new product category</div>
+        </div>
+        <a href="#" onclick="navTo('categories')" class="text-muted text-sm hover:underline">← Back</a>
+      </div>
+      <div class="bg-white border border-border rounded-lg shadow-sm" style="max-width:640px">
+        <div class="p-6">
+          <form onsubmit="return handleCategorySave(event)">
+            <div class="form-section">
+              <div class="form-section-title">Category Details</div>
+              <div class="form-group"><label class="form-label">Name <span class="text-danger">*</span></label><input type="text" id="catf-name" class="form-control" required maxlength="150"></div>
+              <div class="form-group"><label class="form-label">Description</label><textarea id="catf-desc" class="form-control" rows="2"></textarea></div>
+              <div class="form-group">
+                <label class="form-label">Parent Category</label>
+                <select id="catf-parent" class="form-control"><option value="">— None (top-level) —</option></select>
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Save</button>
+              <button type="button" onclick="navTo('categories')" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ USERS ============================ -->
+  <div id="view-users" class="view">
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Staff Management</div>
+          <div class="text-sm text-muted">Manage user accounts and roles — Admin only</div>
+        </div>
+        <div class="page-header-actions">
+          <button onclick="openModal('invite-modal')" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition"><i class="fas fa-plus mr-1"></i> Invite New User</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead>
+          <tbody id="users-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ SETTINGS ============================ -->
+  <div id="view-settings" class="view">
+    <div class="page" style="max-width:720px">
+      <div class="page-header">
+        <div>
+          <div class="text-2xl font-bold">Settings</div>
+          <div class="text-sm text-muted">Manage your personal preferences and regional settings</div>
+        </div>
+      </div>
+      <form onsubmit="return handleSettingsSave(event)">
+        <div class="bg-white border border-border rounded-lg shadow-sm mb-6">
+          <div class="p-4 border-b border-border font-semibold text-sm">Regional Preferences</div>
+          <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div class="form-group"><label class="form-label">Time Zone</label><select class="form-control"><option>UTC</option><option>America/New_York</option><option>America/Caracas</option><option>Europe/London</option></select></div>
+              <div class="form-group"><label class="form-label">Language</label><select class="form-control"><option value="en">English</option><option value="es">Español</option></select></div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white border border-border rounded-lg shadow-sm mb-6">
+          <div class="p-4 border-b border-border flex items-center justify-between">
+            <div class="font-semibold text-sm">Currency Settings</div>
+            <span class="text-xs text-muted">System-wide — applies to all users</span>
+          </div>
+          <div class="p-5">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div class="form-group"><label class="form-label">Currency Code</label><input type="text" class="form-control" value="USD" maxlength="3"></div>
+              <div class="form-group"><label class="form-label">Symbol</label><input type="text" class="form-control" value="$" maxlength="4"></div>
+              <div class="form-group"><label class="form-label">Decimal Places</label><select class="form-control"><option>0</option><option>1</option><option selected>2</option><option>3</option></select></div>
+            </div>
+            <div class="mt-4"><label class="flex items-center gap-2 text-sm cursor-pointer font-medium"><input type="checkbox" class="accent-primary" checked> Show a secondary currency alongside the primary</label></div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-5 mt-4">
+              <div class="form-group"><label class="form-label">Secondary Code</label><input type="text" class="form-control" value="VES" maxlength="3"></div>
+              <div class="form-group"><label class="form-label">Secondary Symbol</label><input type="text" class="form-control" value="Bs." maxlength="4"></div>
+              <div class="form-group"><label class="form-label">Secondary Decimals</label><select class="form-control"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></div>
+              <div class="form-group"><label class="form-label">Exchange Rate</label><input type="number" class="form-control" value="36.50" step="0.00000001" min="0"></div>
+            </div>
+            <div class="flex items-center gap-3 mt-4 flex-wrap">
+              <button type="button" onclick="showToast('Exchange rate updated to 36.52','success')" class="bg-white border border-border text-text px-3 py-1.5 rounded-md text-xs font-medium hover:bg-gray-50">Update now</button>
+              <span class="text-xs text-muted">Last updated: Jun 7, 2026</span>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Save Settings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ============================ MODALS ============================ -->
+<!-- Payment Modal -->
+<div class="modal-overlay" id="payment-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Record Payment</div>
+      <button class="modal-close" onclick="closeModal('payment-modal')">✕</button>
+    </div>
+    <form onsubmit="return handlePaymentSave(event)">
+      <div class="modal-body">
+        <div class="form-group"><label class="form-label">Amount <span class="text-danger">*</span></label><input type="number" id="pay-amount" class="form-control" step="0.01" min="0.01" required></div>
+        <div class="form-group">
+          <label class="form-label">Payment Method <span class="text-danger">*</span></label>
+          <div class="radio-group">
+            <label class="radio-opt"><input type="radio" name="pay-method" value="cash" checked onchange="toggleRef()"> Cash</label>
+            <label class="radio-opt"><input type="radio" name="pay-method" value="bank_transfer" onchange="toggleRef()"> Bank Transfer</label>
+            <label class="radio-opt"><input type="radio" name="pay-method" value="card" onchange="toggleRef()"> Card</label>
+            <label class="radio-opt"><input type="radio" name="pay-method" value="check" onchange="toggleRef()"> Check</label>
+            <label class="radio-opt"><input type="radio" name="pay-method" value="mobile_payment" onchange="toggleRef()"> Mobile Payment</label>
+          </div>
+        </div>
+        <div class="form-group" id="pay-ref-group" style="display:none">
+          <label class="form-label">Reference Number</label>
+          <input type="text" id="pay-ref" class="form-control" placeholder="Transaction ID, check #, etc.">
+        </div>
+        <div class="form-group"><label class="form-label">Notes</label><textarea id="pay-notes" class="form-control" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('payment-modal')" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Cancel</button>
+        <button type="submit" class="bg-success text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700">Record Payment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Adjust Stock Modal -->
+<div class="modal-overlay" id="adjust-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Adjust Stock</div>
+      <button class="modal-close" onclick="closeModal('adjust-modal')">✕</button>
+    </div>
+    <form onsubmit="return handleAdjustSave(event)">
+      <div class="modal-body">
+        <div class="form-group" id="adjust-product-select-row">
+          <label class="form-label">Product <span class="text-danger">*</span></label>
+          <select id="adjust-product" class="form-control" required><option value="">— Select product —</option></select>
+        </div>
+        <div class="form-group" id="adjust-product-label-row" style="display:none">
+          <label class="form-label">Product</label>
+          <div id="adjust-product-label" class="font-semibold text-sm py-2"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Movement Type <span class="text-danger">*</span></label>
+          <select id="adjust-type" class="form-control" required>
+            <option value="purchase">Purchase — add stock received from supplier</option>
+            <option value="adjustment">Adjustment — correct a counting error</option>
+            <option value="return">Return — stock returned from a customer</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quantity <span class="text-danger">*</span> <span class="text-muted font-normal text-xs">(positive = add, negative = deduct)</span></label>
+          <input type="number" id="adjust-qty" class="form-control" step="1" required placeholder="e.g. 50 or -10">
+        </div>
+        <div class="form-group"><label class="form-label">Notes <span class="text-muted font-normal text-xs">(optional)</span></label><textarea id="adjust-notes" class="form-control" rows="2"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('adjust-modal')" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Cancel</button>
+        <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Record Adjustment</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Invite User Modal -->
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Invite New Staff Member</div>
+      <button class="modal-close" onclick="closeModal('invite-modal')">✕</button>
+    </div>
+    <form onsubmit="return handleInviteSave(event)">
+      <div class="modal-body">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="form-group"><label class="form-label">First Name <span class="text-danger">*</span></label><input type="text" id="inv-fname" class="form-control" required></div>
+          <div class="form-group"><label class="form-label">Last Name <span class="text-danger">*</span></label><input type="text" id="inv-lname" class="form-control" required></div>
+        </div>
+        <div class="form-group"><label class="form-label">Email <span class="text-danger">*</span></label><input type="email" id="inv-email" class="form-control" required></div>
+        <div class="form-group">
+          <label class="form-label">Role <span class="text-danger">*</span></label>
+          <select id="inv-role" class="form-control" required>
+            <option value="">— Select role —</option>
+            <option value="Admin">Admin</option>
+            <option value="Manager">Manager</option>
+            <option value="Staff">Staff</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Temporary Password <span class="text-danger">*</span></label><input type="password" id="inv-pass" class="form-control" required></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" onclick="closeModal('invite-modal')" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50">Cancel</button>
+        <button type="submit" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700">Create User</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Movement Side Panel -->
+<div class="side-panel" id="movement-panel">
+  <div class="sp-header">
+    <div class="sp-title" id="movement-title">Movement History</div>
+    <button onclick="closePanel('movement-panel')" class="bg-transparent border-none cursor-pointer text-muted text-lg"><i class="fas fa-times"></i></button>
+  </div>
+  <div class="sp-body" id="movement-body">
+    <div class="text-muted text-sm text-center py-6">Select a product to view movements.</div>
+  </div>
+</div>
+
+<script>
+// ============================ MOCK DATA ============================
+const customers = [
+  {id:1,first_name:'John',last_name:'Doe',email:'john@example.com',phone:'0412-3456789',national_id:'V12345678',date_of_birth:'1985-06-15',gender:'M',address_line1:'123 Main St',address_line2:'Apt 4B',city:'Caracas',state:'Dtto. Capital',postal_code:'1010',country:'Venezuela',notes:'VIP customer',created_at:'2024-01-15'},
+  {id:2,first_name:'Jane',last_name:'Smith',email:'jane@example.com',phone:'0424-9876543',national_id:'V87654321',date_of_birth:'1990-03-22',gender:'F',address_line1:'456 Oak Ave',address_line2:'',city:'Maracaibo',state:'Zulia',postal_code:'4001',country:'Venezuela',notes:'',created_at:'2024-02-10'},
+  {id:3,first_name:'Carlos',last_name:'Rodriguez',email:'carlos@example.com',phone:'0416-5551212',national_id:'V11223344',date_of_birth:'1978-11-08',gender:'M',address_line1:'789 Pine Rd',address_line2:'Suite 100',city:'Valencia',state:'Carabobo',postal_code:'2001',country:'Venezuela',notes:'Corporate account',created_at:'2024-03-05'},
+  {id:4,first_name:'Maria',last_name:'Gonzalez',email:'maria@example.com',phone:'',national_id:'',date_of_birth:'',gender:'',address_line1:'321 Elm St',address_line2:'',city:'Barquisimeto',state:'Lara',postal_code:'3001',country:'Venezuela',notes:'',created_at:'2024-04-20'},
+  {id:5,first_name:'Luis',last_name:'Hernandez',email:'luis@example.com',phone:'0412-9998888',national_id:'V55667788',date_of_birth:'1995-01-30',gender:'M',address_line1:'555 Cedar Ln',address_line2:'',city:'Maturin',state:'Monagas',postal_code:'6201',country:'Venezuela',notes:'',created_at:'2024-05-12'},
+];
+
+const categories = [
+  {id:1,name:'Electronics',description:'Gadgets and devices',parent_category:null,product_count:12},
+  {id:2,name:'Computers',description:'Laptops and desktops',parent_category:1,product_count:5},
+  {id:3,name:'Accessories',description:'Cables, cases, etc.',parent_category:1,product_count:7},
+  {id:4,name:'Tools',description:'Hardware tools',parent_category:null,product_count:8},
+  {id:5,name:'Office Supplies',description:'Paper, pens, etc.',parent_category:null,product_count:15},
+  {id:6,name:'Furniture',description:'Office furniture',parent_category:null,product_count:6},
+];
+
+const products = [
+  {id:1,sku:'SKU-001',name:'Wireless Mouse',category_id:3,unit_of_measure:'unit',description:'Ergonomic wireless mouse',unit_price:29.99,low_stock_threshold:10,current_stock:45,is_active:true},
+  {id:2,sku:'SKU-002',name:'USB-C Cable 2m',category_id:3,unit_of_measure:'unit',description:'Fast charging cable',unit_price:12.50,low_stock_threshold:20,current_stock:8,is_active:true},
+  {id:3,sku:'SKU-003',name:'Laptop Stand',category_id:6,unit_of_measure:'unit',description:'Aluminum laptop stand',unit_price:49.99,low_stock_threshold:5,current_stock:0,is_active:true},
+  {id:4,sku:'SKU-004',name:'Mechanical Keyboard',category_id:2,unit_of_measure:'unit',description:'RGB mechanical keyboard',unit_price:89.99,low_stock_threshold:8,current_stock:12,is_active:true},
+  {id:5,sku:'SKU-005',name:'Webcam HD',category_id:1,unit_of_measure:'unit',description:'1080p webcam',unit_price:59.99,low_stock_threshold:6,current_stock:3,is_active:true},
+  {id:6,sku:'SKU-006',name:'Desk Lamp LED',category_id:6,unit_of_measure:'unit',description:'Adjustable LED lamp',unit_price:34.99,low_stock_threshold:10,current_stock:22,is_active:true},
+  {id:7,sku:'SKU-007',name:'Power Strip 6-outlet',category_id:3,unit_of_measure:'unit',description:'Surge protector',unit_price:19.99,low_stock_threshold:15,current_stock:50,is_active:true},
+  {id:8,sku:'SKU-008',name:'Notebook A4',category_id:5,unit_of_measure:'pack',description:'Pack of 5 notebooks',unit_price:8.99,low_stock_threshold:30,current_stock:100,is_active:true},
+  {id:9,sku:'SKU-009',name:'Hammer 16oz',category_id:4,unit_of_measure:'unit',description:'Claw hammer',unit_price:14.99,low_stock_threshold:8,current_stock:15,is_active:true},
+  {id:10,sku:'SKU-010',name:'Screwdriver Set',category_id:4,unit_of_measure:'unit',description:'6-piece set',unit_price:24.99,low_stock_threshold:10,current_stock:7,is_active:true},
+];
+
+const orders = [
+  {id:1,order_number:'ORD-2024-001',customer_id:1,status:'delivered',created_at:'2024-06-01',confirmed_at:'2024-06-01',paid_at:'2024-06-01',shipped_at:'2024-06-02',delivered_at:'2024-06-03',discount_amount:5.00,subtotal:150.00,tax_amount:0.00,total_amount:145.00,notes:'',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:1,quantity:2,unit_price:29.99,line_total:59.98},{product_id:2,quantity:3,unit_price:12.50,line_total:37.50},{product_id:4,quantity:1,unit_price:89.99,line_total:89.99}],payments:[{id:1,payment_number:'PAY-001',amount:145.00,payment_method:'cash',status:'confirmed',reference_number:'',notes:'',recorded_by:'Alex Doe',created_at:'2024-06-01'}]},
+  {id:2,order_number:'ORD-2024-002',customer_id:2,status:'paid',created_at:'2024-06-02',confirmed_at:'2024-06-02',paid_at:'2024-06-02',shipped_at:'',delivered_at:'',discount_amount:0.00,subtotal:89.99,tax_amount:0.00,total_amount:89.99,notes:'',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:4,quantity:1,unit_price:89.99,line_total:89.99}],payments:[{id:2,payment_number:'PAY-002',amount:89.99,payment_method:'card',status:'confirmed',reference_number:'TXN-998877',notes:'',recorded_by:'Alex Doe',created_at:'2024-06-02'}]},
+  {id:3,order_number:'ORD-2024-003',customer_id:3,status:'confirmed',created_at:'2024-06-03',confirmed_at:'2024-06-03',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:10.00,subtotal:109.98,tax_amount:0.00,total_amount:99.98,notes:'Corporate discount applied',created_by:'Alex Doe',confirmed_by:'Manager Mike',items:[{product_id:1,quantity:1,unit_price:29.99,line_total:29.99},{product_id:6,quantity:2,unit_price:34.99,line_total:69.99}],payments:[]},
+  {id:4,order_number:'ORD-2024-004',customer_id:1,status:'shipped',created_at:'2024-06-04',confirmed_at:'2024-06-04',paid_at:'2024-06-04',shipped_at:'2024-06-05',delivered_at:'',discount_amount:0.00,subtotal:59.99,tax_amount:0.00,total_amount:59.99,notes:'',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:5,quantity:1,unit_price:59.99,line_total:59.99}],payments:[{id:3,payment_number:'PAY-003',amount:59.99,payment_method:'bank_transfer',status:'confirmed',reference_number:'BT-554433',notes:'',recorded_by:'Alex Doe',created_at:'2024-06-04'}]},
+  {id:5,order_number:'ORD-2024-005',customer_id:4,status:'draft',created_at:'2024-06-05',confirmed_at:'',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:0.00,subtotal:24.99,tax_amount:0.00,total_amount:24.99,notes:'',created_by:'Alex Doe',confirmed_by:'',items:[{product_id:9,quantity:1,unit_price:14.99,line_total:14.99},{product_id:10,quantity:1,unit_price:24.99,line_total:24.99}],payments:[]},
+  {id:6,order_number:'ORD-2024-006',customer_id:5,status:'pending',created_at:'2024-06-06',confirmed_at:'',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:0.00,subtotal:49.99,tax_amount:0.00,total_amount:49.99,notes:'',created_by:'Alex Doe',confirmed_by:'',items:[{product_id:6,quantity:1,unit_price:34.99,line_total:34.99},{product_id:8,quantity:2,unit_price:8.99,line_total:17.98}],payments:[]},
+  {id:7,order_number:'ORD-2024-007',customer_id:2,status:'cancelled',created_at:'2024-06-01',confirmed_at:'2024-06-01',paid_at:'',shipped_at:'',delivered_at:'',discount_amount:0.00,subtotal:19.99,tax_amount:0.00,total_amount:19.99,notes:'Customer requested cancellation',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:7,quantity:1,unit_price:19.99,line_total:19.99}],payments:[]},
+  {id:8,order_number:'ORD-2024-008',customer_id:3,status:'refunded',created_at:'2024-05-28',confirmed_at:'2024-05-28',paid_at:'2024-05-28',shipped_at:'2024-05-29',delivered_at:'2024-05-30',discount_amount:0.00,subtotal:12.50,tax_amount:0.00,total_amount:12.50,notes:'Defective item',created_by:'Alex Doe',confirmed_by:'Alex Doe',items:[{product_id:2,quantity:1,unit_price:12.50,line_total:12.50}],payments:[{id:4,payment_number:'PAY-004',amount:12.50,payment_method:'cash',status:'refunded',reference_number:'',notes:'Refund issued',recorded_by:'Alex Doe',created_at:'2024-06-01'}]},
+];
+
+const users = [
+  {id:1,first_name:'Alex',last_name:'Doe',email:'admin@retailops.com',role:'Admin',is_active:true,last_login:'Today'},
+  {id:2,first_name:'Manager',last_name:'Mike',email:'manager@retailops.com',role:'Manager',is_active:true,last_login:'Jun 5, 2024'},
+  {id:3,first_name:'Staff',last_name:'Sam',email:'staff@retailops.com',role:'Staff',is_active:true,last_login:'Jun 4, 2024'},
+  {id:4,first_name:'Inactive',last_name:'Ivy',email:'inactive@retailops.com',role:'Staff',is_active:false,last_login:'Never'},
+];
+
+const movements = [
+  {product_id:1,date:'2024-06-05',type:'Sale',quantity:-2,reference_type:'SalesOrder',reference_id:1,notes:'Stock deducted on confirmation of ORD-2024-001',created_by:'Alex Doe'},
+  {product_id:1,date:'2024-06-01',type:'Purchase',quantity:50,reference_type:'ManualAdjustment',reference_id:0,notes:'Initial stock purchase',created_by:'Alex Doe'},
+  {product_id:2,date:'2024-06-05',type:'Sale',quantity:-3,reference_type:'SalesOrder',reference_id:1,notes:'Stock deducted on confirmation of ORD-2024-001',created_by:'Alex Doe'},
+  {product_id:3,date:'2024-06-03',type:'Sale',quantity:-1,reference_type:'SalesOrder',reference_id:3,notes:'Stock deducted on confirmation of ORD-2024-003',created_by:'Manager Mike'},
+  {product_id:5,date:'2024-06-04',type:'Sale',quantity:-1,reference_type:'SalesOrder',reference_id:4,notes:'Stock deducted on confirmation of ORD-2024-004',created_by:'Alex Doe'},
+];
+
+// ============================ STATE ============================
+let currentView = 'login';
+let currentOrderId = null;
+let currentCustomerId = null;
+let currentPaymentOrderId = null;
+let editingProductId = null;
+let editingCategoryId = null;
+let lineCount = 0;
+
+// ============================ UTILS ============================
+function fmtCurrency(n){return '$'+Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g,',');}
+function fmtDate(d){return new Date(d).toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'});}
+function getCustomer(id){return customers.find(c=>c.id===id)||{};}
+function getProduct(id){return products.find(p=>p.id===id)||{};}
+function getCategory(id){return categories.find(c=>c.id===id)||{};}
+function statusBadge(s){const map={draft:'badge-draft',pending:'badge-pending',confirmed:'badge-confirmed',paid:'badge-paid',shipped:'badge-shipped',delivered:'badge-delivered',cancelled:'badge-cancelled',refunded:'badge-refunded'};return`<span class="badge ${map[s]||''}">${s.replace('_',' ').replace(/\b\w/g,l=>l.toUpperCase())}</span>`;}
+function methodLabel(m){const map={cash:'Cash',bank_transfer:'Bank Transfer',card:'Card',check:'Check',mobile_payment:'Mobile Payment'};return map[m]||m;}
+
+function showToast(message,type='success'){
+  const icons={success:'✓',error:'✕',warning:'⚠'};
+  const container=document.getElementById('toast-container');
+  const toast=document.createElement('div');
+  toast.className=`toast ${type}`;
+  toast.innerHTML=`<span>${icons[type]||'●'}</span><span>${message}</span>`;
+  container.appendChild(toast);
+  requestAnimationFrame(()=>requestAnimationFrame(()=>toast.classList.add('show')));
+  setTimeout(()=>{toast.classList.remove('show');setTimeout(()=>toast.remove(),350);},4000);
+}
+
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function openPanel(id){document.getElementById(id).classList.add('open');}
+function closePanel(id){document.getElementById(id).classList.remove('open');}
+
+document.addEventListener('click',e=>{if(e.target.classList.contains('modal-overlay'))e.target.classList.remove('open');});
+
+// ============================ ROUTER ============================
+function navTo(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(l=>l.classList.remove('active'));
+  if(view==='login'){
+    document.getElementById('view-login').classList.add('active');
+    document.getElementById('app-shell').classList.remove('active');
+  }else{
+    document.getElementById('view-login').classList.remove('active');
+    document.getElementById('app-shell').classList.add('active');
+    const target=document.getElementById('view-'+view);
+    if(target)target.classList.add('active');
+    const link=document.querySelector(`.nav-link[data-view="${view}"]`);
+    if(link)link.classList.add('active');
+    if(view==='dashboard')renderDashboard();
+    if(view==='orders')renderOrders();
+    if(view==='customers')renderCustomers();
+    if(view==='inventory')renderInventory();
+    if(view==='payments')renderPayments();
+    if(view==='categories')renderCategories();
+    if(view==='users')renderUsers();
+  }
+  currentView=view;
+  window.scrollTo(0,0);
+}
+
+// ============================ LOGIN ============================
+function handleLogin(e){
+  e.preventDefault();
+  const email=document.getElementById('login-email').value;
+  const pass=document.getElementById('login-password').value;
+  if(email==='admin@retailops.com'&&pass==='password'){
+    document.getElementById('login-error').classList.add('hidden');
+    showToast('Welcome back, Alex!','success');
+    navTo('dashboard');
+  }else{
+    document.getElementById('login-error').classList.remove('hidden');
+    document.getElementById('login-error-text').textContent='Invalid email or password.';
+  }
+  return false;
+}
+function handleLogout(){showToast('Logged out successfully','success');navTo('login');}
+
+// ============================ DASHBOARD ============================
+function renderDashboard(){
+  const tbody=document.getElementById('dash-orders-body');
+  tbody.innerHTML=orders.slice(0,5).map(o=>{
+    const c=getCustomer(o.customer_id);
+    return`<tr><td class="td-mono"><a href="#" onclick="openOrderDetail(${o.id});return false">${o.order_number}</a></td><td>${c.first_name} ${c.last_name}</td><td>${fmtDate(o.created_at)}</td><td>${statusBadge(o.status)}</td><td><strong>${fmtCurrency(o.total_amount)}</strong></td></tr>`;
+  }).join('');
+  const alerts=document.getElementById('dash-alerts-body');
+  const lowStock=products.filter(p=>p.current_stock<=p.low_stock_threshold);
+  alerts.innerHTML=lowStock.map(p=>`<div class="flex items-center justify-between p-3 rounded-md text-sm ${p.current_stock===0?'bg-red-50 border border-red-200':'bg-amber-50 border border-amber-200'}"><div><strong>${p.sku}</strong> — ${p.name} <span class="text-muted text-xs">(${getCategory(p.category_id).name})</span></div>${p.current_stock===0?'<span class="badge badge-cancelled">Out of stock</span>':`<span class="badge badge-pending">${p.current_stock} left</span>`}</div>`).join('');
+}
+function dashTab(tab){
+  const isOrders=tab==='orders';
+  document.getElementById('dash-tab-orders').style.display=isOrders?'block':'none';
+  document.getElementById('dash-tab-alerts').style.display=isOrders?'none':'block';
+  document.getElementById('tab-btn-orders').className=`px-3 py-1.5 text-xs font-medium border-none ${isOrders?'bg-primary text-white':'bg-white text-text'}`;
+  document.getElementById('tab-btn-alerts').className=`px-3 py-1.5 text-xs font-medium border-none ${!isOrders?'bg-primary text-white':'bg-white text-text'}`;
+}
+
+// ============================ ORDERS ============================
+function renderOrders(){
+  const q=document.getElementById('order-search').value.toLowerCase();
+  const s=document.getElementById('order-status-filter').value;
+  let filtered=orders.filter(o=>{
+    const c=getCustomer(o.customer_id);
+    const matchQ=!q||o.order_number.toLowerCase().includes(q)||(c.first_name+' '+c.last_name).toLowerCase().includes(q);
+    const matchS=!s||o.status===s;
+    return matchQ&&matchS;
+  });
+  const tbody=document.getElementById('orders-table-body');
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="text-5xl mb-3 opacity-40">📋</div><div class="font-semibold text-text mb-1">No orders found</div></div></td></tr>`;document.getElementById('orders-pagination').innerHTML='';return;}
+  tbody.innerHTML=filtered.map(o=>{
+    const c=getCustomer(o.customer_id);
+    const canEdit=o.status==='draft'||o.status==='pending';
+    const canDelete=o.status==='draft';
+    return`<tr><td class="td-mono"><a href="#" onclick="openOrderDetail(${o.id});return false">${o.order_number}</a></td><td><a href="#" onclick="openCustomerDetail(${o.customer_id});return false">${c.first_name} ${c.last_name}</a></td><td>${fmtDate(o.created_at)}</td><td>${statusBadge(o.status)}</td><td>${o.items.length}</td><td><strong>${fmtCurrency(o.total_amount)}</strong></td><td><button onclick="openOrderDetail(${o.id})" class="text-primary text-xs hover:underline mr-2">View</button>${canEdit?`<button onclick="openOrderDetail(${o.id})" class="text-primary text-xs hover:underline mr-2">Edit</button>`:''}${canDelete?`<button onclick="deleteOrder(${o.id})" class="text-danger text-xs hover:underline">Delete</button>`:''}</td></tr>`;
+  }).join('');
+}
+function deleteOrder(id){if(!confirm('Delete this order?'))return;showToast('Order deleted','success');renderOrders();}
+
+// ============================ ORDER DETAIL ============================
+function openOrderCreate(preselectCustomer){
+  currentOrderId=null;
+  editingProductId=null;
+  document.getElementById('od-title').textContent='New Order';
+  document.getElementById('od-subtitle').textContent='Create a new sales order';
+  document.getElementById('od-actions').innerHTML='';
+  document.getElementById('od-customer-hint').style.display='';
+  document.getElementById('od-customer-select-wrap').style.display='';
+  document.getElementById('od-add-item-btn').style.display='';
+  document.getElementById('od-payment-card').style.display='none';
+  document.getElementById('od-info-card').style.display='none';
+  document.getElementById('od-customer-panel').innerHTML=`<div class="form-group" id="od-customer-select-wrap"><label class="form-label">Customer <span class="text-danger">*</span></label><select id="od-customer" class="form-control" required><option value="">— Select customer —</option>${customers.map(c=>`<option value="${c.id}">${c.first_name} ${c.last_name} (${c.email})</option>`).join('')}</select></div>`;
+  if(preselectCustomer)document.getElementById('od-customer').value=preselectCustomer;
+  document.getElementById('line-items-body').innerHTML=`<tr id="empty-row"><td colspan="6" class="text-center text-muted py-6">No items yet — click "+ Add Item" to begin.</td></tr>`;
+  document.getElementById('od-subtotal').textContent='$0.00';
+  document.getElementById('od-discount').value='0.00';
+  document.getElementById('od-grand-total').textContent='$0.00';
+  document.getElementById('od-notes').value='';
+  lineCount=0;
+  document.getElementById('line-item-count').value=0;
+  navTo('order-detail');
+}
+function openOrderDetail(id){
+  const o=orders.find(x=>x.id===id);if(!o)return;
+  currentOrderId=id;
+  const c=getCustomer(o.customer_id);
+  document.getElementById('od-title').textContent=o.order_number;
+  let sub=`${statusBadge(o.status)} <span class="text-muted text-xs">Created by ${o.created_by} · ${fmtDate(o.created_at)}</span>`;
+  if(o.confirmed_by)sub+=` <span class="text-muted text-xs">· Confirmed by ${o.confirmed_by} ${fmtDate(o.confirmed_at)}</span>`;
+  document.getElementById('od-subtitle').innerHTML=sub;
+  document.getElementById('od-customer-hint').style.display='none';
+  document.getElementById('od-customer-select-wrap').style.display='none';
+  const canEdit=o.status==='draft'||o.status==='pending';
+  document.getElementById('od-add-item-btn').style.display=canEdit?'':'none';
+  document.getElementById('od-customer-panel').innerHTML=`<div class="info-panel"><div class="info-row"><span class="info-label">Name</span><a href="#" onclick="openCustomerDetail(${c.id});return false"><strong>${c.first_name} ${c.last_name}</strong></a></div><div class="info-row"><span class="info-label">Email</span>${c.email}</div><div class="info-row"><span class="info-label">Phone</span>${c.phone||'—'}</div>${c.national_id?`<div class="info-row"><span class="info-label">ID Number</span>${c.national_id}</div>`:''}<div class="info-row"><span class="info-label">Address</span>${c.address_line1}, ${c.city}, ${c.state}</div></div>`;
+  // Actions
+  let actions='';
+  if(canEdit)actions+=`<button type="submit" form="order-form" class="bg-white border border-border text-text px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-50 mr-2">Save Draft</button>`;
+  if(o.status==='draft')actions+=`<button onclick="transitionOrder('submit')" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 mr-2">Submit for Review</button>`;
+  if(o.status==='pending')actions+=`<button onclick="transitionOrder('confirm')" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 mr-2">Confirm Order</button>`;
+  if(o.status==='confirmed')actions+=`<button onclick="openPaymentModal()" class="bg-success text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 mr-2">Record Payment</button>`;
+  if(o.status==='paid')actions+=`<button onclick="transitionOrder('ship')" class="bg-primary text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 mr-2">Mark Shipped</button>`;
+  if(o.status==='shipped')actions+=`<button onclick="transitionOrder('deliver')" class="bg-success text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-green-700 mr-2">Mark Delivered</button>`;
+  if(o.status==='confirmed')actions+=`<button onclick="transitionOrder('cancel')" class="bg-danger text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 mr-2">Cancel Order</button>`;
+  if(o.status==='paid')actions+=`<button onclick="transitionOrder('refund')" class="bg-warning text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-amber-700 mr-2">Issue Refund</button>`;
+  document.getElementById('od-actions').innerHTML=actions;
+  // Line items
+  if(o.items.length){
+    document.getElementById('line-items-body').innerHTML=o.items.map((it,i)=>{
+      const p=getProduct(it.product_id);
+      return`<tr data-line="${i+1}"><td><div class="flex items-center gap-2"><div class="product-thumb">${p.current_stock>0?'<img src="https://placehold.co/44x44/2563EB/fff?text=P">':'IMG'}</div><div>${canEdit?`<select name="product_${i+1}" class="form-control" style="font-size:0.82rem" onchange="updateSku(this,${i+1})">${products.filter(x=>x.is_active).map(x=>`<option value="${x.id}" data-sku="${x.sku}" data-price="${x.unit_price}" ${x.id===p.id?'selected':''}>${x.name}</option>`).join('')}</select>`:p.name}</div></div></td><td class="td-mono text-muted text-xs" id="sku-${i+1}">${p.sku}</td><td>${canEdit?`<input type="number" name="quantity_${i+1}" class="form-control" value="${it.quantity}" min="1" onchange="recalcRow(${i+1})">`:it.quantity}</td><td>${canEdit?`<input type="number" name="unit_price_${i+1}" class="form-control" value="${it.unit_price}" step="0.01" min="0" onchange="recalcRow(${i+1})">`:fmtCurrency(it.unit_price)}</td><td><strong id="line-total-${i+1}">${fmtCurrency(it.line_total)}</strong></td>${canEdit?`<td><button type="button" class="text-muted hover:text-text bg-transparent border-none cursor-pointer px-1.5" onclick="removeLineItem(this)">✕</button></td>`:'<td></td>'}</tr>`;
+    }).join('');
+  }else{
+    document.getElementById('line-items-body').innerHTML=`<tr id="empty-row"><td colspan="6" class="text-center text-muted py-6">No items yet — click "+ Add Item" to begin.</td></tr>`;
+  }
+  lineCount=o.items.length;
+  document.getElementById('line-item-count').value=lineCount;
+  document.getElementById('od-discount').value=o.discount_amount.toFixed(2);
+  document.getElementById('od-notes').value=o.notes||'';
+  recalcTotals();
+  // Payments sidebar
+  if(o.payments.length){
+    document.getElementById('od-payment-card').style.display='';
+    document.getElementById('od-payments-list').innerHTML=o.payments.map(p=>`<div class="pay-hist-item"><div class="flex justify-between"><a href="#" onclick="openPaymentDetail(${p.id});return false" class="pay-hist-num">${p.payment_number}</a><strong>${fmtCurrency(p.amount)}</strong></div><div class="pay-hist-meta">${methodLabel(p.payment_method)} · ${fmtDate(p.created_at)} · ${p.recorded_by}</div>${p.reference_number?`<div class="pay-hist-meta">Ref: ${p.reference_number}</div>`:''}</div>`).join('')+`<div class="pt-3 border-t border-border flex justify-between text-sm"><span class="text-muted">Outstanding</span><strong class="${o.total_amount>o.payments.reduce((a,p)=>a+p.amount,0)?'text-danger':'text-success'}">${fmtCurrency(Math.max(0,o.total_amount-o.payments.reduce((a,p)=>a+p.amount,0)))}</strong></div>`;
+  }else{document.getElementById('od-payment-card').style.display='none';}
+  document.getElementById('od-info-card').style.display='';
+  document.getElementById('od-info-panel').innerHTML=`<div class="info-row"><span class="info-label">Order #</span><span class="td-mono">${o.order_number}</span></div><div class="info-row"><span class="info-label">Status</span>${statusBadge(o.status)}</div><div class="info-row"><span class="info-label">Created</span>${fmtDate(o.created_at)}</div>${o.paid_at?`<div class="info-row"><span class="info-label">Paid</span>${fmtDate(o.paid_at)}</div>`:''}`;
+  navTo('order-detail');
+}
+function transitionOrder(action){
+  const o=orders.find(x=>x.id===currentOrderId);if(!o)return;
+  const map={submit:'pending',confirm:'confirmed',ship:'shipped',deliver:'delivered',cancel:'cancelled',refund:'refunded'};
+  const labels={submit:'submitted for review',confirm:'confirmed',ship:'marked as shipped',deliver:'marked as delivered',cancel:'cancelled',refund:'marked as refunded'};
+  if(!confirm(`Are you sure you want to ${action} this order?`))return;
+  o.status=map[action];
+  if(action==='confirm')o.confirmed_by='Manager Mike',o.confirmed_at=new Date().toISOString().split('T')[0];
+  if(action==='ship')o.shipped_at=new Date().toISOString().split('T')[0];
+  if(action==='deliver')o.delivered_at=new Date().toISOString().split('T')[0];
+  if(action==='refund'||action==='cancel')o.payments.forEach(p=>p.status='refunded');
+  showToast(`Order ${o.order_number} ${labels[action]}`,'success');
+  openOrderDetail(o.id);
+}
+function addLineItem(){
+  const tbody=document.getElementById('line-items-body');
+  const empty=document.getElementById('empty-row');
+  if(empty)empty.remove();
+  lineCount++;
+  const options=products.filter(p=>p.is_active).map(p=>`<option value="${p.id}" data-sku="${p.sku}" data-price="${p.unit_price}">${p.name}</option>`).join('');
+  const first=products.find(p=>p.is_active)||{};
+  const row=document.createElement('tr');
+  row.dataset.line=lineCount;
+  row.innerHTML=`<td><div class="flex items-center gap-2"><div class="product-thumb">${first.current_stock>0?'<img src="https://placehold.co/44x44/2563EB/fff?text=P">':'IMG'}</div><div><select name="product_${lineCount}" class="form-control" style="font-size:0.82rem" onchange="updateSku(this,${lineCount})">${options}</select></div></div></td><td class="td-mono text-muted text-xs" id="sku-${lineCount}">${first.sku||'—'}</td><td><input type="number" name="quantity_${lineCount}" class="form-control" value="1" min="1" onchange="recalcRow(${lineCount})"></td><td><input type="number" name="unit_price_${lineCount}" class="form-control" value="${first.unit_price||'0.00'}" step="0.01" min="0" onchange="recalcRow(${lineCount})"></td><td><strong id="line-total-${lineCount}">${fmtCurrency(first.unit_price||0)}</strong></td><td><button type="button" class="text-muted hover:text-text bg-transparent border-none cursor-pointer px-1.5" onclick="removeLineItem(this)">✕</button></td>`;
+  tbody.appendChild(row);
+  document.getElementById('line-item-count').value=lineCount;
+}
+function removeLineItem(btn){
+  const rows=document.querySelectorAll('#line-items-body tr:not(#empty-row)');
+  if(rows.length<=1){showToast('An order must have at least one line item.','warning');return;}
+  btn.closest('tr').remove();
+  recalcTotals();
+}
+function updateSku(sel,idx){const opt=sel.options[sel.selectedIndex];document.getElementById('sku-'+idx).textContent=opt.dataset.sku||'—';const priceInp=sel.closest('tr').querySelector(`[name="unit_price_${idx}"]`);if(priceInp){priceInp.value=opt.dataset.price||'0.00';}recalcRow(idx);}
+function recalcRow(idx){const qty=parseFloat(document.querySelector(`[name="quantity_${idx}"]`)?.value||0);const price=parseFloat(document.querySelector(`[name="unit_price_${idx}"]`)?.value||0);const total=qty*price;const el=document.getElementById('line-total-'+idx);if(el)el.textContent=fmtCurrency(total);recalcTotals();}
+function recalcTotals(){let sub=0;document.querySelectorAll('#line-items-body tr[data-line]').forEach(row=>{const idx=row.dataset.line;const qty=parseFloat(row.querySelector(`[name="quantity_${idx}"]`)?.value||0);const price=parseFloat(row.querySelector(`[name="unit_price_${idx}"]`)?.value||0);sub+=qty*price;});const disc=parseFloat(document.getElementById('od-discount')?.value||0);document.getElementById('od-subtotal').textContent=fmtCurrency(sub);document.getElementById('od-grand-total').textContent=fmtCurrency(Math.max(0,sub-disc));}
+function handleOrderSave(e){e.preventDefault();showToast(currentOrderId?'Order updated':'Order created','success');navTo('orders');return false;}
+
+// ============================ CUSTOMERS ============================
+function renderCustomers(){
+  const q=document.getElementById('customer-search').value.toLowerCase();
+  let filtered=customers.filter(c=>!q||(c.first_name+' '+c.last_name).toLowerCase().includes(q)||c.email.toLowerCase().includes(q)||(c.national_id||'').toLowerCase().includes(q)||(c.phone||'').toLowerCase().includes(q));
+  const tbody=document.getElementById('customers-table-body');
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="text-5xl mb-3 opacity-40">👤</div><div class="font-semibold text-text mb-1">No customers found</div></div></td></tr>`;return;}
+  tbody.innerHTML=filtered.map(c=>`<tr><td><a href="#" onclick="openCustomerDetail(${c.id});return false"><strong>${c.first_name} ${c.last_name}</strong></a></td><td class="td-mono">${c.national_id||'—'}</td><td class="text-muted">${c.email}</td><td>${c.phone||'—'}</td><td>${c.city}</td><td>${c.country}</td><td class="text-muted">${fmtDate(c.created_at)}</td><td><button onclick="openCustomerDetail(${c.id})" class="text-primary text-xs hover:underline mr-2">View</button><button onclick="openCustomerEdit(${c.id})" class="text-primary text-xs hover:underline mr-2">Edit</button><button onclick="deleteCustomer(${c.id})" class="text-danger text-xs hover:underline">Delete</button></td></tr>`).join('');
+}
+function deleteCustomer(id){if(!confirm('Delete this customer?'))return;showToast('Customer deleted','success');renderCustomers();}
+function openCustomerDetail(id){
+  currentCustomerId=id;
+  const c=getCustomer(id);
+  document.getElementById('cd-name').textContent=c.first_name+' '+c.last_name;
+  document.getElementById('cd-since').textContent='Customer since '+fmtDate(c.created_at);
+  document.getElementById('cd-contact').innerHTML=`<div class="info-row"><span class="info-label">Email</span><a href="mailto:${c.email}">${c.email}</a></div><div class="info-row"><span class="info-label">Phone</span>${c.phone||'—'}</div><div class="info-row"><span class="info-label">ID Number</span>${c.national_id||'—'}</div><div class="info-row"><span class="info-label">Date of Birth</span>${c.date_of_birth?fmtDate(c.date_of_birth):'—'}</div><div class="info-row"><span class="info-label">Gender</span>${c.gender==='M'?'Male':c.gender==='F'?'Female':'—'}</div>`;
+  document.getElementById('cd-address').innerHTML=`<div class="info-row"><span class="info-label">Line 1</span>${c.address_line1}</div>${c.address_line2?`<div class="info-row"><span class="info-label">Line 2</span>${c.address_line2}</div>`:''}<div class="info-row"><span class="info-label">City</span>${c.city}, ${c.state} ${c.postal_code}</div><div class="info-row"><span class="info-label">Country</span>${c.country}</div>`;
+  const cOrders=orders.filter(o=>o.customer_id===id);
+  document.getElementById('cd-orders').innerHTML=cOrders.length?cOrders.map(o=>`<tr><td class="td-mono"><a href="#" onclick="openOrderDetail(${o.id});return false">${o.order_number}</a></td><td>${fmtDate(o.created_at)}</td><td>${statusBadge(o.status)}</td><td>${o.items.length}</td><td><strong>${fmtCurrency(o.total_amount)}</strong></td><td><button onclick="openOrderDetail(${o.id})" class="text-primary text-xs hover:underline">View</button></td></tr>`).join(''):`<tr><td colspan="6"><div class="empty-state py-8"><div class="text-5xl mb-3 opacity-40">📋</div><div class="font-semibold text-text mb-1">No orders yet</div></div></td></tr>`;
+  navTo('customer-detail');
+}
+function openCustomerCreate(){
+  document.getElementById('cf-title').textContent='Register Customer';
+  document.getElementById('cf-subtitle').textContent='Add a new customer to the system';
+  ['cf-first_name','cf-last_name','cf-email','cf-phone','cf-national_id','cf-dob','cf-address1','cf-address2','cf-city','cf-state','cf-postal','cf-country','cf-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cf-country').value='United States';
+  navTo('customer-form');
+}
+function openCustomerEdit(id){
+  const c=getCustomer(id);if(!c.id)return;
+  document.getElementById('cf-title').textContent='Edit Customer';
+  document.getElementById('cf-subtitle').textContent='Update details for '+c.first_name+' '+c.last_name;
+  document.getElementById('cf-first_name').value=c.first_name;
+  document.getElementById('cf-last_name').value=c.last_name;
+  document.getElementById('cf-email').value=c.email;
+  document.getElementById('cf-phone').value=c.phone;
+  document.getElementById('cf-national_id').value=c.national_id;
+  document.getElementById('cf-dob').value=c.date_of_birth;
+  document.getElementById('cf-address1').value=c.address_line1;
+  document.getElementById('cf-address2').value=c.address_line2;
+  document.getElementById('cf-city').value=c.city;
+  document.getElementById('cf-state').value=c.state;
+  document.getElementById('cf-postal').value=c.postal_code;
+  document.getElementById('cf-country').value=c.country;
+  document.getElementById('cf-notes').value=c.notes;
+  navTo('customer-form');
+}
+function handleCustomerSave(e){e.preventDefault();showToast('Customer saved successfully','success');navTo('customers');return false;}
+
+// ============================ PAYMENTS ============================
+function renderPayments(){
+  const q=document.getElementById('payment-search').value.toLowerCase();
+  const m=document.getElementById('payment-method-filter').value;
+  const allPayments=orders.flatMap(o=>o.payments.map(p=>({...p,order:o,customer:getCustomer(o.customer_id)})));
+  let filtered=allPayments.filter(p=>{
+    const matchQ=!q||p.payment_number.toLowerCase().includes(q)||p.order.order_number.toLowerCase().includes(q);
+    const matchM=!m||p.payment_method===m;
+    return matchQ&&matchM;
+  });
+  const tbody=document.getElementById('payments-table-body');
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="text-5xl mb-3 opacity-40">💳</div><div class="font-semibold text-text mb-1">No payments found</div></div></td></tr>`;return;}
+  tbody.innerHTML=filtered.map(p=>`<tr><td class="td-mono"><a href="#" onclick="openPaymentDetail(${p.id});return false">${p.payment_number}</a></td><td class="td-mono"><a href="#" onclick="openOrderDetail(${p.order.id});return false">${p.order.order_number}</a></td><td>${p.customer.first_name} ${p.customer.last_name}</td><td><strong>${fmtCurrency(p.amount)}</strong></td><td>${methodLabel(p.payment_method)}</td><td><span class="badge ${p.status==='confirmed'?'badge-paid':'badge-pending'}">${p.status.replace(/\b\w/g,l=>l.toUpperCase())}</span></td><td>${fmtDate(p.created_at)}</td><td><button onclick="openPaymentDetail(${p.id})" class="text-primary text-xs hover:underline">View</button></td></tr>`).join('');
+}
+function openPaymentDetail(id){
+  const allPayments=orders.flatMap(o=>o.payments.map(p=>({...p,order:o,customer:getCustomer(o.customer_id)})));
+  const p=allPayments.find(x=>x.id===id);if(!p)return;
+  currentPaymentOrderId=p.order.id;
+  document.getElementById('pd-number').textContent=p.payment_number;
+  document.getElementById('pd-meta').textContent=`Recorded on ${fmtDate(p.created_at)} by ${p.recorded_by}`;
+  document.getElementById('pd-details').innerHTML=`<div class="info-row"><span class="info-label">Payment #</span><span class="td-mono">${p.payment_number}</span></div><div class="info-row"><span class="info-label">Amount</span><strong class="text-lg">${fmtCurrency(p.amount)}</strong></div><div class="info-row"><span class="info-label">Method</span>${methodLabel(p.payment_method)}</div>${p.reference_number?`<div class="info-row"><span class="info-label">Reference</span><span class="td-mono">${p.reference_number}</span></div>`:''}<div class="info-row"><span class="info-label">Date</span>${fmtDate(p.created_at)}</div><div class="info-row"><span class="info-label">Recorded By</span>${p.recorded_by}</div>${p.notes?`<div class="info-row"><span class="info-label">Notes</span>${p.notes}</div>`:''}`;
+  document.getElementById('pd-order').innerHTML=`<div class="info-row"><span class="info-label">Order #</span><a href="#" onclick="openOrderDetail(${p.order.id});return false" class="td-mono">${p.order.order_number}</a></div><div class="info-row"><span class="info-label">Status</span>${statusBadge(p.order.status)}</div><div class="info-row"><span class="info-label">Customer</span><a href="#" onclick="openCustomerDetail(${p.customer.id});return false">${p.customer.first_name} ${p.customer.last_name}</a></div><div class="info-row"><span class="info-label">Order Total</span>${fmtCurrency(p.order.total_amount)}</div><div class="info-row"><span class="info-label">Amount Paid</span>${fmtCurrency(p.order.payments.reduce((a,pp)=>a+pp.amount,0))}</div><div class="info-row"><span class="info-label">Outstanding</span><strong class="${p.order.amount_outstanding>0?'text-danger':'text-success'}">${fmtCurrency(Math.max(0,p.order.total_amount-p.order.payments.reduce((a,pp)=>a+pp.amount,0)))}</strong></div>`;
+  navTo('payment-detail');
+}
+function openPaymentModal(){
+  const o=orders.find(x=>x.id===currentOrderId);
+  document.getElementById('pay-amount').value=o?Math.max(0,o.total_amount-o.payments.reduce((a,p)=>a+p.amount,0)).toFixed(2):'0.00';
+  openModal('payment-modal');
+}
+function toggleRef(){const checked=document.querySelector('[name="pay-method"]:checked').value;document.getElementById('pay-ref-group').style.display=['bank_transfer','card','check'].includes(checked)?'':'none';}
+function handlePaymentSave(e){e.preventDefault();closeModal('payment-modal');showToast('Payment recorded successfully','success');return false;}
+
+// ============================ INVENTORY ============================
+function renderInventory(){
+  const q=document.getElementById('inv-search').value.toLowerCase();
+  const cat=document.getElementById('inv-category-filter').value;
+  const stock=document.getElementById('inv-stock-filter').value;
+  let filtered=products.filter(p=>{
+    const matchQ=!q||p.sku.toLowerCase().includes(q)||p.name.toLowerCase().includes(q);
+    const matchCat=!cat||p.category_id==+cat;
+    const matchStock=!stock||(stock==='out'&&p.current_stock<=0)||(stock==='low'&&p.current_stock>0&&p.current_stock<=p.low_stock_threshold)||(stock==='ok'&&p.current_stock>p.low_stock_threshold);
+    return matchQ&&matchCat&&matchStock;
+  });
+  const tbody=document.getElementById('inventory-table-body');
+  if(!filtered.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="text-5xl mb-3 opacity-40">📦</div><div class="font-semibold text-text mb-1">No products found</div></div></td></tr>`;return;}
+  tbody.innerHTML=filtered.map(p=>`<tr><td class="td-mono">${p.sku}</td><td><div class="flex items-center gap-2"><div class="product-thumb">${p.current_stock>0?'<img src="https://placehold.co/44x44/2563EB/fff?text=P">':'IMG'}</div><div><strong>${p.name}</strong>${!p.is_active?' <span class="badge badge-inactive ml-1">Inactive</span>':''}</div></div></td><td>${getCategory(p.category_id).name}</td><td class="text-muted">${p.unit_of_measure}</td><td>${fmtCurrency(p.unit_price)}</td><td>${p.current_stock<=0?`<span class="stock-out">${p.current_stock}</span>`:p.current_stock<=p.low_stock_threshold?`<span class="stock-low">${p.current_stock}</span>`:`<span class="stock-ok">${p.current_stock}</span>`} <span class="text-xs text-muted">(min: ${p.low_stock_threshold})</span></td><td><button onclick="openProductEdit(${p.id})" class="text-primary text-xs hover:underline mr-2">Edit</button><button onclick="openAdjustModal(${p.id})" class="text-primary text-xs hover:underline mr-2">Adjust</button><button onclick="loadMovements(${p.id})" class="text-primary text-xs hover:underline">Movements</button></td></tr>`).join('');
+  // Populate category filter
+  const catSel=document.getElementById('inv-category-filter');
+  const existing=Array.from(catSel.options).map(o=>o.value);
+  categories.forEach(c=>{if(!existing.includes(String(c.id))){const opt=document.createElement('option');opt.value=c.id;opt.textContent=c.name;catSel.appendChild(opt);}});
+  // Populate adjust modal product select
+  const adjSel=document.getElementById('adjust-product');
+  if(adjSel.options.length<=1){products.forEach(p=>{const opt=document.createElement('option');opt.value=p.id;opt.textContent=p.sku+' — '+p.name;adjSel.appendChild(opt);});}
+}
+function openProductCreate(){editingProductId=null;document.getElementById('pf-title').textContent='Add Product';document.getElementById('pf-subtitle').textContent='Add a new product to inventory';document.getElementById('pf-sku').value='';document.getElementById('pf-name').value='';document.getElementById('pf-category').innerHTML='<option value="">— Select category —</option>'+categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');document.getElementById('pf-unit').value='unit';document.getElementById('pf-description').value='';document.getElementById('pf-price').value='';document.getElementById('pf-threshold').value='10';document.getElementById('pf-active').checked=true;navTo('product-form');}
+function openProductEdit(id){const p=getProduct(id);if(!p.id)return;editingProductId=id;document.getElementById('pf-title').textContent='Edit Product';document.getElementById('pf-subtitle').textContent='Update details for '+p.name;document.getElementById('pf-sku').value=p.sku;document.getElementById('pf-name').value=p.name;document.getElementById('pf-category').innerHTML='<option value="">— Select category —</option>'+categories.map(c=>`<option value="${c.id}" ${c.id===p.category_id?'selected':''}>${c.name}</option>`).join('');document.getElementById('pf-unit').value=p.unit_of_measure;document.getElementById('pf-description').value=p.description;document.getElementById('pf-price').value=p.unit_price;document.getElementById('pf-threshold').value=p.low_stock_threshold;document.getElementById('pf-active').checked=p.is_active;navTo('product-form');}
+function handleProductSave(e){e.preventDefault();showToast(editingProductId?'Product updated':'Product created','success');navTo('inventory');return false;}
+function openAdjustModal(productId){
+  document.getElementById('adjust-quantity').value='';
+  document.getElementById('adjust-notes').value='';
+  document.getElementById('adjust-type').value='purchase';
+  if(productId){const p=getProduct(productId);document.getElementById('adjust-product-select-row').style.display='none';document.getElementById('adjust-product-label-row').style.display='';document.getElementById('adjust-product-label').textContent=p.sku+' — '+p.name;document.getElementById('adjust-product').value=productId;document.getElementById('adjust-product').removeAttribute('required');}
+  else{document.getElementById('adjust-product-select-row').style.display='';document.getElementById('adjust-product-label-row').style.display='none';document.getElementById('adjust-product-label').textContent='';document.getElementById('adjust-product').value='';document.getElementById('adjust-product').setAttribute('required','');}
+  openModal('adjust-modal');
+}
+function handleAdjustSave(e){e.preventDefault();closeModal('adjust-modal');showToast('Stock adjustment recorded','success');return false;}
+function loadMovements(productId){
+  const p=getProduct(productId);
+  document.getElementById('movement-title').textContent=p.sku+' — '+p.name;
+  const pm=movements.filter(m=>m.product_id===productId);
+  let html=`<div class="text-xs text-muted mb-3">Current stock: <strong class="${p.current_stock<=0?'text-danger':p.current_stock<=p.low_stock_threshold?'text-warning':'text-success'}">${p.current_stock}</strong></div>`;
+  if(!pm.length){html+='<div class="text-muted italic text-sm">No movements recorded.</div>';}
+  else{html+=pm.map(m=>`<div class="movement-item"><div class="flex justify-between"><span><strong>${m.type}</strong> · ${m.reference_type} #${m.reference_id}</span><span class="${m.quantity>=0?'text-success':'text-danger'} font-semibold">${m.quantity>=0?'+':''}${m.quantity}</span></div><div class="pay-hist-meta">${fmtDate(m.date)} · ${m.created_by}</div>${m.notes?`<div class="pay-hist-meta">${m.notes}</div>`:''}</div>`).join('');}
+  document.getElementById('movement-body').innerHTML=html;
+  openPanel('movement-panel');
+}
+
+// ============================ CATEGORIES ============================
+function renderCategories(){
+  const tbody=document.getElementById('categories-table-body');
+  tbody.innerHTML=categories.map(c=>`<tr><td><a href="#" onclick="openCategoryEdit(${c.id});return false"><strong>${c.name}</strong></a>${c.description?`<div class="text-xs text-muted">${c.description}</div>`:''}</td><td>${c.parent_category?'<span class="badge badge-pending">Subcategory</span>':'<span class="badge badge-active">Parent</span>'}</td><td>${c.parent_category?`<a href="#" onclick="openCategoryEdit(${c.parent_category});return false">${getCategory(c.parent_category).name}</a>`:'—'}</td><td>${c.product_count}</td><td><button onclick="openCategoryEdit(${c.id})" class="text-primary text-xs hover:underline mr-2">Edit</button><button onclick="deleteCategory(${c.id})" class="text-danger text-xs hover:underline">Delete</button></td></tr>`).join('');
+}
+function openCategoryCreate(){
+  editingCategoryId=null;document.getElementById('catf-title').textContent='New Category';document.getElementById('catf-subtitle').textContent='Add a new product category';document.getElementById('catf-name').value='';document.getElementById('catf-desc').value='';document.getElementById('catf-parent').innerHTML='<option value="">— None (top-level) —</option>'+categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');navTo('category-form');
+}
+function openCategoryEdit(id){
+  const c=getCategory(id);if(!c.id)return;editingCategoryId=id;document.getElementById('catf-title').textContent='Edit Category';document.getElementById('catf-subtitle').textContent='Update details for '+c.name;document.getElementById('catf-name').value=c.name;document.getElementById('catf-desc').value=c.description;document.getElementById('catf-parent').innerHTML='<option value="">— None (top-level) —</option>'+categories.filter(x=>x.id!==id).map(x=>`<option value="${x.id}" ${x.id===c.parent_category?'selected':''}>${x.name}</option>`).join('');navTo('category-form');
+}
+function handleCategorySave(e){e.preventDefault();showToast(editingCategoryId?'Category updated':'Category created','success');navTo('categories');return false;}
+function deleteCategory(id){if(!confirm('Delete this category?'))return;showToast('Category deleted','success');renderCategories();}
+
+// ============================ USERS ============================
+function renderUsers(){
+  const tbody=document.getElementById('users-table-body');
+  tbody.innerHTML=users.map(u=>`<tr style="${u.is_active?'':'opacity:0.55'}"><td><div class="flex items-center gap-2"><div class="avatar" style="width:28px;height:28px;font-size:0.65rem;${!u.is_active?'background:var(--muted);':''}">${u.first_name[0]}${u.last_name[0]}</div><strong>${u.first_name} ${u.last_name}</strong>${u.id===1?'<span class="text-xs text-muted">(you)</span>':''}</div></td><td class="text-muted">${u.email}</td><td><span class="badge badge-${u.role.toLowerCase()}">${u.role}</span></td><td>${u.is_active?'<span class="badge badge-active">Active</span>':'<span class="badge badge-inactive">Inactive</span>'}</td><td class="text-muted">${u.last_login}</td><td><button class="text-primary text-xs hover:underline mr-2">Edit</button>${u.is_active?`<button onclick="toggleUser(${u.id})" class="text-xs hover:underline" style="color:var(--warning)">Deactivate</button>`:`<button onclick="toggleUser(${u.id})" class="text-xs hover:underline" style="color:var(--success)">Reactivate</button>`}</td></tr>`).join('');
+}
+function toggleUser(id){const u=users.find(x=>x.id===id);if(u){u.is_active=!u.is_active;showToast(`${u.first_name} ${u.is_active?'reactivated':'deactivated'}`,'success');renderUsers();}}
+function handleInviteSave(e){e.preventDefault();closeModal('invite-modal');showToast('User invited successfully','success');return false;}
+
+// ============================ SETTINGS ============================
+function handleSettingsSave(e){e.preventDefault();showToast('Settings saved successfully','success');return false;}
+
+// ============================ INIT ============================
+document.addEventListener('DOMContentLoaded',()=>{});
+</script>
+</body>
+</html>
