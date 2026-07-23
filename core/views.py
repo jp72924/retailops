@@ -6,7 +6,7 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.deletion import ProtectedError
 from django.http import JsonResponse
@@ -19,7 +19,7 @@ from django.views.decorators.http import require_POST
 from .decorators import role_required
 from .models import (
     Customer, InventoryMovement, Payment,
-    Product, ProductCategory, Role,
+    Product, ProductCategory, RecipientProfile, Role,
     SalesOrder, SalesOrderItem, SystemSettings, User,
 )
 
@@ -1580,6 +1580,118 @@ def user_reactivate(request, pk):
     return redirect('user-list')
 
 
+# ── Recipient Profiles (fraud-prevention allowlist) ─────────────────────────────
+
+@login_required
+@role_required('Manager', 'Admin')
+def recipient_profile_list(request):
+    q = request.GET.get('q', '').strip()
+    qs = RecipientProfile.objects.order_by('payment_method', 'label')
+    if q:
+        qs = qs.filter(
+            Q(label__icontains=q) | Q(phone__icontains=q) |
+            Q(bank__icontains=q) | Q(document_id__icontains=q)
+        )
+    page_obj = Paginator(qs, 25).get_page(request.GET.get('page'))
+    return render(request, 'core/recipient_profile_list.html', {'page_obj': page_obj, 'query': q})
+
+
+def _parse_recipient_profile_post(request):
+    label = request.POST.get('label', '').strip()
+    payment_method = request.POST.get('payment_method', '').strip()
+    phone = request.POST.get('phone', '').strip()
+    bank = request.POST.get('bank', '').strip()
+    document_id = request.POST.get('document_id', '').strip()
+
+    errors = {}
+    if payment_method not in dict(RecipientProfile.PAYMENT_METHOD_CHOICES):
+        errors['payment_method'] = 'Select a valid payment method.'
+    if not phone:
+        errors['phone'] = 'Phone is required.'
+    if not bank:
+        errors['bank'] = 'Bank is required.'
+    if not document_id:
+        errors['document_id'] = 'Document/ID number is required.'
+    return label, payment_method, phone, bank, document_id, errors
+
+
+_DUPLICATE_PROFILE_ERROR = (
+    'A profile with this exact payment method, phone, bank, and document number already exists.'
+)
+
+
+@login_required
+@role_required('Manager', 'Admin')
+def recipient_profile_create(request):
+    if request.method == 'POST':
+        label, payment_method, phone, bank, document_id, errors = _parse_recipient_profile_post(request)
+        form_data = {
+            'label': label, 'payment_method': payment_method,
+            'phone': phone, 'bank': bank, 'document_id': document_id,
+        }
+        if not errors:
+            try:
+                profile = RecipientProfile.objects.create(
+                    label=label, payment_method=payment_method, phone=phone,
+                    bank=bank, document_id=document_id, created_by=request.user,
+                )
+                messages.success(request, f'Recipient profile "{profile}" created.')
+                return redirect('recipient-profile-list')
+            except IntegrityError:
+                errors['non_field'] = _DUPLICATE_PROFILE_ERROR
+        return render(request, 'core/recipient_profile_form.html',
+                      {'errors': errors, 'form_data': form_data})
+    return render(request, 'core/recipient_profile_form.html', {'errors': {}, 'form_data': {}})
+
+
+@login_required
+@role_required('Manager', 'Admin')
+def recipient_profile_edit(request, pk):
+    profile = get_object_or_404(RecipientProfile, pk=pk)
+
+    if request.method == 'POST':
+        label, payment_method, phone, bank, document_id, errors = _parse_recipient_profile_post(request)
+        is_active = request.POST.get('is_active') == 'on'
+        form_data = {
+            'label': label, 'payment_method': payment_method, 'phone': phone,
+            'bank': bank, 'document_id': document_id, 'is_active': is_active,
+        }
+        if not errors:
+            profile.label = label
+            profile.payment_method = payment_method
+            profile.phone = phone
+            profile.bank = bank
+            profile.document_id = document_id
+            profile.is_active = is_active
+            try:
+                profile.save()
+                messages.success(request, f'Recipient profile "{profile}" updated.')
+                return redirect('recipient-profile-list')
+            except IntegrityError:
+                errors['non_field'] = _DUPLICATE_PROFILE_ERROR
+        return render(request, 'core/recipient_profile_form.html',
+                      {'profile': profile, 'errors': errors, 'form_data': form_data})
+
+    form_data = {
+        'label': profile.label, 'payment_method': profile.payment_method,
+        'phone': profile.phone, 'bank': profile.bank,
+        'document_id': profile.document_id, 'is_active': profile.is_active,
+    }
+    return render(request, 'core/recipient_profile_form.html',
+                  {'profile': profile, 'errors': {}, 'form_data': form_data})
+
+
+@require_POST
+@login_required
+@role_required('Manager', 'Admin')
+def recipient_profile_delete(request, pk):
+    profile = get_object_or_404(RecipientProfile, pk=pk)
+    label = str(profile)
+    profile.delete()
+    messages.success(request, f'Recipient profile "{label}" deleted.')
+    return redirect('recipient-profile-list')
+
+
 # ── Regional Settings ──────────────────────────────────────────────────────────
 
 @login_required
@@ -1716,6 +1828,9 @@ def user_settings(request):
             sys_settings.ocr_require_complete = request.POST.get('ocr_require_complete') == 'on'
             sys_settings.receipt_image_required_for_receipt_methods = (
                 request.POST.get('receipt_image_required_for_receipt_methods') == 'on'
+            )
+            sys_settings.recipient_validation_enabled = (
+                request.POST.get('recipient_validation_enabled') == 'on'
             )
 
             if errors:

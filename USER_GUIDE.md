@@ -485,6 +485,54 @@ POST /api/v1/settings/secondary-rate/refresh/   (Manager or Admin token)
 > value you set until someone changes it. The kiosk PWA, if your business uses
 > one, has its own live-rate pipeline and is unaffected by this value.
 
+### Receipt OCR settings (Manager / Admin)
+
+*Who can do this: Manager, Admin*
+
+If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk, you can turn on automatic verification of the payment receipt screenshots customers upload. Verification is handled by a server-side proxy to **VEPay**, which reads the receipt image and reports back what it found (amount, date, reference, recipient) so RetailOps can check it against the order before accepting the payment.
+
+**Turning it on:**
+
+1. On the **Settings** page, find the **Receipt OCR Settings** card.
+2. Tick **Enable receipt OCR verification**.
+3. Fill in:
+   - **Provider** — currently only **VEPay** is supported.
+   - **VEPay Base URL** — the address of your VEPay proxy instance. Required while OCR is enabled.
+   - **API Key** — click **Replace key** to paste your VEPay API key. The key is never shown again after saving; the field just displays `***` to confirm one is on file. Leaving the replace box blank after clicking **Replace key** clears the stored key.
+   - **Timeout Seconds** — how long RetailOps waits for VEPay to respond before giving up.
+   - **Max File Size MB** — the largest receipt image accepted for upload.
+   - **Receipt Image Retention Days** — how many days a receipt image is kept before it's automatically deleted.
+4. Under **Payment Methods**, tick which of Mobile Payment / Bank Transfer require OCR verification.
+5. Optionally tick:
+   - **Require amount to match outstanding balance** — rejects a receipt if the OCR-read amount doesn't match what's owed.
+   - **Require VEPay complete validation** — rejects receipts VEPay only partially or ambiguously matched.
+   - **Require receipt image for kiosk mobile payment and bank transfer** — customers must attach an image before submitting these payment methods, independent of whether OCR itself is enabled.
+6. Click **Save Settings**.
+
+> Turning OCR off (unticking **Enable receipt OCR verification**) stops receipts from being checked, but the rest of the configuration — base URL, key, timeouts, method selection — stays on file so you can re-enable it later without re-entering everything.
+
+### Recipient profile validation (Manager / Admin)
+
+*Who can do this: Manager, Admin*
+
+If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk with receipt-screenshot verification, you can add an extra fraud check: RetailOps compares the **recipient** phone, bank, and identification/document number that OCR reads off the screenshot against a list of your own known-good accounts. A screenshot that doesn't name one of these accounts as the recipient is rejected, even if everything else about it looks legitimate — this catches a customer paying into the wrong account (or someone else's account) and submitting that screenshot as if it were a valid payment to you.
+
+**Setting up recipient profiles:**
+
+1. On the **Settings** page, find **Manage Recipient Profiles** in the Receipt OCR Settings card and open it.
+2. Click **+ New Profile** and fill in:
+   - **Label** — an optional name to help you recognize the profile later (e.g. "Main store — BDV").
+   - **Payment Method** — Mobile Payment or Bank Transfer.
+   - **Recipient Phone**, **Recipient Bank**, **Recipient Document/ID Number** — all three are required and must match what your customers actually see when they pay you.
+3. Save. Add one profile per account/payment-method combination you accept payments into.
+4. Profiles can be edited or marked **Active/Inactive** at any time; deactivating a profile keeps it on file for reference without using it for matching. Deleting a profile removes it permanently.
+
+**Turning on the check:**
+
+Back on the Settings page, tick **Reject payments whose receipt recipient doesn't match a known-good profile** in the Receipt OCR Settings card and save. RetailOps will not let you enable this until at least one active recipient profile exists for at least one payment method.
+
+> Recipient validation is independent of the existing amount/reference/date checks — it only looks at *who the money was sent to*. Small formatting differences (dashes in phone numbers, accents in bank names, punctuation in document numbers) are normalized automatically, so profiles don't need to match the screenshot text exactly.
+
 ---
 
 ## Quick Reference — Order Status Summary

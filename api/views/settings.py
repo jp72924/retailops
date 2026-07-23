@@ -3,7 +3,7 @@ from rest_framework.authentication import SessionAuthentication, TokenAuthentica
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Payment, SystemSettings
+from core.models import Payment, RecipientProfile, SystemSettings
 from core.services.bcv import BCVRateError, update_secondary_exchange_rate
 from api.kiosk.authentication import KioskTokenAuthentication
 from api.permissions import IsManagerOrAdmin
@@ -30,7 +30,7 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             'ocr_timeout_seconds', 'ocr_max_file_mb',
             'ocr_strict_amount', 'ocr_require_complete',
             'ocr_enabled_methods', 'receipt_image_required_for_receipt_methods',
-            'delete_receipt_image_after_days',
+            'delete_receipt_image_after_days', 'recipient_validation_enabled',
         ]
         read_only_fields = ['secondary_rate_updated_at']
 
@@ -106,6 +106,15 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({
                     'secondary_rate_source_field': 'Required when automatic rate update is enabled.'
                 })
+
+        recipient_validation_enabled = attrs.get(
+            'recipient_validation_enabled',
+            self.instance.recipient_validation_enabled if self.instance else False,
+        )
+        if recipient_validation_enabled and not RecipientProfile.objects.filter(is_active=True).exists():
+            raise serializers.ValidationError({
+                'recipient_validation_enabled': 'At least one active recipient profile is required before enabling this check.'
+            })
         return attrs
 
     def to_representation(self, instance):

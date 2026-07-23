@@ -2,6 +2,7 @@ from decimal import Decimal
 from io import BytesIO
 
 import responses
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
@@ -13,6 +14,7 @@ from core.models import (
     Customer,
     OcrCallLog,
     Payment,
+    RecipientProfile,
     Role,
     SalesOrder,
     SystemSettings,
@@ -22,6 +24,8 @@ from core.models import (
 
 class ReceiptVerifyAPITests(APITestCase):
     def setUp(self):
+        cache.clear()
+        self.addCleanup(cache.clear)
         role = Role.objects.create(name=Role.MANAGER)
         self.user = User.objects.create_user(
             email='manager@example.com',
@@ -307,6 +311,58 @@ class ReceiptVerifyAPITests(APITestCase):
         self.assertEqual(response.data['code'], 'incomplete_receipt')
         self.assertEqual(response.data['details']['missing_fields'], ['origin.phone'])
         self.assertEqual(OcrCallLog.objects.get().status, 'incomplete_receipt')
+
+    @responses.activate
+    def test_verify_receipt_recipient_match_is_none_when_toggle_disabled(self):
+        responses.add(responses.POST, self.provider_url, json=self._vepay_payload(), status=200)
+
+        response = self.client.post(self.url, self._multipart_payload(), format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data['checks']['recipient_match'])
+
+    @responses.activate
+    def test_verify_receipt_recipient_mismatch_is_a_warning_not_an_error(self):
+        settings = SystemSettings.get()
+        settings.recipient_validation_enabled = True
+        settings.save()
+        RecipientProfile.objects.create(
+            label='Main store', payment_method=Payment.MOBILE_PAYMENT,
+            phone='4141234567', bank='BDV', document_id='V12345678',
+            created_by=self.user,
+        )
+        responses.add(responses.POST, self.provider_url, json=self._vepay_payload(), status=200)
+
+        response = self.client.post(self.url, self._multipart_payload(), format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['valid'], True)
+        self.assertFalse(response.data['checks']['recipient_match']['matched'])
+        self.assertIn(
+            'recipient_mismatch',
+            [warning['code'] for warning in response.data['warnings']],
+        )
+
+    @responses.activate
+    def test_verify_receipt_recipient_match_reports_matched_profile(self):
+        settings = SystemSettings.get()
+        settings.recipient_validation_enabled = True
+        settings.save()
+        RecipientProfile.objects.create(
+            label='Main store', payment_method=Payment.MOBILE_PAYMENT,
+            phone='04129876543', bank='Mercantil', document_id='J-12345678-9',
+            created_by=self.user,
+        )
+        responses.add(responses.POST, self.provider_url, json=self._vepay_payload(), status=200)
+
+        response = self.client.post(self.url, self._multipart_payload(), format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['checks']['recipient_match']['matched'])
+        self.assertNotIn(
+            'recipient_mismatch',
+            [warning['code'] for warning in response.data['warnings']],
+        )
 
     def test_verify_receipt_rejects_unsupported_heif_before_provider_call(self):
         image = SimpleUploadedFile(

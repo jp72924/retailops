@@ -11,6 +11,9 @@ from .vepay import (
     PAYMENT_BANK_APP_PATH,
     PAYMENT_DATETIME_ISO_PATH,
     PAYMENT_REFERENCE_PATH,
+    RECIPIENT_BANK_PATH,
+    RECIPIENT_DOCUMENT_ID_PATH,
+    RECIPIENT_PHONE_PATH,
     get_receipt_value,
 )
 
@@ -23,6 +26,7 @@ PAYMENT_AMOUNT_CURRENCY_PATHS = (
     ('currency',),
 )
 REQUIRED_FIELD_KEYS = ('amount_usd', 'reference', 'paid_on', 'origin_bank')
+RECIPIENT_FIELD_KEYS = ('phone', 'bank', 'document_id')
 
 BANK_ALIASES = {
     'BDV': 'BDV',
@@ -93,6 +97,49 @@ def compare_receipt_fields(receipt_data, expected_fields, settings, field_keys=N
         'receipt_fields': _stringify_fields(receipt_fields),
         'expected_fields': _stringify_fields(expected),
         'mismatches': mismatches,
+    }
+
+
+def match_recipient_profile(receipt_data, profiles):
+    """
+    Check OCR-extracted recipient fields (phone, bank, document id) against a
+    set of admin-configured RecipientProfile-like objects.
+
+    ``profiles`` is an iterable already scoped by the caller (active +
+    matching payment_method) exposing .phone/.bank/.document_id/.pk — this
+    function does not query the DB itself, keeping it unit-testable with
+    plain objects/namedtuples.
+
+    A receipt only matches a profile if all three fields are present on the
+    receipt and all three normalize to the same value as the profile ("no
+    OCR data" is always a non-match, matching compare_receipt_fields'
+    missing-is-mismatch convention).
+    """
+    receipt_fields = {
+        'phone': normalize_phone(get_receipt_value(receipt_data, RECIPIENT_PHONE_PATH, '')),
+        'bank': normalize_bank(get_receipt_value(receipt_data, RECIPIENT_BANK_PATH, '')),
+        'document_id': normalize_document_id(
+            get_receipt_value(receipt_data, RECIPIENT_DOCUMENT_ID_PATH, '')
+        ),
+    }
+
+    profiles = list(profiles)
+    matched_profile_id = None
+    if all(receipt_fields.values()):
+        for profile in profiles:
+            if (
+                normalize_phone(profile.phone) == receipt_fields['phone'] and
+                normalize_bank(profile.bank) == receipt_fields['bank'] and
+                normalize_document_id(profile.document_id) == receipt_fields['document_id']
+            ):
+                matched_profile_id = profile.pk
+                break
+
+    return {
+        'matched': matched_profile_id is not None,
+        'matched_profile_id': matched_profile_id,
+        'receipt_fields': _stringify_fields(receipt_fields),
+        'checked_profiles_count': len(profiles),
     }
 
 
@@ -209,6 +256,24 @@ def normalize_bank(value):
         return ''
     compact = re.sub(r'[^0-9A-Z]+', ' ', raw).strip()
     return BANK_ALIASES.get(compact, compact)
+
+
+def normalize_phone(value):
+    """
+    Strip everything but digits, then drop a leading '58' country code or a
+    single leading trunk '0' so '0414-1234567', '+58 414 1234567', and
+    '4141234567' all compare equal on the national-significant digits.
+    """
+    digits = re.sub(r'\D+', '', str(value or ''))
+    if digits.startswith('58') and len(digits) > 10:
+        digits = digits[2:]
+    if digits.startswith('0') and len(digits) > 10:
+        digits = digits[1:]
+    return digits
+
+
+def normalize_document_id(value):
+    return re.sub(r'[^0-9A-Za-z]+', '', str(value or '')).upper()
 
 
 def _ascii_upper(value):

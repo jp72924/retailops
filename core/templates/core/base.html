@@ -385,7 +385,7 @@
     {% if user.role.name == 'Admin' %}
     <a href="{% url 'user-list' %}"      class="nav-link {% if 'user' in url_name %}active{% endif %}">{% trans "Users" %}</a>
     {% endif %}
-    <a href="{% url 'settings' %}"       class="nav-link {% if url_name == 'settings' %}active{% endif %}">{% trans "Settings" %}</a>
+    <a href="{% url 'settings' %}"       class="nav-link {% if url_name == 'settings' or 'recipient-profile' in url_name %}active{% endif %}">{% trans "Settings" %}</a>
   </div>
   <div class="nav-right">
     <form method="post" action="{% url 'set-language' %}" class="nav-lang" id="lang-form">

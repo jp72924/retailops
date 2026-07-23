@@ -15,9 +15,11 @@ from rest_framework.views import APIView
 
 from core.models import (
     Customer, InventoryMovement, KioskStation, Payment, Product,
-    SalesOrder, SalesOrderItem, SystemSettings,
+    RecipientProfile, SalesOrder, SalesOrderItem, SystemSettings,
 )
-from core.services.receipt_matching import REQUIRED_FIELD_KEYS, compare_receipt_fields
+from core.services.receipt_matching import (
+    REQUIRED_FIELD_KEYS, compare_receipt_fields, match_recipient_profile,
+)
 from core.services.vepay import TRANSACTION_KEY_PATH, VEPayClient, VEPayError, get_receipt_value
 
 from .authentication import KioskTokenAuthentication
@@ -486,6 +488,22 @@ def _payment_receipt_fields(receipt_data, order, payment_method, now):
                     'mismatches': comparison['mismatches'],
                 },
             )
+
+        if settings.recipient_validation_enabled:
+            profiles = RecipientProfile.objects.filter(
+                is_active=True, payment_method=payment_method,
+            )
+            recipient_match = match_recipient_profile(vepay_data, profiles)
+            if not recipient_match['matched']:
+                raise _ReceiptValidationError(
+                    'Receipt recipient details do not match any known-good account.',
+                    'recipient_mismatch',
+                    status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    details={
+                        'receipt_fields': recipient_match['receipt_fields'],
+                        'checked_profiles_count': recipient_match['checked_profiles_count'],
+                    },
+                )
 
         transaction_key = (
             get_receipt_value(vepay_data, TRANSACTION_KEY_PATH, '') or transaction_key

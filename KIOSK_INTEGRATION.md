@@ -94,6 +94,28 @@ https://github.com/jp72924/vepay-api
 Until a Base URL is configured, saving with OCR enabled is rejected — the field
 is required when OCR is on.
 
+### Recipient profile validation (optional)
+
+With OCR enabled, RetailOps can additionally verify that a receipt's OCR-detected
+*recipient* phone, bank, and document/ID number match one of your own configured
+recipient profiles (**Settings → Manage Recipient Profiles**). This catches
+receipts paid into a different account than yours. When enabled and no profile
+matches, `POST /api/v1/kiosk/checkout/` returns:
+
+```json
+{
+  "error": "Receipt recipient details do not match any known-good account.",
+  "code": "recipient_mismatch",
+  "details": {
+    "receipt_fields": {"phone": "...", "bank": "...", "document_id": "..."},
+    "checked_profiles_count": 1
+  }
+}
+```
+
+with HTTP status `422`. This check is off by default and requires at least one
+active recipient profile before it can be turned on.
+
 ## Important Boundaries
 
 - The Kiosk never connects directly to PostgreSQL, SQLite, GCS, S3, or local
@@ -114,3 +136,6 @@ is required when OCR is on.
   station key from backend tooling.
 - Receipt validation fails: check System Settings for OCR enablement, supported
   payment methods, receipt image requirement, and VEPay configuration.
+- `recipient_mismatch`: the receipt's OCR-detected recipient doesn't match any
+  active recipient profile for that payment method — check **Settings → Manage
+  Recipient Profiles**, or disable recipient validation if not needed.

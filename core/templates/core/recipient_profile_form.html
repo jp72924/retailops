@@ -1,0 +1,103 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+{% block title %}{% if profile %}{% trans "Edit Recipient Profile" %}{% else %}{% trans "New Recipient Profile" %}{% endif %} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">{% if profile %}{% trans "Edit Recipient Profile" %}{% else %}{% trans "New Recipient Profile" %}{% endif %}</div>
+      <div class="page-subtitle">
+        {% if profile %}{% blocktrans with name=profile|stringformat:"s" %}Update details for {{ name }}{% endblocktrans %}{% else %}{% trans "Add a known-good recipient for OCR-verified kiosk payments" %}{% endif %}
+      </div>
+    </div>
+    <a href="{% url 'recipient-profile-list' %}" style="color:var(--muted);font-size:0.875rem;">← {% trans "Back" %}</a>
+  </div>
+
+  <div class="card" style="max-width:640px;">
+    <div class="card-body">
+      {% if errors.non_field %}
+      <div class="invalid-feedback" style="margin-bottom:16px;">{{ errors.non_field }}</div>
+      {% endif %}
+      <form method="post" action="{% if profile %}{% url 'recipient-profile-edit' profile.pk %}{% else %}{% url 'recipient-profile-create' %}{% endif %}">
+        {% csrf_token %}
+
+        <div class="form-section">
+          <div class="form-section-title">{% trans "Profile Details" %}</div>
+
+          <!-- Label (optional) -->
+          <div class="form-group">
+            <label class="form-label" for="id_label">{% trans "Label" %}</label>
+            <input type="text" id="id_label" name="label" maxlength="150"
+              class="form-control"
+              value="{{ form_data.label|default:'' }}"
+              placeholder="{% trans 'e.g. Main store — BDV' %}">
+          </div>
+
+          <!-- Payment method (required) -->
+          <div class="form-group">
+            <label class="form-label" for="id_payment_method">{% trans "Payment Method" %} <span class="req">*</span></label>
+            <select id="id_payment_method" name="payment_method" required
+              class="form-control{% if errors.payment_method %} is-invalid{% endif %}">
+              <option value="">{% trans "— Select —" %}</option>
+              <option value="mobile_payment" {% if form_data.payment_method == "mobile_payment" %}selected{% endif %}>{% trans "Mobile Payment" %}</option>
+              <option value="bank_transfer" {% if form_data.payment_method == "bank_transfer" %}selected{% endif %}>{% trans "Bank Transfer" %}</option>
+            </select>
+            {% if errors.payment_method %}<div class="invalid-feedback">{{ errors.payment_method }}</div>{% endif %}
+          </div>
+
+          <!-- Phone (required) -->
+          <div class="form-group">
+            <label class="form-label" for="id_phone">{% trans "Recipient Phone" %} <span class="req">*</span></label>
+            <input type="text" id="id_phone" name="phone" maxlength="30" required
+              class="form-control{% if errors.phone %} is-invalid{% endif %}"
+              value="{{ form_data.phone|default:'' }}"
+              placeholder="{% trans 'e.g. 0414-1234567' %}">
+            {% if errors.phone %}<div class="invalid-feedback">{{ errors.phone }}</div>{% endif %}
+          </div>
+
+          <!-- Bank (required) -->
+          <div class="form-group">
+            <label class="form-label" for="id_bank">{% trans "Recipient Bank" %} <span class="req">*</span></label>
+            <input type="text" id="id_bank" name="bank" maxlength="120" required
+              class="form-control{% if errors.bank %} is-invalid{% endif %}"
+              value="{{ form_data.bank|default:'' }}"
+              placeholder="{% trans 'e.g. Banco de Venezuela' %}">
+            {% if errors.bank %}<div class="invalid-feedback">{{ errors.bank }}</div>{% endif %}
+          </div>
+
+          <!-- Document ID (required) -->
+          <div class="form-group">
+            <label class="form-label" for="id_document_id">{% trans "Recipient Document/ID Number" %} <span class="req">*</span></label>
+            <input type="text" id="id_document_id" name="document_id" maxlength="60" required
+              class="form-control{% if errors.document_id %} is-invalid{% endif %}"
+              value="{{ form_data.document_id|default:'' }}"
+              placeholder="{% trans 'e.g. V-12345678' %}">
+            {% if errors.document_id %}<div class="invalid-feedback">{{ errors.document_id }}</div>{% endif %}
+          </div>
+
+          {% if profile %}
+          <div class="form-group">
+            <label class="form-check">
+              <input type="checkbox" name="is_active" value="on"
+                {% if form_data.is_active %}checked{% endif %}>
+              {% trans "Active" %}
+            </label>
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+              {% trans "Inactive profiles are kept for reference but are never matched against receipts." %}
+            </div>
+          </div>
+          {% endif %}
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">
+            {% if profile %}{% trans "Save Changes" %}{% else %}{% trans "Create Profile" %}{% endif %}
+          </button>
+          <a href="{% url 'recipient-profile-list' %}" class="btn btn-secondary">{% trans "Cancel" %}</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
