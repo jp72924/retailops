@@ -485,6 +485,32 @@ POST /api/v1/settings/secondary-rate/refresh/   (Manager or Admin token)
 > value you set until someone changes it. The kiosk PWA, if your business uses
 > one, has its own live-rate pipeline and is unaffected by this value.
 
+### Receipt OCR settings (Manager / Admin)
+
+*Who can do this: Manager, Admin*
+
+If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk, you can turn on automatic verification of the payment receipt screenshots customers upload. Verification is handled by a server-side proxy to **VEPay**, which reads the receipt image and reports back what it found (amount, date, reference, recipient) so RetailOps can check it against the order before accepting the payment.
+
+**Turning it on:**
+
+1. On the **Settings** page, find the **Receipt OCR Settings** card.
+2. Tick **Enable receipt OCR verification**.
+3. Fill in:
+   - **Provider** — currently only **VEPay** is supported.
+   - **VEPay Base URL** — the address of your VEPay proxy instance. Required while OCR is enabled.
+   - **API Key** — click **Replace key** to paste your VEPay API key. The key is never shown again after saving; the field just displays `***` to confirm one is on file. Leaving the replace box blank after clicking **Replace key** clears the stored key.
+   - **Timeout Seconds** — how long RetailOps waits for VEPay to respond before giving up.
+   - **Max File Size MB** — the largest receipt image accepted for upload.
+   - **Receipt Image Retention Days** — how many days a receipt image is kept before it's automatically deleted.
+4. Under **Payment Methods**, tick which of Mobile Payment / Bank Transfer require OCR verification.
+5. Optionally tick:
+   - **Require amount to match outstanding balance** — rejects a receipt if the OCR-read amount doesn't match what's owed.
+   - **Require VEPay complete validation** — rejects receipts VEPay only partially or ambiguously matched.
+   - **Require receipt image for kiosk mobile payment and bank transfer** — customers must attach an image before submitting these payment methods, independent of whether OCR itself is enabled.
+6. Click **Save Settings**.
+
+> Turning OCR off (unticking **Enable receipt OCR verification**) stops receipts from being checked, but the rest of the configuration — base URL, key, timeouts, method selection — stays on file so you can re-enable it later without re-entering everything.
+
 ### Recipient profile validation (Manager / Admin)
 
 *Who can do this: Manager, Admin*

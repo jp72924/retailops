@@ -1128,12 +1128,41 @@ Partial update — only the fields you provide are changed. All fields are optio
 }
 ```
 
+**Enable OCR verification example:**
+```json
+{
+  "ocr_enabled": true,
+  "ocr_provider": "vepay",
+  "ocr_base_url": "https://your-vepay-instance.example.com",
+  "ocr_api_key": "sk_live_xxxxxxxxxxxx",
+  "ocr_timeout_seconds": 30,
+  "ocr_max_file_mb": 8,
+  "ocr_strict_amount": true,
+  "ocr_require_complete": false,
+  "ocr_enabled_methods": ["mobile_payment", "bank_transfer"]
+}
+```
+
 Response `200 OK`: the updated settings object (same shape as `GET`).
 
 **Validation rules for secondary currency:**
 - If `secondary_currency_enabled` is `true`, `secondary_currency_symbol` must be non-empty (even in a PATCH that omits it — the server merges with the stored value before validating).
 - `secondary_exchange_rate` must be `> 0` whenever provided.
 - Violations return `400 validation_error` with per-field details.
+
+**Validation rules for OCR/VEPay settings:**
+- If `ocr_enabled` is `true`, `ocr_base_url` must be non-empty (same merge-before-validate behavior as the secondary-currency symbol above — a PATCH that omits `ocr_base_url` while `ocr_enabled` is already stored as `true` still requires it to be set).
+- `ocr_provider` must be one of the supported provider choices (currently only `"vepay"`).
+- `ocr_timeout_seconds`, `ocr_max_file_mb`, and `delete_receipt_image_after_days` must each be `> 0`.
+- `ocr_enabled_methods` must be a list whose entries are drawn only from `"mobile_payment"` / `"bank_transfer"`; any other value returns `400` naming the unsupported method(s).
+- Violations return `400 validation_error` with per-field details.
+
+<a id="ocr-api-key-masking"></a>
+**`ocr_api_key` masking:**
+- `GET` and `PATCH` responses never return the real key: they return `"***"` if a key is stored, or `""` if none is stored.
+- To leave the stored key unchanged, either omit `ocr_api_key` from the `PATCH` body entirely, or send it back as `"***"` — both are treated as "no change."
+- The sentinel `"__no_change__"` is also accepted for the same purpose (used by the Settings page form, which always has to submit a value for the field).
+- To replace the key, send the new cleartext value in `ocr_api_key`. To clear it, send an empty string `""`.
 
 **Note:** Changing these settings takes effect immediately for all new back-office renders and API responses. Existing prices and totals stored in the database are raw decimals — they are not converted, only the display changes. The secondary exchange rate is a static, admin-set value used for back-office display only; it has no effect on the kiosk PWA, which maintains its own live exchange rate pipeline.
 
