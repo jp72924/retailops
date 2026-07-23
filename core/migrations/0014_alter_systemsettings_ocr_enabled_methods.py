@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('core', '0012_systemsettings_secondary_rate_auto_update_enabled_and_more'),
+        ('core', '0013_systemsettings_recipient_validation_enabled_and_more'),
     ]
 
     operations = [
