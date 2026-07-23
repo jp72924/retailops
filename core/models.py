@@ -565,7 +565,7 @@ class SystemSettings(models.Model):
     ocr_max_file_mb = models.PositiveIntegerField(default=8)
     ocr_strict_amount = models.BooleanField(default=True)
     ocr_require_complete = models.BooleanField(default=False)
-    ocr_enabled_methods = models.JSONField(default=list)
+    ocr_enabled_methods = models.JSONField(default=list, blank=True)
     receipt_image_required_for_receipt_methods = models.BooleanField(default=True)
     delete_receipt_image_after_days = models.PositiveIntegerField(default=90)
 
