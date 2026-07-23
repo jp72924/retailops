@@ -18,6 +18,7 @@ from .views.inventory import InventoryMovementViewSet
 from .views.order import OrderViewSet
 from .views.payment import PaymentViewSet
 from .views.product import ProductViewSet
+from .views.recipient_profile import RecipientProfileViewSet
 from .views.role import RoleViewSet
 from .views.mcp_skill import MCPSkillView
 from .views.settings import SecondaryRateRefreshView, SystemSettingsView
@@ -38,6 +39,7 @@ router.register('inventory', InventoryMovementViewSet, basename='inventory')
 # ── Phase 4 ───────────────────────────────────────────────────────────────────
 router.register('orders',   OrderViewSet,   basename='order')
 router.register('payments', PaymentViewSet, basename='payment')
+router.register('payment-recipient-profiles', RecipientProfileViewSet, basename='recipient-profile')
 
 urlpatterns = router.urls + [
     # Authentication

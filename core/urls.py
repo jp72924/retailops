@@ -161,6 +161,21 @@ urlpatterns = [
     # POST /users/<pk>/reactivate/  — set is_active=True; redirect to user-list
     path('users/<int:pk>/reactivate/', views.user_reactivate, name='user-reactivate'),
 
+    # ── Recipient Profiles (fraud-prevention allowlist, Manager/Admin) ─────────
+    # GET  /settings/recipient-profiles/           — paginated profile list with search
+    path('settings/recipient-profiles/', views.recipient_profile_list, name='recipient-profile-list'),
+
+    # GET  /settings/recipient-profiles/new/       — blank profile form
+    # POST /settings/recipient-profiles/new/       — create; redirect to recipient-profile-list
+    path('settings/recipient-profiles/new/', views.recipient_profile_create, name='recipient-profile-create'),
+
+    # GET  /settings/recipient-profiles/<pk>/edit/ — pre-filled edit form
+    # POST /settings/recipient-profiles/<pk>/edit/ — update; redirect to recipient-profile-list
+    path('settings/recipient-profiles/<int:pk>/edit/', views.recipient_profile_edit, name='recipient-profile-edit'),
+
+    # POST /settings/recipient-profiles/<pk>/delete/ — delete; redirect to recipient-profile-list
+    path('settings/recipient-profiles/<int:pk>/delete/', views.recipient_profile_delete, name='recipient-profile-delete'),
+
     # ── Regional Settings ─────────────────────────────────────────────────────
     # GET  /settings/  — personal timezone/language + system currency (Admin)
     # POST /settings/  — save preferences

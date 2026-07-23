@@ -13,6 +13,7 @@ from core.models import (
     Payment,
     Product,
     ProductCategory,
+    RecipientProfile,
     Role,
     SystemSettings,
     User,
@@ -260,6 +261,58 @@ class KioskCheckoutReceiptTests(APITestCase):
 
         self.assertEqual(Payment.objects.count(), 0)
 
+    @responses.activate
+    def test_recipient_mismatch_is_rejected_with_422(self):
+        self._enable_ocr()
+        self._enable_recipient_validation(payment_method=Payment.MOBILE_PAYMENT)
+        payload = self._vepay_payload()
+        payload['recipient'] = {'phone': '0424-0000000', 'bank': 'Banesco', 'document_id': 'V00000000'}
+        responses.add(responses.POST, self.provider_url, json=payload, status=200)
+
+        response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data['code'], 'recipient_mismatch')
+        self.assertEqual(Payment.objects.count(), 0)
+
+    @responses.activate
+    def test_recipient_match_allows_checkout(self):
+        self._enable_ocr()
+        self._enable_recipient_validation(payment_method=Payment.MOBILE_PAYMENT)
+        payload = self._vepay_payload()
+        payload['recipient'] = {'phone': '0414-1234567', 'bank': 'Banco de Venezuela', 'document_id': 'V-12345678'}
+        responses.add(responses.POST, self.provider_url, json=payload, status=200)
+
+        response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Payment.objects.get().status, Payment.CONFIRMED)
+
+    @responses.activate
+    def test_recipient_validation_disabled_skips_check(self):
+        self._enable_ocr()
+        payload = self._vepay_payload()
+        payload['recipient'] = {'phone': '0424-0000000', 'bank': 'Banesco', 'document_id': 'V00000000'}
+        responses.add(responses.POST, self.provider_url, json=payload, status=200)
+
+        response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    @responses.activate
+    def test_recipient_validation_scoped_to_payment_method(self):
+        self._enable_ocr()
+        self._enable_recipient_validation(payment_method=Payment.BANK_TRANSFER)
+        payload = self._vepay_payload()
+        payload['recipient'] = {'phone': '0414-1234567', 'bank': 'Banco de Venezuela', 'document_id': 'V-12345678'}
+        responses.add(responses.POST, self.provider_url, json=payload, status=200)
+
+        response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data['code'], 'recipient_mismatch')
+        self.assertEqual(response.data['details']['checked_profiles_count'], 0)
+
     def test_checkout_blocks_receipt_image_when_ocr_is_disabled(self):
         response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
 
@@ -291,6 +344,16 @@ class KioskCheckoutReceiptTests(APITestCase):
         sys_settings.secondary_currency_enabled = True
         sys_settings.secondary_currency_code = 'VES'
         sys_settings.secondary_exchange_rate = Decimal('50')
+        sys_settings.save()
+
+    def _enable_recipient_validation(self, payment_method):
+        RecipientProfile.objects.create(
+            label='Main store', payment_method=payment_method,
+            phone='4141234567', bank='BDV', document_id='V12345678',
+            created_by=self.admin,
+        )
+        sys_settings = SystemSettings.get()
+        sys_settings.recipient_validation_enabled = True
         sys_settings.save()
 
     def _receipt_payload(self, reference='000123'):

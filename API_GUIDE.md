@@ -30,7 +30,8 @@ A complete reference for the RetailOps REST API, intended for developers integra
    - [Orders](#49-orders)
    - [Payments](#410-payments)
    - [Settings](#411-settings)
-   - [MCP Skill Card](#412-mcp-skill-card)
+   - [Recipient Profiles](#412-recipient-profiles)
+   - [MCP Skill Card](#413-mcp-skill-card)
 5. [Object Schemas](#5-object-schemas)
 
 ---
@@ -1031,7 +1032,19 @@ System-wide currency display settings. A singleton row — there is always exact
   "secondary_rate_auto_update_enabled": false,
   "secondary_rate_source_url": "https://ve.dolarapi.com/v1/dolares/oficial",
   "secondary_rate_source_field": "promedio",
-  "secondary_rate_updated_at": null
+  "secondary_rate_updated_at": null,
+  "ocr_enabled": false,
+  "ocr_provider": "vepay",
+  "ocr_base_url": "",
+  "ocr_api_key": "",
+  "ocr_timeout_seconds": 30,
+  "ocr_max_file_mb": 8,
+  "ocr_strict_amount": true,
+  "ocr_require_complete": false,
+  "ocr_enabled_methods": [],
+  "receipt_image_required_for_receipt_methods": true,
+  "delete_receipt_image_after_days": 90,
+  "recipient_validation_enabled": false
 }
 ```
 
@@ -1049,6 +1062,18 @@ System-wide currency display settings. A singleton row — there is always exact
 | `secondary_rate_source_url` | string (URL) | JSON endpoint to fetch the rate from. Default: DolarApi BCV official rate. |
 | `secondary_rate_source_field` | string | Dotted path to the numeric rate in the source JSON (e.g. `promedio`, `data.rate`). |
 | `secondary_rate_updated_at` | string (datetime) or null | Read-only. Timestamp of the last successful automatic update. |
+| `ocr_enabled` | boolean | Feature flag for receipt OCR verification. When `true`, mobile payment / bank transfer receipts uploaded at the kiosk are sent to the configured VEPay proxy for verification. Requires `ocr_base_url` to be set (`400` otherwise). |
+| `ocr_provider` | string | OCR backend to use. Only `"vepay"` is currently supported (enforced by a model `choices` constraint — other values are rejected with `400`). |
+| `ocr_base_url` | string (URL) | Base URL of the VEPay proxy instance (e.g. `https://your-vepay-instance.example.com`). Required when `ocr_enabled` is `true`; the check re-validates against the merged (stored + patched) state, so a `PATCH` that omits it while `ocr_enabled` is already `true` still enforces this. |
+| `ocr_api_key` | string, write-only masking | API key for the VEPay proxy. **Never returned in cleartext** — `GET`/`PATCH` responses always show `"***"` when a key is stored, or `""` when none is stored. See [API key masking](#ocr-api-key-masking) below for write semantics. |
+| `ocr_timeout_seconds` | integer | Request timeout, in seconds, for calls to the OCR provider. Must be `> 0`. |
+| `ocr_max_file_mb` | integer | Maximum accepted receipt image size, in megabytes. Must be `> 0`. |
+| `ocr_strict_amount` | boolean | When `true`, the OCR-extracted amount must match the outstanding balance for the receipt to be accepted. |
+| `ocr_require_complete` | boolean | When `true`, only receipts VEPay marks as a "complete" match are accepted (partial/ambiguous matches are rejected). |
+| `ocr_enabled_methods` | array of strings | Payment methods that require OCR verification. Each element must be one of `"mobile_payment"`, `"bank_transfer"` — any other value returns `400` with the unsupported method(s) listed. |
+| `receipt_image_required_for_receipt_methods` | boolean | When `true`, kiosk customers must attach a receipt image before submitting Mobile Payment / Bank Transfer — independent of whether OCR verification is enabled. |
+| `delete_receipt_image_after_days` | integer | Retention period, in days, before stored receipt images are purged. Must be `> 0`. |
+| `recipient_validation_enabled` | boolean | When `true`, kiosk checkout for Mobile Payment/Bank Transfer rejects receipts whose OCR-detected recipient doesn't match an active [recipient profile](#412-recipient-profiles) for that payment method. Cannot be set to `true` unless at least one active profile exists (`400` otherwise). |
 
 ---
 
@@ -1114,7 +1139,42 @@ Response `200 OK`: the updated settings object (same shape as `GET`).
 
 ---
 
-### 4.12 MCP Skill Card
+### 4.12 Recipient Profiles
+
+Admin-configured "known-good" recipient identities (phone, bank, document/ID number) that OCR-verified kiosk receipts for Mobile Payment / Bank Transfer are checked against when `recipient_validation_enabled` is on (see [4.11 Settings](#411-settings)). Unlike Categories, **every** action here — including list and retrieve — is Manager+ only, since these records carry bank-account and document identifiers used for fraud control.
+
+| Method | Endpoint | Permission | Description |
+|--------|----------|------------|-------------|
+| `GET` | `/api/v1/payment-recipient-profiles/` | Manager+ | Paginated list of profiles |
+| `POST` | `/api/v1/payment-recipient-profiles/` | Manager+ | Create a profile |
+| `GET` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Retrieve a profile |
+| `PUT` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Full update |
+| `PATCH` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Partial update |
+| `DELETE` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Delete |
+
+**Search:** `?search=` matches `label`, `phone`, `bank`, `document_id`  
+**Ordering:** `?ordering=payment_method|label|created_at`
+
+---
+
+#### Create / update recipient profile fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|--------------|
+| `label` | string | No | Free-text name to help identify the profile (e.g. `"Main store — BDV"`) |
+| `payment_method` | string | Yes | `mobile_payment` or `bank_transfer` |
+| `phone` | string | Yes | Recipient phone number as it appears on receipts |
+| `bank` | string | Yes | Recipient bank name |
+| `document_id` | string | Yes | Recipient identification/RIF/document number |
+| `is_active` | boolean | No | Defaults to `true`. Inactive profiles are kept on file but never matched. |
+
+`(payment_method, phone, bank, document_id)` must be unique — creating or updating into a duplicate combination returns `400`. `created_by` and timestamps are read-only and set automatically.
+
+Response: [RecipientProfile object](#recipientprofile-object).
+
+---
+
+### 4.13 MCP Skill Card
 
 A public capability descriptor intended for AI agents. Returns a structured document describing all MCP tools, resources, workflow prompts, the order lifecycle, constraints, and error codes.
 
@@ -1321,11 +1381,34 @@ The JSON response shape:
   "secondary_rate_auto_update_enabled": false,
   "secondary_rate_source_url": "https://ve.dolarapi.com/v1/dolares/oficial",
   "secondary_rate_source_field": "promedio",
-  "secondary_rate_updated_at": null
+  "secondary_rate_updated_at": null,
+  "recipient_validation_enabled": false
 }
 ```
 
-Singleton — there is always exactly one row. Returned by `GET /api/v1/settings/` and accepted by `PATCH /api/v1/settings/`. The `secondary_*` fields are always present in responses; when `secondary_currency_enabled` is `false` their display values are stored but ignored by all display logic. `secondary_rate_updated_at` is read-only and set by the rate-refresh endpoint or the `update_bcv_rate` command.
+Singleton — there is always exactly one row. Returned by `GET /api/v1/settings/` and accepted by `PATCH /api/v1/settings/`. The `secondary_*` fields are always present in responses; when `secondary_currency_enabled` is `false` their display values are stored but ignored by all display logic. `secondary_rate_updated_at` is read-only and set by the rate-refresh endpoint or the `update_bcv_rate` command. `recipient_validation_enabled` gates the [Recipient Profiles](#412-recipient-profiles) match check at kiosk checkout.
+
+---
+
+### RecipientProfile object
+
+```json
+{
+  "id": 1,
+  "label": "Main store — BDV",
+  "payment_method": "mobile_payment",
+  "payment_method_display": "Mobile Payment",
+  "phone": "0414-1234567",
+  "bank": "Banco de Venezuela",
+  "document_id": "V-12345678",
+  "is_active": true,
+  "created_by": 2,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}
+```
+
+Matching normalizes `phone` (digits only, country/trunk prefix stripped), `bank` (accent/case-insensitive, with known bank-name aliases), and `document_id` (punctuation-stripped, uppercased) — so profiles don't need to match a receipt's exact text, only the same underlying values.
 
 ---
 

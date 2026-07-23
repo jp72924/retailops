@@ -569,6 +569,8 @@ class SystemSettings(models.Model):
     receipt_image_required_for_receipt_methods = models.BooleanField(default=True)
     delete_receipt_image_after_days = models.PositiveIntegerField(default=90)
 
+    recipient_validation_enabled = models.BooleanField(default=False)
+
     class Meta:
         verbose_name = 'System Settings'
         verbose_name_plural = 'System Settings'
@@ -596,6 +598,10 @@ class SystemSettings(models.Model):
             raise ValidationError({
                 'ocr_base_url': 'Required when OCR is enabled.'
             })
+        if self.recipient_validation_enabled and not RecipientProfile.objects.filter(is_active=True).exists():
+            raise ValidationError({
+                'recipient_validation_enabled': 'At least one active recipient profile is required before enabling this check.'
+            })
         if self.delete_receipt_image_after_days <= 0:
             raise ValidationError({
                 'delete_receipt_image_after_days': 'Must be greater than zero.'
@@ -612,6 +618,51 @@ class SystemSettings(models.Model):
     def get(cls):
         obj, _ = cls.objects.get_or_create(pk=1)
         return obj
+
+
+# ─── RecipientProfile ──────────────────────────────────────────────────────────
+
+class RecipientProfile(models.Model):
+    """
+    Admin-configured "known-good" recipient identity for OCR-verified kiosk
+    payments (Mobile Payment / Bank Transfer). A submitted receipt's
+    OCR-extracted recipient phone/bank/document must match one active profile
+    scoped to the same payment method, or checkout is rejected. Guards against
+    a customer paying into the wrong (or fraudulent) account and passing the
+    screenshot off as a valid payment to the store.
+    """
+    PAYMENT_METHOD_CHOICES = [
+        (Payment.MOBILE_PAYMENT, 'Mobile Payment'),
+        (Payment.BANK_TRANSFER, 'Bank Transfer'),
+    ]
+
+    label = models.CharField(max_length=150, blank=True)
+    payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
+    phone = models.CharField(max_length=30)
+    bank = models.CharField(max_length=120)
+    document_id = models.CharField(max_length=60)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='created_recipient_profiles',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Recipient Profile'
+        verbose_name_plural = 'Recipient Profiles'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['payment_method', 'phone', 'bank', 'document_id'],
+                name='recipient_profile_unique_combo',
+            ),
+        ]
+        ordering = ['payment_method', 'label']
+
+    def __str__(self):
+        return self.label or f'{self.get_payment_method_display()} · {self.phone}'
 
 
 # ─── KioskStation ────────────────────────────────────────────────────────────

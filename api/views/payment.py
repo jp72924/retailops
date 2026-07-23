@@ -16,8 +16,8 @@ from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 from PIL import Image, UnidentifiedImageError
 
-from core.models import OcrCallLog, Payment, SalesOrder, SystemSettings
-from core.services.receipt_matching import compare_receipt_fields
+from core.models import OcrCallLog, Payment, RecipientProfile, SalesOrder, SystemSettings
+from core.services.receipt_matching import compare_receipt_fields, match_recipient_profile
 from core.services.vepay import (
     ORIGIN_BANK_PATH,
     ORIGIN_PHONE_PATH,
@@ -299,6 +299,7 @@ class PaymentViewSet(
             vepay_data,
             sales_order,
             settings,
+            payment_method,
             expected_fields=expected_fields,
         )
         request_id = self._request_id_from_vepay(vepay_data)
@@ -477,6 +478,7 @@ class PaymentViewSet(
         receipt_data,
         sales_order,
         settings,
+        payment_method,
         expected_fields=None,
     ):
         expected_fields = dict(expected_fields or {})
@@ -533,6 +535,18 @@ class PaymentViewSet(
                 'message': 'One or more receipt fields do not match the expected payment details.',
             })
 
+        recipient_match = None
+        if settings.recipient_validation_enabled:
+            profiles = RecipientProfile.objects.filter(
+                is_active=True, payment_method=payment_method,
+            )
+            recipient_match = match_recipient_profile(receipt_data, profiles)
+            if not recipient_match['matched']:
+                warnings.append({
+                    'code': 'recipient_mismatch',
+                    'message': 'Receipt recipient details do not match any known-good account.',
+                })
+
         checks = {
             'amount_matches': amount_matches,
             'duplicate': duplicate,
@@ -554,6 +568,7 @@ class PaymentViewSet(
             'receipt_fields': receipt_fields,
             'expected_fields': expected,
             'mismatches': comparison['mismatches'],
+            'recipient_match': recipient_match,
         }
         return checks, warnings
 

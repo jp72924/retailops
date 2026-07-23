@@ -322,6 +322,21 @@
           </div>
         </div>
 
+        <div class="form-group" style="margin-bottom:20px;border-top:1px solid var(--border);padding-top:16px;">
+          <label class="form-check">
+            <input type="checkbox" name="recipient_validation_enabled" value="on"
+              {% if sys_settings.recipient_validation_enabled %}checked{% endif %}>
+            {% trans "Reject payments whose receipt recipient doesn't match a known-good profile" %}
+          </label>
+          <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+            {% trans "Compares the OCR-extracted recipient phone, bank, and ID against admin-configured recipient profiles." %}
+          </div>
+          {% if errors.recipient_validation_enabled %}
+          <div class="invalid-feedback">{{ errors.recipient_validation_enabled }}</div>
+          {% endif %}
+          <a href="{% url 'recipient-profile-list' %}" class="btn btn-secondary btn-sm" style="margin-top:8px;">{% trans "Manage Recipient Profiles" %}</a>
+        </div>
+
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-top:1px solid var(--border);padding-top:16px;">
           <button type="button" class="btn btn-secondary btn-sm" id="ocr-test-connection">{% trans "Test connection" %}</button>
           <span id="ocr-health-status" class="badge badge-draft" style="text-transform:none;letter-spacing:0;">{% trans "Not tested" %}</span>

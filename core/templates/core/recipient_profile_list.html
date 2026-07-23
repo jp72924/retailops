@@ -1,0 +1,114 @@
+{% extends "core/base.html" %}
+{% load i18n %}
+{% block title %}{% trans "Recipient Profiles" %} | RetailOps{% endblock %}
+
+{% block content %}
+<div class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">{% trans "Recipient Profiles" %}</div>
+      <div class="page-subtitle">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} profile registered{% plural %}{{ counter }} profiles registered{% endblocktrans %}</div>
+    </div>
+    <div class="page-header-actions">
+      <a href="{% url 'settings' %}" style="color:var(--muted);font-size:0.875rem;margin-right:16px;">← {% trans "Back to Settings" %}</a>
+      <a href="{% url 'recipient-profile-create' %}" class="btn btn-primary">{% trans "+ New Profile" %}</a>
+    </div>
+  </div>
+
+  <!-- Filter Bar -->
+  <form method="get" action="{% url 'recipient-profile-list' %}">
+    <div class="filter-bar">
+      <input type="text" name="q" class="form-control" placeholder="{% trans '🔍 Search label, phone, bank, or document…' %}" value="{{ query|default:'' }}">
+      <button type="submit" class="btn btn-primary btn-sm">{% trans "Search" %}</button>
+      {% if query %}
+        <a href="{% url 'recipient-profile-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
+        <span class="filter-active">{% blocktrans %}Filtered by "{{ query }}"{% endblocktrans %}</span>
+      {% endif %}
+    </div>
+  </form>
+
+  {% if page_obj.object_list %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{% trans "Label" %}</th>
+          <th>{% trans "Payment Method" %}</th>
+          <th>{% trans "Phone" %}</th>
+          <th>{% trans "Bank" %}</th>
+          <th>{% trans "Document ID" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th>{% trans "Actions" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for profile in page_obj %}
+        <tr>
+          <td><a href="{% url 'recipient-profile-edit' profile.pk %}"><strong>{{ profile.label|default:"—" }}</strong></a></td>
+          <td>{{ profile.get_payment_method_display }}</td>
+          <td>{{ profile.phone }}</td>
+          <td>{{ profile.bank }}</td>
+          <td>{{ profile.document_id }}</td>
+          <td>
+            {% if profile.is_active %}
+              <span class="badge badge-active">{% trans "Active" %}</span>
+            {% else %}
+              <span class="badge badge-pending">{% trans "Inactive" %}</span>
+            {% endif %}
+          </td>
+          <td class="td-actions">
+            <a href="{% url 'recipient-profile-edit' profile.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
+            <form method="post" action="{% url 'recipient-profile-delete' profile.pk %}" class="inline"
+                  onsubmit="return confirm('{% blocktrans with name=profile|stringformat:'s'|escapejs %}Delete recipient profile &quot;{{ name }}&quot;? This cannot be undone.{% endblocktrans %}')">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm"
+                      style="color:var(--danger);border:1px solid var(--border);background:transparent;">{% trans "Delete" %}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if page_obj.has_other_pages %}
+  <div class="pagination">
+    <span class="pg-info">
+      {% blocktrans with start=page_obj.start_index end=page_obj.end_index total=page_obj.paginator.count %}Showing {{ start }}–{{ end }} of {{ total }}{% endblocktrans %}
+    </span>
+    {% if page_obj.has_previous %}
+      <a href="?{% if query %}q={{ query }}&{% endif %}page={{ page_obj.previous_page_number }}" class="pg-btn">‹</a>
+    {% else %}
+      <span class="pg-btn disabled">‹</span>
+    {% endif %}
+    {% for num in page_obj.paginator.page_range %}
+      {% if page_obj.number == num %}
+        <span class="pg-btn active">{{ num }}</span>
+      {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+        <a href="?{% if query %}q={{ query }}&{% endif %}page={{ num }}" class="pg-btn">{{ num }}</a>
+      {% endif %}
+    {% endfor %}
+    {% if page_obj.has_next %}
+      <a href="?{% if query %}q={{ query }}&{% endif %}page={{ page_obj.next_page_number }}" class="pg-btn">›</a>
+    {% else %}
+      <span class="pg-btn disabled">›</span>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="table-wrap">
+    <div class="empty-state">
+      <div class="empty-icon">🛡️</div>
+      <div class="empty-title">{% trans "No recipient profiles found" %}</div>
+      {% if query %}
+        <div>{% blocktrans %}No results for "{{ query }}".{% endblocktrans %} <a href="{% url 'recipient-profile-list' %}">{% trans "Clear search" %}</a></div>
+      {% else %}
+        <div><a href="{% url 'recipient-profile-create' %}">{% trans "Add your first recipient profile" %}</a></div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

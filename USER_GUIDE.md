@@ -485,6 +485,28 @@ POST /api/v1/settings/secondary-rate/refresh/   (Manager or Admin token)
 > value you set until someone changes it. The kiosk PWA, if your business uses
 > one, has its own live-rate pipeline and is unaffected by this value.
 
+### Recipient profile validation (Manager / Admin)
+
+*Who can do this: Manager, Admin*
+
+If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk with receipt-screenshot verification, you can add an extra fraud check: RetailOps compares the **recipient** phone, bank, and identification/document number that OCR reads off the screenshot against a list of your own known-good accounts. A screenshot that doesn't name one of these accounts as the recipient is rejected, even if everything else about it looks legitimate — this catches a customer paying into the wrong account (or someone else's account) and submitting that screenshot as if it were a valid payment to you.
+
+**Setting up recipient profiles:**
+
+1. On the **Settings** page, find **Manage Recipient Profiles** in the Receipt OCR Settings card and open it.
+2. Click **+ New Profile** and fill in:
+   - **Label** — an optional name to help you recognize the profile later (e.g. "Main store — BDV").
+   - **Payment Method** — Mobile Payment or Bank Transfer.
+   - **Recipient Phone**, **Recipient Bank**, **Recipient Document/ID Number** — all three are required and must match what your customers actually see when they pay you.
+3. Save. Add one profile per account/payment-method combination you accept payments into.
+4. Profiles can be edited or marked **Active/Inactive** at any time; deactivating a profile keeps it on file for reference without using it for matching. Deleting a profile removes it permanently.
+
+**Turning on the check:**
+
+Back on the Settings page, tick **Reject payments whose receipt recipient doesn't match a known-good profile** in the Receipt OCR Settings card and save. RetailOps will not let you enable this until at least one active recipient profile exists for at least one payment method.
+
+> Recipient validation is independent of the existing amount/reference/date checks — it only looks at *who the money was sent to*. Small formatting differences (dashes in phone numbers, accents in bank names, punctuation in document numbers) are normalized automatically, so profiles don't need to match the screenshot text exactly.
+
 ---
 
 ## Quick Reference — Order Status Summary
