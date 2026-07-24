@@ -436,7 +436,7 @@ class Command(BaseCommand):
         for status, label in SalesOrder.STATUS_CHOICES:
             n = SalesOrder.objects.filter(status=status).count()
             if n:
-                self.stdout.write(f'      {label:<12} {n}')
+                self.stdout.write(f'      {str(label):<12} {n}')
 
         self.stdout.write(f'    Payments           : {Payment.objects.count()}')
         self.stdout.write(f'    Inventory movements: {InventoryMovement.objects.count()}')

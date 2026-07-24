@@ -6,6 +6,7 @@ from django.core.validators import FileExtensionValidator
 from django.db import models, transaction
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 
 # ─── SequenceCounter ─────────────────────────────────────────────────────────
@@ -47,10 +48,10 @@ class Role(models.Model):
     STAFF = 'Staff'
     KIOSK = 'Kiosk'
     NAME_CHOICES = [
-        (ADMIN, 'Admin'),
-        (MANAGER, 'Manager'),
-        (STAFF, 'Staff'),
-        (KIOSK, 'Kiosk'),
+        (ADMIN, _('Admin')),
+        (MANAGER, _('Manager')),
+        (STAFF, _('Staff')),
+        (KIOSK, _('Kiosk')),
     ]
 
     name = models.CharField(max_length=20, choices=NAME_CHOICES, unique=True)
@@ -217,12 +218,12 @@ class Product(models.Model):
     BOX = 'box'
     PACK = 'pack'
     UNIT_CHOICES = [
-        (PIECE, 'Piece'),
-        (KG, 'Kilogram'),
-        (LITER, 'Liter'),
-        (METER, 'Meter'),
-        (BOX, 'Box'),
-        (PACK, 'Pack'),
+        (PIECE, _('Piece')),
+        (KG, _('Kilogram')),
+        (LITER, _('Liter')),
+        (METER, _('Meter')),
+        (BOX, _('Box')),
+        (PACK, _('Pack')),
     ]
 
     sku = models.CharField(max_length=100, unique=True)
@@ -299,14 +300,14 @@ class SalesOrder(models.Model):
     CANCELLED = 'cancelled'
     REFUNDED = 'refunded'
     STATUS_CHOICES = [
-        (DRAFT, 'Draft'),
-        (PENDING, 'Pending'),
-        (CONFIRMED, 'Confirmed'),
-        (PAID, 'Paid'),
-        (SHIPPED, 'Shipped'),
-        (DELIVERED, 'Delivered'),
-        (CANCELLED, 'Cancelled'),
-        (REFUNDED, 'Refunded'),
+        (DRAFT, _('Draft')),
+        (PENDING, _('Pending')),
+        (CONFIRMED, _('Confirmed')),
+        (PAID, _('Paid')),
+        (SHIPPED, _('Shipped')),
+        (DELIVERED, _('Delivered')),
+        (CANCELLED, _('Cancelled')),
+        (REFUNDED, _('Refunded')),
     ]
 
     order_number = models.CharField(max_length=30, unique=True, blank=True, editable=False)
@@ -412,16 +413,16 @@ class Payment(models.Model):
     PENDING_REVIEW = 'pending_review'
     CONFIRMED = 'confirmed'
     METHOD_CHOICES = [
-        (CASH, 'Cash'),
-        (MOBILE_PAYMENT, 'Mobile Payment'),
-        (BANK_TRANSFER, 'Bank Transfer'),
-        (CARD, 'Card'),
-        (CHECK, 'Check'),
-        (OTHER, 'Other'),
+        (CASH, _('Cash')),
+        (MOBILE_PAYMENT, _('Mobile Payment')),
+        (BANK_TRANSFER, _('Bank Transfer')),
+        (CARD, _('Card')),
+        (CHECK, _('Check')),
+        (OTHER, _('Other')),
     ]
     STATUS_CHOICES = [
-        (PENDING_REVIEW, 'Pending Review'),
-        (CONFIRMED, 'Confirmed'),
+        (PENDING_REVIEW, _('Pending Review')),
+        (CONFIRMED, _('Confirmed')),
     ]
 
     payment_number = models.CharField(max_length=30, unique=True, blank=True, editable=False)
@@ -482,10 +483,10 @@ class InventoryMovement(models.Model):
     ADJUSTMENT = 'adjustment'
     RETURN = 'return'
     MOVEMENT_TYPE_CHOICES = [
-        (SALE, 'Sale'),
-        (PURCHASE, 'Purchase'),
-        (ADJUSTMENT, 'Adjustment'),
-        (RETURN, 'Return'),
+        (SALE, _('Sale')),
+        (PURCHASE, _('Purchase')),
+        (ADJUSTMENT, _('Adjustment')),
+        (RETURN, _('Return')),
     ]
 
     SALES_ORDER = 'SalesOrder'
@@ -493,10 +494,10 @@ class InventoryMovement(models.Model):
     MANUAL_ADJUSTMENT = 'ManualAdjustment'
     RETURN_REF = 'Return'
     REFERENCE_TYPE_CHOICES = [
-        (SALES_ORDER, 'Sales Order'),
-        (PURCHASE_ORDER, 'Purchase Order'),
-        (MANUAL_ADJUSTMENT, 'Manual Adjustment'),
-        (RETURN_REF, 'Return'),
+        (SALES_ORDER, _('Sales Order')),
+        (PURCHASE_ORDER, _('Purchase Order')),
+        (MANUAL_ADJUSTMENT, _('Manual Adjustment')),
+        (RETURN_REF, _('Return')),
     ]
 
     product = models.ForeignKey(
@@ -640,8 +641,8 @@ class RecipientProfile(models.Model):
     MOBILE_PAYMENT = Payment.MOBILE_PAYMENT
     BANK_TRANSFER = Payment.BANK_TRANSFER
     PAYMENT_METHOD_CHOICES = [
-        (MOBILE_PAYMENT, 'Mobile Payment'),
-        (BANK_TRANSFER, 'Bank Transfer'),
+        (MOBILE_PAYMENT, _('Mobile Payment')),
+        (BANK_TRANSFER, _('Bank Transfer')),
     ]
 
     label = models.CharField(max_length=150, blank=True)

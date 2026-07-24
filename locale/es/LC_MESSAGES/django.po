@@ -1218,3 +1218,94 @@ msgid "%(counter)s profile registered"
 msgid_plural "%(counter)s profiles registered"
 msgstr[0] "%(counter)s perfil registrado"
 msgstr[1] "%(counter)s perfiles registrados"
+
+# Model choice labels (Role, Product, SalesOrder, Payment, InventoryMovement,
+# RecipientProfile) — previously plain strings, not translated regardless of
+# UI language. Now wrapped in gettext_lazy() in core/models.py.
+
+msgid "Admin"
+msgstr "Administrador"
+
+msgid "Manager"
+msgstr "Gerente"
+
+msgid "Staff"
+msgstr "Personal"
+
+msgid "Kiosk"
+msgstr "Quiosco"
+
+msgid "Piece"
+msgstr "Pieza"
+
+msgid "Kilogram"
+msgstr "Kilogramo"
+
+msgid "Liter"
+msgstr "Litro"
+
+msgid "Meter"
+msgstr "Metro"
+
+msgid "Box"
+msgstr "Caja"
+
+msgid "Pack"
+msgstr "Paquete"
+
+msgid "Draft"
+msgstr "Borrador"
+
+msgid "Pending"
+msgstr "Pendiente"
+
+msgid "Confirmed"
+msgstr "Confirmado"
+
+msgid "Shipped"
+msgstr "Enviado"
+
+msgid "Delivered"
+msgstr "Entregado"
+
+msgid "Cancelled"
+msgstr "Cancelado"
+
+msgid "Refunded"
+msgstr "Reembolsado"
+
+msgid "Cash"
+msgstr "Efectivo"
+
+msgid "Card"
+msgstr "Tarjeta"
+
+msgid "Check"
+msgstr "Cheque"
+
+msgid "Other"
+msgstr "Otro"
+
+msgid "Pending Review"
+msgstr "Revisión pendiente"
+
+msgid "Sale"
+msgstr "Venta"
+
+msgid "Purchase"
+msgstr "Compra"
+
+msgid "Adjustment"
+msgstr "Ajuste"
+
+msgid "Return"
+msgstr "Devolución"
+
+msgid "Sales Order"
+msgstr "Orden de venta"
+
+msgid "Purchase Order"
+msgstr "Orden de compra"
+
+msgid "Manual Adjustment"
+msgstr "Ajuste manual"
