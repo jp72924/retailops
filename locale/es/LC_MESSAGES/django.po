@@ -1121,3 +1121,100 @@ msgid "<strong>%(counter)s product</strong> is below the low-stock threshold —
 msgid_plural "<strong>%(counter)s products</strong> are below the low-stock threshold — restock soon."
 msgstr[0] "<strong>%(counter)s producto</strong> está por debajo del umbral de stock bajo — reponga pronto."
 msgstr[1] "<strong>%(counter)s productos</strong> están por debajo del umbral de stock bajo — reponga pronto."
+
+# Recipient Profiles (fraud-prevention allowlist for OCR-verified payments)
+
+msgid "Recipient Profiles"
+msgstr "Perfiles de destinatario"
+
+msgid "Back to Settings"
+msgstr "Volver a configuración"
+
+msgid "+ New Profile"
+msgstr "+ Nuevo perfil"
+
+msgid "🔍 Search label, phone/account, bank, or document…"
+msgstr "🔍 Buscar por etiqueta, teléfono/cuenta, banco o documento…"
+
+msgid "Label"
+msgstr "Etiqueta"
+
+msgid "Phone / Account"
+msgstr "Teléfono / cuenta"
+
+msgid "Bank"
+msgstr "Banco"
+
+msgid "Document ID"
+msgstr "Documento"
+
+msgid "No recipient profiles found"
+msgstr "No se encontraron perfiles de destinatario"
+
+msgid "Add your first recipient profile"
+msgstr "Agregue su primer perfil de destinatario"
+
+msgid "Edit Recipient Profile"
+msgstr "Editar perfil de destinatario"
+
+msgid "New Recipient Profile"
+msgstr "Nuevo perfil de destinatario"
+
+msgid "Add a known-good recipient for OCR-verified kiosk payments"
+msgstr "Agregue un destinatario confiable para pagos verificados por OCR en el kiosco"
+
+msgid "Profile Details"
+msgstr "Detalles del perfil"
+
+msgid "e.g. Main store — BDV"
+msgstr "ej. Tienda principal — BDV"
+
+msgid "— Select —"
+msgstr "— Seleccionar —"
+
+msgid "Recipient Phone"
+msgstr "Teléfono del destinatario"
+
+msgid "e.g. 0414-1234567"
+msgstr "ej. 0414-1234567"
+
+msgid "Recipient Account Number"
+msgstr "Número de cuenta del destinatario"
+
+msgid "e.g. 0102-1234-5678-9012-3456"
+msgstr "ej. 0102-1234-5678-9012-3456"
+
+msgid "Recipient Bank"
+msgstr "Banco del destinatario"
+
+msgid "e.g. Banco de Venezuela"
+msgstr "ej. Banco de Venezuela"
+
+msgid "Recipient Document/ID Number"
+msgstr "Documento/identificación del destinatario"
+
+msgid "e.g. V-12345678"
+msgstr "ej. V-12345678"
+
+msgid "Inactive profiles are kept for reference but are never matched against receipts."
+msgstr "Los perfiles inactivos se conservan como referencia, pero nunca se usan para verificar recibos."
+
+msgid "Create Profile"
+msgstr "Crear perfil"
+
+msgid "Reject payments whose receipt recipient doesn't match a known-good profile"
+msgstr "Rechazar pagos cuyo destinatario en el recibo no coincida con ningún perfil confiable"
+
+msgid "Compares the OCR-extracted recipient phone, bank, and ID against admin-configured recipient profiles."
+msgstr "Compara el teléfono, banco e identificación del destinatario extraídos por OCR con los perfiles configurados por el administrador."
+
+msgid "Manage Recipient Profiles"
+msgstr "Gestionar perfiles de destinatario"
+
+msgid "Delete recipient profile &quot;%(name)s&quot;? This cannot be undone."
+msgstr "¿Eliminar el perfil de destinatario &quot;%(name)s&quot;? Esto no se puede deshacer."
+
+msgid "%(counter)s profile registered"
+msgid_plural "%(counter)s profiles registered"
+msgstr[0] "%(counter)s perfil registrado"
+msgstr[1] "%(counter)s perfiles registrados"
