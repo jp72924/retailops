@@ -72,6 +72,7 @@ from .tools.inventory import register_inventory_tools
 from .tools.orders import register_order_tools
 from .tools.payments import register_payment_tools
 from .tools.products import register_product_tools
+from .tools.recipient_profiles import register_recipient_profile_tools
 from .tools.roles import register_role_tools
 from .tools.settings import register_settings_tools
 from .tools.users import register_user_tools
@@ -172,7 +173,7 @@ mcp = FastMCP(
 client = RetailOpsClient()
 
 # ---------------------------------------------------------------------------
-# Register tools (54 tools across 11 domains)
+# Register tools (59 tools across 12 domains)
 # ---------------------------------------------------------------------------
 register_auth_tools(mcp, client)
 register_role_tools(mcp, client)
@@ -184,10 +185,11 @@ register_inventory_tools(mcp, client)
 register_order_tools(mcp, client)
 register_payment_tools(mcp, client)
 register_settings_tools(mcp, client)
+register_recipient_profile_tools(mcp, client)
 register_user_tools(mcp, client)
 
 # ---------------------------------------------------------------------------
-# Register resources (14 URI handlers)
+# Register resources (15 URI handlers)
 # ---------------------------------------------------------------------------
 register_resources(mcp, client)
 

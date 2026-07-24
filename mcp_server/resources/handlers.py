@@ -7,7 +7,7 @@ Resources map retailops:// URIs to GET endpoints on the API.
 They always return pretty-printed JSON (text/plain MIME type).
 Use MCP Tools when you need filtering, pagination, or write access.
 
-URI catalog (14 resources):
+URI catalog (15 resources):
   retailops://settings               -> GET /settings/
   retailops://roles                  -> GET /roles/
   retailops://dashboard              → GET /dashboard/
@@ -22,6 +22,7 @@ URI catalog (14 resources):
   retailops://payments               → GET /payments/
   retailops://inventory              → GET /inventory/
   retailops://users                  → GET /users/  (Admin token only)
+  retailops://payment-recipient-profiles -> GET /payment-recipient-profiles/  (Manager+ only)
 """
 
 import json
@@ -237,6 +238,25 @@ def register_resources(mcp: FastMCP, client: RetailOpsClient) -> None:
         """
         try:
             return _pretty(await client.get("/inventory/"))
+        except RetailOpsError as e:
+            return _error_text(e)
+
+    # ------------------------------------------------------------------
+    # Recipient profiles (Manager+ token required)
+    # ------------------------------------------------------------------
+
+    @mcp.resource("retailops://payment-recipient-profiles")
+    async def resource_recipient_profiles() -> str:
+        """
+        RetailOps recipient profiles — first 25 results. Manager+ token required.
+
+        The fraud-prevention allowlist OCR-verified kiosk payments (Mobile
+        Payment / Bank Transfer) are checked against when the system setting
+        recipient_validation_enabled is on. Use the retailops_list_recipient_profiles
+        tool for search and pagination.
+        """
+        try:
+            return _pretty(await client.get("/payment-recipient-profiles/"))
         except RetailOpsError as e:
             return _error_text(e)
 

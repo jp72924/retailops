@@ -30,11 +30,11 @@ def _build_skill_card(request):
         "version": "1.0.0",
         "description": (
             "RetailOps is an internal retail and e-commerce order management system. "
-            "This MCP server exposes its agent-facing API as 54 structured tools across 11 domains: "
+            "This MCP server exposes its agent-facing API as 59 structured tools across 12 domains: "
             "Auth, Roles, Dashboard, Settings, Customers, Categories, Products, Inventory, "
-            "Orders, Payments, and Users. Use these tools to manage the complete order "
-            "lifecycle, record inventory movements, onboard customers, and monitor "
-            "operational health."
+            "Orders, Payments, Recipient Profiles, and Users. Use these tools to manage the complete order "
+            "lifecycle, record inventory movements, onboard customers, manage the payment "
+            "recipient-verification allowlist, and monitor operational health."
         ),
         "api_base_url": base,
         "skill_url": request.build_absolute_uri('/api/v1/mcp-skill/'),
@@ -233,10 +233,14 @@ def _build_skill_card(request):
                     "params": {
                         "first_name": "string (required)", "last_name": "string (required)",
                         "email": "string (required, unique)",
-                        "address_line1": "string (required)", "city": "string (required)",
-                        "state": "string (required)", "postal_code": "string (required)",
                         "country": "string (default: 'United States')",
-                        "phone": "string, optional", "address_line2": "string, optional",
+                        "phone": "string, optional",
+                        "national_id": "string, optional, unique if provided (e.g. cédula, DNI, SSN)",
+                        "date_of_birth": "date string 'YYYY-MM-DD', optional",
+                        "gender": "'M' or 'F', optional",
+                        "address_line1": "string, optional", "address_line2": "string, optional",
+                        "city": "string, optional", "state": "string, optional",
+                        "postal_code": "string, optional",
                     },
                 },
                 {
@@ -543,6 +547,42 @@ def _build_skill_card(request):
                     },
                 },
             ],
+            "recipient_profiles": [
+                {
+                    "name": "retailops_list_recipient_profiles",
+                    "role": "Manager+",
+                    "description": "Paginated list of recipient profiles (fraud-prevention allowlist for OCR-verified kiosk payments).",
+                    "params": {"search": "string, optional", "page": "int", "page_size": "int (max 100)"},
+                },
+                {
+                    "name": "retailops_get_recipient_profile",
+                    "role": "Manager+",
+                    "description": "Full recipient profile record.",
+                    "params": {"id": "int (required)"},
+                },
+                {
+                    "name": "retailops_create_recipient_profile",
+                    "role": "Manager+",
+                    "description": "Create a recipient profile. payment_method+phone+bank+document_id must be a unique combination.",
+                    "params": {
+                        "payment_method": "'mobile_payment'|'bank_transfer' (required)",
+                        "phone": "string (required)", "bank": "string (required)",
+                        "document_id": "string (required)", "label": "string, optional",
+                    },
+                },
+                {
+                    "name": "retailops_update_recipient_profile",
+                    "role": "Manager+",
+                    "description": "Partial update. Set is_active=false to deactivate without deleting.",
+                    "params": {"id": "int (required)", "...": "any recipient profile field"},
+                },
+                {
+                    "name": "retailops_delete_recipient_profile",
+                    "role": "Manager+",
+                    "description": "Hard delete. Irreversible.",
+                    "params": {"id": "int (required)"},
+                },
+            ],
             "users": [
                 {
                     "name": "retailops_list_users",
@@ -619,6 +659,7 @@ def _build_skill_card(request):
             {"uri": "retailops://orders/{id}",               "description": "Single order with line items and payments"},
             {"uri": "retailops://payments",                  "description": "Most recent 25 payments"},
             {"uri": "retailops://inventory",                 "description": "Most recent 25 movement records"},
+            {"uri": "retailops://payment-recipient-profiles", "description": "First 25 recipient profiles (Manager+ token required)"},
             {"uri": "retailops://users",                     "description": "First 25 users (Admin token required)"},
         ],
 

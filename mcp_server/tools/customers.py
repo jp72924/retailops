@@ -64,6 +64,9 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         last_name: str,
         email: str,
         phone: Optional[str] = None,
+        national_id: Optional[str] = None,
+        date_of_birth: Optional[str] = None,
+        gender: Optional[str] = None,
         address_line1: Optional[str] = None,
         address_line2: Optional[str] = None,
         city: Optional[str] = None,
@@ -83,6 +86,9 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
             last_name:     Customer's last name (required).
             email:         Contact email — must be unique (required).
             phone:         Phone number.
+            national_id:   National/tax identification number (e.g. cédula, DNI, SSN). Must be unique if provided.
+            date_of_birth: Date of birth, ISO format "YYYY-MM-DD".
+            gender:        "M" or "F".
             address_line1: Primary street address.
             address_line2: Suite, apartment, or building number.
             city:          City name.
@@ -99,6 +105,9 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
                 "last_name": last_name,
                 "email": email,
                 "phone": phone,
+                "national_id": national_id,
+                "date_of_birth": date_of_birth,
+                "gender": gender,
                 "address_line1": address_line1,
                 "address_line2": address_line2,
                 "city": city,
@@ -117,6 +126,9 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         last_name: Optional[str] = None,
         email: Optional[str] = None,
         phone: Optional[str] = None,
+        national_id: Optional[str] = None,
+        date_of_birth: Optional[str] = None,
+        gender: Optional[str] = None,
         address_line1: Optional[str] = None,
         address_line2: Optional[str] = None,
         city: Optional[str] = None,
@@ -129,6 +141,8 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         Update one or more fields on an existing customer (partial update).
 
         Only the fields you provide are changed; omitted fields are left as-is.
+        national_id must remain unique if provided. gender is "M" or "F".
+        date_of_birth is ISO format "YYYY-MM-DD".
 
         Args:
             id: The customer's integer primary key (required).
@@ -142,6 +156,9 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
                 "last_name": last_name,
                 "email": email,
                 "phone": phone,
+                "national_id": national_id,
+                "date_of_birth": date_of_birth,
+                "gender": gender,
                 "address_line1": address_line1,
                 "address_line2": address_line2,
                 "city": city,

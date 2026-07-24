@@ -84,8 +84,8 @@ AI Model / External Tool
 │               ▼                    ▼                    ▼          │
 │         ┌──────────┐        ┌────────────┐      ┌──────────────┐  │
 │         │  tools/  │        │ resources/ │      │  prompts/    │  │
-│         │ 10 files │        │ handlers.py│      │ workflows.py │  │
-│         │ 54 tools │        │ 14 URIs    │      │  5 prompts   │  │
+│         │ 12 files │        │ handlers.py│      │ workflows.py │  │
+│         │ 59 tools │        │ 15 URIs    │      │  5 prompts   │  │
 │         └────┬─────┘        └─────┬──────┘      └──────┬───────┘  │
 │              │                    │                     │          │
 │              └────────────────────┼─────────────────────┘          │
@@ -104,7 +104,7 @@ AI Model / External Tool
 
 **Key design decisions:**
 
-- **Single shared client instance** — all 54 tool closures share one `RetailOpsClient`, while the active RetailOps API token is resolved per request.
+- **Single shared client instance** — all 59 tool closures share one `RetailOpsClient`, while the active RetailOps API token is resolved per request.
 - **Flat tool namespace** — every tool is prefixed `retailops_` so there are no naming conflicts when the server is combined with other MCP servers in a multi-server setup.
 - **Error surfacing** — API errors are caught at the tool boundary and converted to human-readable `ValueError` messages. The AI receives an explanation, not a raw HTTP traceback.
 - **None-param stripping** — optional fields that are not provided are absent from the HTTP request body entirely, satisfying DRF's `allow_null=False` default on optional fields.
@@ -124,6 +124,7 @@ mcp_server/
 ├── tools/
 │   ├── __init__.py
 │   ├── auth.py               # 3 tools  — login, whoami, logout
+│   ├── roles.py              # 2 tools  — list, get (Admin only, reference data)
 │   ├── dashboard.py          # 1 tool   — get_dashboard
 │   ├── customers.py          # 5 tools  — list, get, create, update, delete
 │   ├── categories.py         # 5 tools  — list, get, create, update, delete
@@ -133,13 +134,14 @@ mcp_server/
 │   │                         #            submit, confirm, cancel, ship, deliver,
 │   │                         #            refund, record_payment,
 │   │                         #            bulk_confirm, bulk_ship, bulk_deliver
-│   ├── payments.py           # 2 tools  — list, get
+│   ├── payments.py           # 4 tools  — list, get, check_receipt_ocr_health, verify_receipt
 │   ├── settings.py           # 2 tools  — get_system_settings, update_system_settings
+│   ├── recipient_profiles.py # 5 tools  — list, get, create, update, delete
 │   └── users.py              # 7 tools  — list, get, create, update, deactivate,
 │                             #            reactivate, change_password
 │
 ├── resources/
-│   └── handlers.py           # 14 URI-addressable read-only resources
+│   └── handlers.py           # 15 URI-addressable read-only resources
 │
 └── prompts/
     └── workflows.py          # 5 guided workflow prompt templates
@@ -229,7 +231,7 @@ except RetailOpsError as e:
 
 **Purpose:** Single async wrapper around the RetailOps REST API. All tool closures share one instance created in `server.py`.
 
-The client maintains two underlying `httpx.AsyncClient` instances. All 54 tool closures share one instance created in `server.py`, but authenticated requests build the `Authorization: Token <token>` header dynamically from the MCP request Bearer token, a local `retailops_login` token, or `RETAILOPS_API_TOKEN`.
+The client maintains two underlying `httpx.AsyncClient` instances. All 59 tool closures share one instance created in `server.py`, but authenticated requests build the `Authorization: Token <token>` header dynamically from the MCP request Bearer token, a local `retailops_login` token, or `RETAILOPS_API_TOKEN`.
 
 | Client | Auth header | Used by |
 |---|---|---|
@@ -324,14 +326,16 @@ if not items:
 | File | Tools | Key operations |
 |---|---|---|
 | `auth.py` | 3 | Login (public endpoint), whoami, logout (revoke token) |
+| `roles.py` | 2 | List/get roles (Admin only, reference data) |
 | `dashboard.py` | 1 | Summary counts and recent activity |
-| `settings.py` | 2 | Get and update system-wide currency settings |
+| `settings.py` | 2 | Get and update system-wide currency, OCR, and recipient-validation settings |
 | `customers.py` | 5 | Full CRUD on customer records |
 | `categories.py` | 5 | Full CRUD on product categories |
 | `products.py` | 6 | Full CRUD + inventory movement history per product |
 | `inventory.py` | 4 | List movements, get single movement, single and bulk stock adjustments |
 | `orders.py` | 15 | Full order lifecycle + payment recording + bulk confirm/ship/deliver |
-| `payments.py` | 2 | List payments, get single payment |
+| `payments.py` | 4 | List/get payments, OCR health check, verify receipt without creating a payment |
+| `recipient_profiles.py` | 5 | Full CRUD on the OCR recipient-verification allowlist (Manager+ only) |
 | `users.py` | 7 | Full CRUD + deactivate/reactivate/change-password (Admin only) |
 
 ---
@@ -358,6 +362,8 @@ Note that resources return error text rather than raising exceptions — by conv
 | URI | Returns |
 |---|---|
 | `retailops://dashboard` | Dashboard summary (counts, recent activity) |
+| `retailops://settings` | Singleton system settings (currency, OCR, recipient validation) |
+| `retailops://roles` | Paginated role list (Admin token required) |
 | `retailops://customers` | Paginated customer list |
 | `retailops://customers/{id}` | Single customer record |
 | `retailops://products` | Paginated product list (all stocks) |
@@ -368,6 +374,7 @@ Note that resources return error text rather than raising exceptions — by conv
 | `retailops://orders/{id}` | Single order with all line items |
 | `retailops://payments` | Paginated payment list |
 | `retailops://inventory` | Paginated inventory movement log (all products) |
+| `retailops://payment-recipient-profiles` | Paginated recipient profile list (Manager+ token required) |
 | `retailops://users` | Paginated user list (Admin only) |
 
 ---
@@ -431,7 +438,8 @@ mcp = FastMCP(
 client = RetailOpsClient()
 
 register_auth_tools(mcp, client)
-# ... 8 more register calls ...
+# ... 11 more register_*_tools calls (roles, dashboard, customers, categories,
+# products, inventory, orders, payments, settings, recipient_profiles, users) ...
 register_resources(mcp, client)
 register_prompts(mcp)
 
@@ -444,7 +452,7 @@ The `instructions` string is included in every MCP session initialization respon
 
 ## 5. Tool Catalog
 
-Complete listing of all 54 tools with their signatures and role requirements.
+Complete listing of all 59 tools with their signatures and role requirements.
 
 ### Auth (3 tools)
 
@@ -453,6 +461,13 @@ Complete listing of all 54 tools with their signatures and role requirements.
 | `retailops_login` | `email: str`, `password: str`, `activate: bool=True` | None (public) | Obtain a RetailOps API token; activates it only for stdio/local sessions |
 | `retailops_whoami` | — | Any authenticated | Show the current effective RetailOps identity and token source |
 | `retailops_logout` | `revoke_env_token: bool=False` | Any authenticated | Safely revoke the current effective token |
+
+### Roles (2 tools)
+
+| Tool | Parameters | Role required | Description |
+|---|---|---|---|
+| `retailops_list_roles` | `page?`, `page_size?` | Admin only | Paginated list of seeded roles (reference data) |
+| `retailops_get_role` | `id: int` | Admin only | Single role by ID |
 
 ### Dashboard (1 tool)
 
@@ -464,8 +479,8 @@ Complete listing of all 54 tools with their signatures and role requirements.
 
 | Tool | Parameters | Role required | Description |
 |---|---|---|---|
-| `retailops_get_system_settings` | — | Any authenticated | Returns currency settings: `currency_code`, `currency_symbol`, `decimal_places`, `secondary_currency_enabled`, `secondary_currency_code`, `secondary_currency_symbol`, `secondary_decimal_places`, `secondary_exchange_rate`, plus the auto-update fields `secondary_rate_auto_update_enabled`, `secondary_rate_source_url`, `secondary_rate_source_field`, `secondary_rate_updated_at` |
-| `retailops_update_system_settings` | `currency_code?`, `currency_symbol?`, `decimal_places?`, `secondary_currency_enabled?`, `secondary_currency_code?`, `secondary_currency_symbol?`, `secondary_decimal_places?`, `secondary_exchange_rate?`, `secondary_rate_auto_update_enabled?`, `secondary_rate_source_url?`, `secondary_rate_source_field?` | Manager+ | Partial update of currency display settings. `secondary_exchange_rate` is a string (e.g. `"36.5"`) to preserve decimal precision; validated as `> 0` before sending. When enabling secondary currency, `secondary_currency_symbol` must be non-empty. To auto-update the rate, set `secondary_rate_auto_update_enabled` with a source URL + JSON field, then trigger via `POST /api/v1/settings/secondary-rate/refresh/` or the `update_bcv_rate` command. |
+| `retailops_get_system_settings` | — | Any authenticated | Returns currency settings: `currency_code`, `currency_symbol`, `decimal_places`, `secondary_currency_enabled`, `secondary_currency_code`, `secondary_currency_symbol`, `secondary_decimal_places`, `secondary_exchange_rate`, the auto-update fields `secondary_rate_auto_update_enabled`, `secondary_rate_source_url`, `secondary_rate_source_field`, `secondary_rate_updated_at`, the OCR/VEPay fields `ocr_enabled`, `ocr_provider`, `ocr_base_url`, `ocr_api_key` (masked as `"***"`), `ocr_timeout_seconds`, `ocr_max_file_mb`, `ocr_strict_amount`, `ocr_require_complete`, `ocr_enabled_methods`, `receipt_image_required_for_receipt_methods`, `delete_receipt_image_after_days`, and `recipient_validation_enabled` |
+| `retailops_update_system_settings` | `currency_code?`, `currency_symbol?`, `decimal_places?`, `secondary_currency_enabled?`, `secondary_currency_code?`, `secondary_currency_symbol?`, `secondary_decimal_places?`, `secondary_exchange_rate?`, `secondary_rate_auto_update_enabled?`, `secondary_rate_source_url?`, `secondary_rate_source_field?`, `ocr_enabled?`, `ocr_provider?`, `ocr_base_url?`, `ocr_api_key?`, `ocr_timeout_seconds?`, `ocr_max_file_mb?`, `ocr_strict_amount?`, `ocr_require_complete?`, `ocr_enabled_methods?`, `receipt_image_required_for_receipt_methods?`, `delete_receipt_image_after_days?`, `recipient_validation_enabled?` | Manager+ | Partial update of currency, secondary-currency, OCR/VEPay, and recipient-validation settings. `secondary_exchange_rate` is a string (e.g. `"36.5"`) to preserve decimal precision; validated as `> 0` before sending. When enabling secondary currency, `secondary_currency_symbol` must be non-empty. To auto-update the rate, set `secondary_rate_auto_update_enabled` with a source URL + JSON field, then trigger via `POST /api/v1/settings/secondary-rate/refresh/` or the `update_bcv_rate` command. Pass `ocr_api_key=""` to clear the stored key; omit it to leave unchanged. `recipient_validation_enabled` cannot be set to `true` unless at least one active recipient profile exists (see `retailops_create_recipient_profile`). |
 
 ### Customers (5 tools)
 
@@ -527,12 +542,26 @@ Complete listing of all 54 tools with their signatures and role requirements.
 | `retailops_bulk_ship_orders` | `order_ids: list[int]` | Manager+ | Ship multiple Paid orders; partial-success response |
 | `retailops_bulk_deliver_orders` | `order_ids: list[int]` | Manager+ | Deliver multiple Shipped orders; partial-success response |
 
-### Payments (2 tools)
+### Payments (4 tools)
 
 | Tool | Parameters | Role required | Description |
 |---|---|---|---|
 | `retailops_list_payments` | `sales_order?`, `payment_method?`, `date_from?`, `date_to?`, `page?`, `page_size?` | Any | Filtered payment list |
 | `retailops_get_payment` | `id: int` | Any | Single payment record |
+| `retailops_check_receipt_ocr_health` | — | Manager+ | Check configured OCR/VEPay provider connectivity |
+| `retailops_verify_receipt` | `image_path`, `payment_method`, `sales_order_id?`, `expected_amount_usd?` (required if `sales_order_id` omitted), `expected_reference?`, `expected_paid_on?`, `expected_origin_bank?` | Manager+ | Upload a local receipt image and verify OCR fields without creating a payment |
+
+### Recipient Profiles (5 tools)
+
+The fraud-prevention allowlist OCR-verified kiosk payments (Mobile Payment / Bank Transfer) are checked against when `recipient_validation_enabled` is on (see Settings above). Unlike Categories, every action here — including list and get — requires Manager or Admin, since these records carry bank-account and document identifiers.
+
+| Tool | Parameters | Role required | Description |
+|---|---|---|---|
+| `retailops_list_recipient_profiles` | `search?`, `page?`, `page_size?` | Manager+ | Paginated list, searches label/phone/bank/document_id |
+| `retailops_get_recipient_profile` | `id: int` | Manager+ | Single profile by ID |
+| `retailops_create_recipient_profile` | `payment_method` (`"mobile_payment"`\|`"bank_transfer"`), `phone`, `bank`, `document_id`, `label?` | Manager+ | Create a profile. `payment_method`+`phone`+`bank`+`document_id` must be a unique combination |
+| `retailops_update_recipient_profile` | `id: int`, + any profile field, `is_active?` | Manager+ | Partial update; set `is_active=false` to deactivate without deleting |
+| `retailops_delete_recipient_profile` | `id: int` | Manager+ | Hard delete — irreversible |
 
 ### Users (7 tools)
 
@@ -554,6 +583,8 @@ Resources are read-only and fetched by URI rather than function call. They retur
 
 ```
 retailops://dashboard
+retailops://settings
+retailops://roles
 retailops://customers
 retailops://customers/{id}
 retailops://products
@@ -564,6 +595,7 @@ retailops://orders
 retailops://orders/{id}
 retailops://payments
 retailops://inventory
+retailops://payment-recipient-profiles
 retailops://users
 ```
 
@@ -1140,7 +1172,7 @@ async def main():
         async with ClientSession(read, write) as session:
             await session.initialize()
 
-            # Load all 54 RetailOps tools as LangChain tools
+            # Load all 59 RetailOps tools as LangChain tools
             tools = await load_mcp_tools(session)
 
             model = ChatAnthropic(model="claude-opus-4-6")
@@ -1432,7 +1464,7 @@ The RetailOps API exposes a self-contained **skill card** at a public HTTP endpo
 GET /api/v1/mcp-skill/
 ```
 
-**No authentication required.** Returns a complete JSON document describing all 54 tools, 14 resources, 5 workflow prompts, connection instructions, the order lifecycle state machine, constraints, and error codes.
+**No authentication required.** Returns a complete JSON document describing all 59 tools, 15 resources, 5 workflow prompts, connection instructions, the order lifecycle state machine, constraints, and error codes.
 
 ### Formats
 

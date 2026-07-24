@@ -74,12 +74,18 @@ def register_settings_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         ocr_enabled_methods: Optional[list] = None,
         receipt_image_required_for_receipt_methods: Optional[bool] = None,
         delete_receipt_image_after_days: Optional[int] = None,
+        recipient_validation_enabled: Optional[bool] = None,
     ) -> dict:
         """
         Partial-update all current SystemSettings fields. Requires Manager+.
 
         Pass ocr_api_key="" to clear the stored OCR key. Omit ocr_api_key
         (None) to leave it unchanged.
+
+        recipient_validation_enabled cannot be set to true unless at least
+        one active recipient profile already exists — use
+        retailops_create_recipient_profile first, or the API returns a
+        validation error.
         """
         if secondary_exchange_rate is not None:
             secondary_exchange_rate = _positive_decimal(
@@ -125,6 +131,7 @@ def register_settings_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
             "ocr_enabled_methods": ocr_enabled_methods,
             "receipt_image_required_for_receipt_methods": receipt_image_required_for_receipt_methods,
             "delete_receipt_image_after_days": delete_receipt_image_after_days,
+            "recipient_validation_enabled": recipient_validation_enabled,
         }
         payload = {key: value for key, value in payload.items() if value is not None}
 
