@@ -97,10 +97,13 @@ is required when OCR is on.
 ### Recipient profile validation (optional)
 
 With OCR enabled, RetailOps can additionally verify that a receipt's OCR-detected
-*recipient* phone, bank, and document/ID number match one of your own configured
-recipient profiles (**Settings → Manage Recipient Profiles**). This catches
-receipts paid into a different account than yours. When enabled and no profile
-matches, `POST /api/v1/kiosk/checkout/` returns:
+*recipient* details match one of your own configured recipient profiles
+(**Settings → Manage Recipient Profiles**). This catches receipts paid into a
+different account than yours. The identifying field checked depends on the
+payment method: recipient **phone** for Mobile Payment, recipient **bank
+account number** for Bank Transfer — plus bank and document/ID number in both
+cases. When enabled and no profile matches, `POST /api/v1/kiosk/checkout/`
+returns:
 
 ```json
 {
@@ -113,8 +116,9 @@ matches, `POST /api/v1/kiosk/checkout/` returns:
 }
 ```
 
-with HTTP status `422`. This check is off by default and requires at least one
-active recipient profile before it can be turned on.
+(for a Bank Transfer checkout, `receipt_fields` has `account_number` in place
+of `phone`.) HTTP status is `422`. This check is off by default and requires
+at least one active recipient profile before it can be turned on.
 
 ## Important Boundaries
 

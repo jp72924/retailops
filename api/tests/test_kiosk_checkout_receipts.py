@@ -313,6 +313,41 @@ class KioskCheckoutReceiptTests(APITestCase):
         self.assertEqual(response.data['code'], 'recipient_mismatch')
         self.assertEqual(response.data['details']['checked_profiles_count'], 0)
 
+    @responses.activate
+    def test_bank_transfer_recipient_match_allows_checkout(self):
+        """Bank transfer profiles are matched on account_number, not phone —
+        confirms the full checkout pipeline (OCR -> recipient match -> accept)
+        works end-to-end for the account_number identifier."""
+        self._enable_ocr()
+        self._enable_recipient_validation(payment_method=Payment.BANK_TRANSFER)
+        payload = self._vepay_payload()
+        payload['recipient'] = {
+            'account': '0102-1234-5678-9012', 'bank': 'Banco de Venezuela',
+            'document_id': 'V-12345678',
+        }
+        responses.add(responses.POST, self.provider_url, json=payload, status=200)
+
+        response = self._checkout(Payment.BANK_TRANSFER, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Payment.objects.get().status, Payment.CONFIRMED)
+
+    @responses.activate
+    def test_bank_transfer_recipient_mismatch_is_rejected_with_422(self):
+        self._enable_ocr()
+        self._enable_recipient_validation(payment_method=Payment.BANK_TRANSFER)
+        payload = self._vepay_payload()
+        payload['recipient'] = {
+            'account': '9999999999999999', 'bank': 'Banesco', 'document_id': 'V00000000',
+        }
+        responses.add(responses.POST, self.provider_url, json=payload, status=200)
+
+        response = self._checkout(Payment.BANK_TRANSFER, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data['code'], 'recipient_mismatch')
+        self.assertEqual(Payment.objects.count(), 0)
+
     def test_checkout_blocks_receipt_image_when_ocr_is_disabled(self):
         response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
 
@@ -349,7 +384,9 @@ class KioskCheckoutReceiptTests(APITestCase):
     def _enable_recipient_validation(self, payment_method):
         RecipientProfile.objects.create(
             label='Main store', payment_method=payment_method,
-            phone='4141234567', bank='BDV', document_id='V12345678',
+            phone='4141234567' if payment_method == Payment.MOBILE_PAYMENT else '',
+            account_number='0102123456789012' if payment_method == Payment.BANK_TRANSFER else '',
+            bank='BDV', document_id='V12345678',
             created_by=self.admin,
         )
         sys_settings = SystemSettings.get()

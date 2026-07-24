@@ -540,7 +540,7 @@ class PaymentViewSet(
             profiles = RecipientProfile.objects.filter(
                 is_active=True, payment_method=payment_method,
             )
-            recipient_match = match_recipient_profile(receipt_data, profiles)
+            recipient_match = match_recipient_profile(receipt_data, payment_method, profiles)
             if not recipient_match['matched']:
                 warnings.append({
                     'code': 'recipient_mismatch',

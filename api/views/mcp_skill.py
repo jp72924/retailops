@@ -563,17 +563,19 @@ def _build_skill_card(request):
                 {
                     "name": "retailops_create_recipient_profile",
                     "role": "Manager+",
-                    "description": "Create a recipient profile. payment_method+phone+bank+document_id must be a unique combination.",
+                    "description": "Create a recipient profile. payment_method+phone/account_number+bank+document_id must be a unique combination.",
                     "params": {
                         "payment_method": "'mobile_payment'|'bank_transfer' (required)",
-                        "phone": "string (required)", "bank": "string (required)",
-                        "document_id": "string (required)", "label": "string, optional",
+                        "bank": "string (required)", "document_id": "string (required)",
+                        "phone": "string, required when payment_method is 'mobile_payment' (omit for bank_transfer)",
+                        "account_number": "string, required when payment_method is 'bank_transfer' (omit for mobile_payment)",
+                        "label": "string, optional",
                     },
                 },
                 {
                     "name": "retailops_update_recipient_profile",
                     "role": "Manager+",
-                    "description": "Partial update. Set is_active=false to deactivate without deleting.",
+                    "description": "Partial update. Set is_active=false to deactivate without deleting. phone is used for mobile_payment, account_number for bank_transfer — not both.",
                     "params": {"id": "int (required)", "...": "any recipient profile field"},
                 },
                 {

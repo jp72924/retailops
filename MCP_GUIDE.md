@@ -555,11 +555,13 @@ Complete listing of all 59 tools with their signatures and role requirements.
 
 The fraud-prevention allowlist OCR-verified kiosk payments (Mobile Payment / Bank Transfer) are checked against when `recipient_validation_enabled` is on (see Settings above). Unlike Categories, every action here — including list and get — requires Manager or Admin, since these records carry bank-account and document identifiers.
 
+The identifying field is payment-method-dependent: pass `phone` for a `"mobile_payment"` profile, or `account_number` for a `"bank_transfer"` profile — exactly one of the two, matching `payment_method`; the other must be omitted (the tools reject the wrong one client-side before calling the API).
+
 | Tool | Parameters | Role required | Description |
 |---|---|---|---|
-| `retailops_list_recipient_profiles` | `search?`, `page?`, `page_size?` | Manager+ | Paginated list, searches label/phone/bank/document_id |
+| `retailops_list_recipient_profiles` | `search?`, `page?`, `page_size?` | Manager+ | Paginated list, searches label/phone/account_number/bank/document_id |
 | `retailops_get_recipient_profile` | `id: int` | Manager+ | Single profile by ID |
-| `retailops_create_recipient_profile` | `payment_method` (`"mobile_payment"`\|`"bank_transfer"`), `phone`, `bank`, `document_id`, `label?` | Manager+ | Create a profile. `payment_method`+`phone`+`bank`+`document_id` must be a unique combination |
+| `retailops_create_recipient_profile` | `payment_method` (`"mobile_payment"`\|`"bank_transfer"`), `bank`, `document_id`, `phone?` (required for mobile_payment), `account_number?` (required for bank_transfer), `label?` | Manager+ | Create a profile. `payment_method`+`phone`/`account_number`+`bank`+`document_id` must be a unique combination |
 | `retailops_update_recipient_profile` | `id: int`, + any profile field, `is_active?` | Manager+ | Partial update; set `is_active=false` to deactivate without deleting |
 | `retailops_delete_recipient_profile` | `id: int` | Manager+ | Hard delete — irreversible |
 

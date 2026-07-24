@@ -17,13 +17,13 @@ class RecipientProfileViewSet(ModelViewSet):
     these records carry bank-account and document identifiers used for fraud
     control, not general catalog data.
 
-    Search:   ?search= on label, phone, bank, document_id.
+    Search:   ?search= on label, phone, account_number, bank, document_id.
     Ordering: ?ordering=payment_method|label|created_at.
     """
     queryset = RecipientProfile.objects.order_by('payment_method', 'label')
     serializer_class = RecipientProfileSerializer
     permission_classes = [IsAuthenticated, IsManagerOrAdmin]
-    search_fields = ['label', 'phone', 'bank', 'document_id']
+    search_fields = ['label', 'phone', 'account_number', 'bank', 'document_id']
     ordering_fields = ['payment_method', 'label', 'created_at']
     ordering = ['payment_method', 'label']
 

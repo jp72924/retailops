@@ -1589,7 +1589,7 @@ def recipient_profile_list(request):
     qs = RecipientProfile.objects.order_by('payment_method', 'label')
     if q:
         qs = qs.filter(
-            Q(label__icontains=q) | Q(phone__icontains=q) |
+            Q(label__icontains=q) | Q(phone__icontains=q) | Q(account_number__icontains=q) |
             Q(bank__icontains=q) | Q(document_id__icontains=q)
         )
     page_obj = Paginator(qs, 25).get_page(request.GET.get('page'))
@@ -1600,23 +1600,30 @@ def _parse_recipient_profile_post(request):
     label = request.POST.get('label', '').strip()
     payment_method = request.POST.get('payment_method', '').strip()
     phone = request.POST.get('phone', '').strip()
+    account_number = request.POST.get('account_number', '').strip()
     bank = request.POST.get('bank', '').strip()
     document_id = request.POST.get('document_id', '').strip()
 
     errors = {}
     if payment_method not in dict(RecipientProfile.PAYMENT_METHOD_CHOICES):
         errors['payment_method'] = 'Select a valid payment method.'
-    if not phone:
-        errors['phone'] = 'Phone is required.'
+    elif payment_method == RecipientProfile.MOBILE_PAYMENT:
+        if not phone:
+            errors['phone'] = 'Phone is required for mobile payment profiles.'
+        account_number = ''
+    elif payment_method == RecipientProfile.BANK_TRANSFER:
+        if not account_number:
+            errors['account_number'] = 'Account number is required for bank transfer profiles.'
+        phone = ''
     if not bank:
         errors['bank'] = 'Bank is required.'
     if not document_id:
         errors['document_id'] = 'Document/ID number is required.'
-    return label, payment_method, phone, bank, document_id, errors
+    return label, payment_method, phone, account_number, bank, document_id, errors
 
 
 _DUPLICATE_PROFILE_ERROR = (
-    'A profile with this exact payment method, phone, bank, and document number already exists.'
+    'A profile with this exact payment method and identifying details already exists.'
 )
 
 
@@ -1624,16 +1631,17 @@ _DUPLICATE_PROFILE_ERROR = (
 @role_required('Manager', 'Admin')
 def recipient_profile_create(request):
     if request.method == 'POST':
-        label, payment_method, phone, bank, document_id, errors = _parse_recipient_profile_post(request)
+        label, payment_method, phone, account_number, bank, document_id, errors = _parse_recipient_profile_post(request)
         form_data = {
-            'label': label, 'payment_method': payment_method,
-            'phone': phone, 'bank': bank, 'document_id': document_id,
+            'label': label, 'payment_method': payment_method, 'phone': phone,
+            'account_number': account_number, 'bank': bank, 'document_id': document_id,
         }
         if not errors:
             try:
                 profile = RecipientProfile.objects.create(
                     label=label, payment_method=payment_method, phone=phone,
-                    bank=bank, document_id=document_id, created_by=request.user,
+                    account_number=account_number, bank=bank, document_id=document_id,
+                    created_by=request.user,
                 )
                 messages.success(request, f'Recipient profile "{profile}" created.')
                 return redirect('recipient-profile-list')
@@ -1650,16 +1658,18 @@ def recipient_profile_edit(request, pk):
     profile = get_object_or_404(RecipientProfile, pk=pk)
 
     if request.method == 'POST':
-        label, payment_method, phone, bank, document_id, errors = _parse_recipient_profile_post(request)
+        label, payment_method, phone, account_number, bank, document_id, errors = _parse_recipient_profile_post(request)
         is_active = request.POST.get('is_active') == 'on'
         form_data = {
             'label': label, 'payment_method': payment_method, 'phone': phone,
-            'bank': bank, 'document_id': document_id, 'is_active': is_active,
+            'account_number': account_number, 'bank': bank, 'document_id': document_id,
+            'is_active': is_active,
         }
         if not errors:
             profile.label = label
             profile.payment_method = payment_method
             profile.phone = phone
+            profile.account_number = account_number
             profile.bank = bank
             profile.document_id = document_id
             profile.is_active = is_active
@@ -1674,8 +1684,9 @@ def recipient_profile_edit(request, pk):
 
     form_data = {
         'label': profile.label, 'payment_method': profile.payment_method,
-        'phone': profile.phone, 'bank': profile.bank,
-        'document_id': profile.document_id, 'is_active': profile.is_active,
+        'phone': profile.phone, 'account_number': profile.account_number,
+        'bank': profile.bank, 'document_id': profile.document_id,
+        'is_active': profile.is_active,
     }
     return render(request, 'core/recipient_profile_form.html',
                   {'profile': profile, 'errors': {}, 'form_data': form_data})

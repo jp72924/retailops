@@ -18,7 +18,7 @@
   <!-- Filter Bar -->
   <form method="get" action="{% url 'recipient-profile-list' %}">
     <div class="filter-bar">
-      <input type="text" name="q" class="form-control" placeholder="{% trans '🔍 Search label, phone, bank, or document…' %}" value="{{ query|default:'' }}">
+      <input type="text" name="q" class="form-control" placeholder="{% trans '🔍 Search label, phone/account, bank, or document…' %}" value="{{ query|default:'' }}">
       <button type="submit" class="btn btn-primary btn-sm">{% trans "Search" %}</button>
       {% if query %}
         <a href="{% url 'recipient-profile-list' %}" class="btn btn-secondary btn-sm">{% trans "Clear" %}</a>
@@ -34,7 +34,7 @@
         <tr>
           <th>{% trans "Label" %}</th>
           <th>{% trans "Payment Method" %}</th>
-          <th>{% trans "Phone" %}</th>
+          <th>{% trans "Phone / Account" %}</th>
           <th>{% trans "Bank" %}</th>
           <th>{% trans "Document ID" %}</th>
           <th>{% trans "Status" %}</th>
@@ -46,7 +46,7 @@
         <tr>
           <td><a href="{% url 'recipient-profile-edit' profile.pk %}"><strong>{{ profile.label|default:"—" }}</strong></a></td>
           <td>{{ profile.get_payment_method_display }}</td>
-          <td>{{ profile.phone }}</td>
+          <td>{% if profile.payment_method == "bank_transfer" %}{{ profile.account_number }}{% else %}{{ profile.phone }}{% endif %}</td>
           <td>{{ profile.bank }}</td>
           <td>{{ profile.document_id }}</td>
           <td>

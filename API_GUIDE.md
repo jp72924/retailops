@@ -1170,7 +1170,9 @@ Response `200 OK`: the updated settings object (same shape as `GET`).
 
 ### 4.12 Recipient Profiles
 
-Admin-configured "known-good" recipient identities (phone, bank, document/ID number) that OCR-verified kiosk receipts for Mobile Payment / Bank Transfer are checked against when `recipient_validation_enabled` is on (see [4.11 Settings](#411-settings)). Unlike Categories, **every** action here — including list and retrieve — is Manager+ only, since these records carry bank-account and document identifiers used for fraud control.
+Admin-configured "known-good" recipient identities that OCR-verified kiosk receipts for Mobile Payment / Bank Transfer are checked against when `recipient_validation_enabled` is on (see [4.11 Settings](#411-settings)). Unlike Categories, **every** action here — including list and retrieve — is Manager+ only, since these records carry bank-account and document identifiers used for fraud control.
+
+The identifying field is payment-method-dependent: `mobile_payment` profiles use `phone` (the recipient's phone number); `bank_transfer` profiles use `account_number` (the recipient's bank account number) instead. Only one of the two is ever populated on a given profile — see the field table below.
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|------------|-------------|
@@ -1181,7 +1183,7 @@ Admin-configured "known-good" recipient identities (phone, bank, document/ID num
 | `PATCH` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Partial update |
 | `DELETE` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Delete |
 
-**Search:** `?search=` matches `label`, `phone`, `bank`, `document_id`  
+**Search:** `?search=` matches `label`, `phone`, `account_number`, `bank`, `document_id`  
 **Ordering:** `?ordering=payment_method|label|created_at`
 
 ---
@@ -1192,12 +1194,13 @@ Admin-configured "known-good" recipient identities (phone, bank, document/ID num
 |-------|------|----------|--------------|
 | `label` | string | No | Free-text name to help identify the profile (e.g. `"Main store — BDV"`) |
 | `payment_method` | string | Yes | `mobile_payment` or `bank_transfer` |
-| `phone` | string | Yes | Recipient phone number as it appears on receipts |
+| `phone` | string | Conditional | Recipient phone number as it appears on receipts. Required when `payment_method` is `mobile_payment`; must be blank/omitted for `bank_transfer` (`400` otherwise). |
+| `account_number` | string | Conditional | Recipient bank account number. Required when `payment_method` is `bank_transfer`; must be blank/omitted for `mobile_payment` (`400` otherwise). |
 | `bank` | string | Yes | Recipient bank name |
 | `document_id` | string | Yes | Recipient identification/RIF/document number |
 | `is_active` | boolean | No | Defaults to `true`. Inactive profiles are kept on file but never matched. |
 
-`(payment_method, phone, bank, document_id)` must be unique — creating or updating into a duplicate combination returns `400`. `created_by` and timestamps are read-only and set automatically.
+`(payment_method, phone, account_number, bank, document_id)` must be unique — creating or updating into a duplicate combination returns `400`. `created_by` and timestamps are read-only and set automatically.
 
 Response: [RecipientProfile object](#recipientprofile-object).
 
@@ -1421,6 +1424,7 @@ Singleton — there is always exactly one row. Returned by `GET /api/v1/settings
 
 ### RecipientProfile object
 
+Mobile payment profile (uses `phone`, `account_number` blank):
 ```json
 {
   "id": 1,
@@ -1428,6 +1432,7 @@ Singleton — there is always exactly one row. Returned by `GET /api/v1/settings
   "payment_method": "mobile_payment",
   "payment_method_display": "Mobile Payment",
   "phone": "0414-1234567",
+  "account_number": "",
   "bank": "Banco de Venezuela",
   "document_id": "V-12345678",
   "is_active": true,
@@ -1437,7 +1442,25 @@ Singleton — there is always exactly one row. Returned by `GET /api/v1/settings
 }
 ```
 
-Matching normalizes `phone` (digits only, country/trunk prefix stripped), `bank` (accent/case-insensitive, with known bank-name aliases), and `document_id` (punctuation-stripped, uppercased) — so profiles don't need to match a receipt's exact text, only the same underlying values.
+Bank transfer profile (uses `account_number`, `phone` blank):
+```json
+{
+  "id": 2,
+  "label": "Main store — wire transfers",
+  "payment_method": "bank_transfer",
+  "payment_method_display": "Bank Transfer",
+  "phone": "",
+  "account_number": "0102-1234-5678-9012-3456",
+  "bank": "Banco de Venezuela",
+  "document_id": "J-12345678-9",
+  "is_active": true,
+  "created_by": 2,
+  "created_at": "2026-01-01T00:00:00Z",
+  "updated_at": "2026-01-01T00:00:00Z"
+}
+```
+
+Matching normalizes `phone` (digits only, country/trunk prefix stripped), `account_number` (digits only), `bank` (accent/case-insensitive, with known bank-name aliases), and `document_id` (punctuation-stripped, uppercased) — so profiles don't need to match a receipt's exact text, only the same underlying values.
 
 ---
 

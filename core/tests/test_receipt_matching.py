@@ -3,11 +3,12 @@ from types import SimpleNamespace
 
 from django.test import TestCase
 
-from core.models import SystemSettings
+from core.models import Payment, SystemSettings
 from core.services.receipt_matching import (
     REQUIRED_FIELD_KEYS,
     compare_receipt_fields,
     match_recipient_profile,
+    normalize_account_number,
     normalize_document_id,
     normalize_phone,
 )
@@ -245,26 +246,43 @@ class NormalizeDocumentIdTests(TestCase):
         self.assertEqual(normalize_document_id(None), '')
 
 
+class NormalizeAccountNumberTests(TestCase):
+    def test_strips_dashes_and_spaces(self):
+        expected = '01021234567890123456'
+        self.assertEqual(normalize_account_number('0102-1234-5678-9012-3456'), expected)
+        self.assertEqual(normalize_account_number('0102 1234 5678 9012 3456'), expected)
+        self.assertEqual(normalize_account_number(expected), expected)
+
+    def test_empty_and_none_are_empty_string(self):
+        self.assertEqual(normalize_account_number(''), '')
+        self.assertEqual(normalize_account_number(None), '')
+
+
 class RecipientProfileMatchingTests(TestCase):
+    """Mobile payment profiles — matched on phone."""
+
     def setUp(self):
         self.profiles = [
-            SimpleNamespace(pk=1, phone='4141234567', bank='Banco de Venezuela', document_id='V-12.345.678'),
-            SimpleNamespace(pk=2, phone='04249999999', bank='Banesco', document_id='J987654321'),
+            SimpleNamespace(pk=1, phone='4141234567', account_number='',
+                             bank='Banco de Venezuela', document_id='V-12.345.678'),
+            SimpleNamespace(pk=2, phone='04249999999', account_number='',
+                             bank='Banesco', document_id='J987654321'),
         ]
 
     def _receipt(self, phone='0414-1234567', bank='BDV', document_id='v12345678'):
         return {'recipient': {'phone': phone, 'bank': bank, 'document_id': document_id}}
 
     def test_matching_receipt_finds_the_right_profile(self):
-        result = match_recipient_profile(self._receipt(), self.profiles)
+        result = match_recipient_profile(self._receipt(), Payment.MOBILE_PAYMENT, self.profiles)
 
         self.assertTrue(result['matched'])
         self.assertEqual(result['matched_profile_id'], 1)
         self.assertEqual(result['checked_profiles_count'], 2)
+        self.assertIn('phone', result['receipt_fields'])
 
     def test_mismatched_bank_does_not_match(self):
         result = match_recipient_profile(
-            self._receipt(bank='Banesco'), self.profiles,
+            self._receipt(bank='Banesco'), Payment.MOBILE_PAYMENT, self.profiles,
         )
 
         self.assertFalse(result['matched'])
@@ -273,7 +291,7 @@ class RecipientProfileMatchingTests(TestCase):
     def test_unrelated_receipt_does_not_match_any_profile(self):
         result = match_recipient_profile(
             self._receipt(phone='0424-0000000', bank='Banesco', document_id='V00000000'),
-            self.profiles,
+            Payment.MOBILE_PAYMENT, self.profiles,
         )
 
         self.assertFalse(result['matched'])
@@ -281,13 +299,58 @@ class RecipientProfileMatchingTests(TestCase):
     def test_missing_recipient_field_is_treated_as_no_match(self):
         receipt = {'recipient': {'phone': '0414-1234567', 'bank': 'BDV'}}
 
-        result = match_recipient_profile(receipt, self.profiles)
+        result = match_recipient_profile(receipt, Payment.MOBILE_PAYMENT, self.profiles)
 
         self.assertFalse(result['matched'])
         self.assertEqual(result['receipt_fields']['document_id'], '')
 
     def test_empty_profile_list_never_matches(self):
-        result = match_recipient_profile(self._receipt(), [])
+        result = match_recipient_profile(self._receipt(), Payment.MOBILE_PAYMENT, [])
 
         self.assertFalse(result['matched'])
         self.assertEqual(result['checked_profiles_count'], 0)
+
+
+class RecipientProfileMatchingBankTransferTests(TestCase):
+    """Bank transfer profiles — matched on account_number instead of phone."""
+
+    def setUp(self):
+        self.profiles = [
+            SimpleNamespace(pk=3, phone='', account_number='01021234567890123456',
+                             bank='Banco de Venezuela', document_id='J-12345678-9'),
+        ]
+
+    def _receipt(self, account='0102-1234-5678-9012-3456', bank='BDV', document_id='j-12345678-9'):
+        return {'recipient': {'account': account, 'bank': bank, 'document_id': document_id}}
+
+    def test_matching_receipt_finds_the_right_profile(self):
+        result = match_recipient_profile(self._receipt(), Payment.BANK_TRANSFER, self.profiles)
+
+        self.assertTrue(result['matched'])
+        self.assertEqual(result['matched_profile_id'], 3)
+        self.assertIn('account_number', result['receipt_fields'])
+        self.assertNotIn('phone', result['receipt_fields'])
+
+    def test_mismatched_account_number_does_not_match(self):
+        result = match_recipient_profile(
+            self._receipt(account='9999999999999999'), Payment.BANK_TRANSFER, self.profiles,
+        )
+
+        self.assertFalse(result['matched'])
+
+    def test_dashes_and_spaces_in_account_number_are_ignored(self):
+        result = match_recipient_profile(
+            self._receipt(account='0102 1234 5678 9012 3456'), Payment.BANK_TRANSFER, self.profiles,
+        )
+
+        self.assertTrue(result['matched'])
+
+    def test_mobile_payment_receipt_data_does_not_match_bank_transfer_profile(self):
+        """A receipt with only a recipient.phone (no recipient.account) can
+        never match a bank_transfer profile, since it's matched on
+        account_number, not phone."""
+        receipt = {'recipient': {'phone': '04141234567', 'bank': 'BDV', 'document_id': 'j-12345678-9'}}
+
+        result = match_recipient_profile(receipt, Payment.BANK_TRANSFER, self.profiles)
+
+        self.assertFalse(result['matched'])

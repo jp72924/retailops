@@ -626,19 +626,28 @@ class RecipientProfile(models.Model):
     """
     Admin-configured "known-good" recipient identity for OCR-verified kiosk
     payments (Mobile Payment / Bank Transfer). A submitted receipt's
-    OCR-extracted recipient phone/bank/document must match one active profile
-    scoped to the same payment method, or checkout is rejected. Guards against
-    a customer paying into the wrong (or fraudulent) account and passing the
+    OCR-extracted recipient identity must match one active profile scoped to
+    the same payment method, or checkout is rejected. Guards against a
+    customer paying into the wrong (or fraudulent) account and passing the
     screenshot off as a valid payment to the store.
+
+    The identifying field is payment-method-dependent: mobile payment
+    profiles store/match the recipient's phone number, while bank transfer
+    profiles store/match the recipient's bank account number instead. Only
+    one of `phone` / `account_number` is populated on a given row, enforced
+    by `clean()`.
     """
+    MOBILE_PAYMENT = Payment.MOBILE_PAYMENT
+    BANK_TRANSFER = Payment.BANK_TRANSFER
     PAYMENT_METHOD_CHOICES = [
-        (Payment.MOBILE_PAYMENT, 'Mobile Payment'),
-        (Payment.BANK_TRANSFER, 'Bank Transfer'),
+        (MOBILE_PAYMENT, 'Mobile Payment'),
+        (BANK_TRANSFER, 'Bank Transfer'),
     ]
 
     label = models.CharField(max_length=150, blank=True)
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
-    phone = models.CharField(max_length=30)
+    phone = models.CharField(max_length=30, blank=True)
+    account_number = models.CharField(max_length=34, blank=True)
     bank = models.CharField(max_length=120)
     document_id = models.CharField(max_length=60)
     is_active = models.BooleanField(default=True)
@@ -655,14 +664,29 @@ class RecipientProfile(models.Model):
         verbose_name_plural = 'Recipient Profiles'
         constraints = [
             models.UniqueConstraint(
-                fields=['payment_method', 'phone', 'bank', 'document_id'],
+                fields=['payment_method', 'phone', 'account_number', 'bank', 'document_id'],
                 name='recipient_profile_unique_combo',
             ),
         ]
         ordering = ['payment_method', 'label']
 
+    def clean(self):
+        if self.payment_method == self.MOBILE_PAYMENT:
+            if not (self.phone or '').strip():
+                raise ValidationError({'phone': 'Required for mobile payment profiles.'})
+            if (self.account_number or '').strip():
+                raise ValidationError({
+                    'account_number': 'Not used for mobile payment profiles — leave blank.'
+                })
+        elif self.payment_method == self.BANK_TRANSFER:
+            if not (self.account_number or '').strip():
+                raise ValidationError({'account_number': 'Required for bank transfer profiles.'})
+            if (self.phone or '').strip():
+                raise ValidationError({'phone': 'Not used for bank transfer profiles — leave blank.'})
+
     def __str__(self):
-        return self.label or f'{self.get_payment_method_display()} · {self.phone}'
+        identifier = self.phone if self.payment_method == self.MOBILE_PAYMENT else self.account_number
+        return self.label or f'{self.get_payment_method_display()} · {identifier}'
 
 
 # ─── KioskStation ────────────────────────────────────────────────────────────

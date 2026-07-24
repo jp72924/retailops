@@ -38,7 +38,8 @@
           <div class="form-group">
             <label class="form-label" for="id_payment_method">{% trans "Payment Method" %} <span class="req">*</span></label>
             <select id="id_payment_method" name="payment_method" required
-              class="form-control{% if errors.payment_method %} is-invalid{% endif %}">
+              class="form-control{% if errors.payment_method %} is-invalid{% endif %}"
+              onchange="window.toggleRecipientIdentifierField()">
               <option value="">{% trans "— Select —" %}</option>
               <option value="mobile_payment" {% if form_data.payment_method == "mobile_payment" %}selected{% endif %}>{% trans "Mobile Payment" %}</option>
               <option value="bank_transfer" {% if form_data.payment_method == "bank_transfer" %}selected{% endif %}>{% trans "Bank Transfer" %}</option>
@@ -46,14 +47,24 @@
             {% if errors.payment_method %}<div class="invalid-feedback">{{ errors.payment_method }}</div>{% endif %}
           </div>
 
-          <!-- Phone (required) -->
-          <div class="form-group">
+          <!-- Phone (required for Mobile Payment) -->
+          <div class="form-group" id="id_phone_group">
             <label class="form-label" for="id_phone">{% trans "Recipient Phone" %} <span class="req">*</span></label>
-            <input type="text" id="id_phone" name="phone" maxlength="30" required
+            <input type="text" id="id_phone" name="phone" maxlength="30"
               class="form-control{% if errors.phone %} is-invalid{% endif %}"
               value="{{ form_data.phone|default:'' }}"
               placeholder="{% trans 'e.g. 0414-1234567' %}">
             {% if errors.phone %}<div class="invalid-feedback">{{ errors.phone }}</div>{% endif %}
+          </div>
+
+          <!-- Account number (required for Bank Transfer) -->
+          <div class="form-group" id="id_account_number_group">
+            <label class="form-label" for="id_account_number">{% trans "Recipient Account Number" %} <span class="req">*</span></label>
+            <input type="text" id="id_account_number" name="account_number" maxlength="34"
+              class="form-control{% if errors.account_number %} is-invalid{% endif %}"
+              value="{{ form_data.account_number|default:'' }}"
+              placeholder="{% trans 'e.g. 0102-1234-5678-9012-3456' %}">
+            {% if errors.account_number %}<div class="invalid-feedback">{{ errors.account_number }}</div>{% endif %}
           </div>
 
           <!-- Bank (required) -->
@@ -100,4 +111,21 @@
     </div>
   </div>
 </div>
+
+<script>
+  window.toggleRecipientIdentifierField = function () {
+    var method = document.getElementById('id_payment_method').value;
+    var phoneGroup = document.getElementById('id_phone_group');
+    var phoneInput = document.getElementById('id_phone');
+    var accountGroup = document.getElementById('id_account_number_group');
+    var accountInput = document.getElementById('id_account_number');
+
+    var isBankTransfer = method === 'bank_transfer';
+    phoneGroup.style.display = isBankTransfer ? 'none' : '';
+    phoneInput.required = !isBankTransfer;
+    accountGroup.style.display = isBankTransfer ? '' : 'none';
+    accountInput.required = isBankTransfer;
+  };
+  window.toggleRecipientIdentifierField();
+</script>
 {% endblock %}

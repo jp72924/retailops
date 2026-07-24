@@ -493,7 +493,7 @@ def _payment_receipt_fields(receipt_data, order, payment_method, now):
             profiles = RecipientProfile.objects.filter(
                 is_active=True, payment_method=payment_method,
             )
-            recipient_match = match_recipient_profile(vepay_data, profiles)
+            recipient_match = match_recipient_profile(vepay_data, payment_method, profiles)
             if not recipient_match['matched']:
                 raise _ReceiptValidationError(
                     'Receipt recipient details do not match any known-good account.',

@@ -4,6 +4,8 @@ import unicodedata
 
 from django.utils.dateparse import parse_date, parse_datetime
 
+from core.models import Payment
+
 from .vepay import (
     ORIGIN_ACCOUNT_PATH,
     ORIGIN_BANK_PATH,
@@ -11,6 +13,7 @@ from .vepay import (
     PAYMENT_BANK_APP_PATH,
     PAYMENT_DATETIME_ISO_PATH,
     PAYMENT_REFERENCE_PATH,
+    RECIPIENT_ACCOUNT_PATH,
     RECIPIENT_BANK_PATH,
     RECIPIENT_DOCUMENT_ID_PATH,
     RECIPIENT_PHONE_PATH,
@@ -26,7 +29,10 @@ PAYMENT_AMOUNT_CURRENCY_PATHS = (
     ('currency',),
 )
 REQUIRED_FIELD_KEYS = ('amount_usd', 'reference', 'paid_on', 'origin_bank')
-RECIPIENT_FIELD_KEYS = ('phone', 'bank', 'document_id')
+RECIPIENT_IDENTIFIER_BY_METHOD = {
+    Payment.MOBILE_PAYMENT: ('phone', RECIPIENT_PHONE_PATH),
+    Payment.BANK_TRANSFER: ('account_number', RECIPIENT_ACCOUNT_PATH),
+}
 
 BANK_ALIASES = {
     'BDV': 'BDV',
@@ -100,23 +106,30 @@ def compare_receipt_fields(receipt_data, expected_fields, settings, field_keys=N
     }
 
 
-def match_recipient_profile(receipt_data, profiles):
+def match_recipient_profile(receipt_data, payment_method, profiles):
     """
-    Check OCR-extracted recipient fields (phone, bank, document id) against a
-    set of admin-configured RecipientProfile-like objects.
+    Check OCR-extracted recipient fields against a set of admin-configured
+    RecipientProfile-like objects for the given payment_method.
+
+    The identifying field is payment-method-dependent: mobile payment
+    compares the recipient's phone number; bank transfer compares the
+    recipient's bank account number instead (see RecipientProfile).
 
     ``profiles`` is an iterable already scoped by the caller (active +
-    matching payment_method) exposing .phone/.bank/.document_id/.pk — this
-    function does not query the DB itself, keeping it unit-testable with
-    plain objects/namedtuples.
+    matching payment_method) exposing .bank/.document_id/.pk plus either
+    .phone or .account_number — this function does not query the DB itself,
+    keeping it unit-testable with plain objects/namedtuples.
 
     A receipt only matches a profile if all three fields are present on the
     receipt and all three normalize to the same value as the profile ("no
     OCR data" is always a non-match, matching compare_receipt_fields'
     missing-is-mismatch convention).
     """
+    identifier_attr, identifier_path = RECIPIENT_IDENTIFIER_BY_METHOD[payment_method]
+    normalize_identifier = normalize_phone if identifier_attr == 'phone' else normalize_account_number
+
     receipt_fields = {
-        'phone': normalize_phone(get_receipt_value(receipt_data, RECIPIENT_PHONE_PATH, '')),
+        identifier_attr: normalize_identifier(get_receipt_value(receipt_data, identifier_path, '')),
         'bank': normalize_bank(get_receipt_value(receipt_data, RECIPIENT_BANK_PATH, '')),
         'document_id': normalize_document_id(
             get_receipt_value(receipt_data, RECIPIENT_DOCUMENT_ID_PATH, '')
@@ -128,7 +141,7 @@ def match_recipient_profile(receipt_data, profiles):
     if all(receipt_fields.values()):
         for profile in profiles:
             if (
-                normalize_phone(profile.phone) == receipt_fields['phone'] and
+                normalize_identifier(getattr(profile, identifier_attr)) == receipt_fields[identifier_attr] and
                 normalize_bank(profile.bank) == receipt_fields['bank'] and
                 normalize_document_id(profile.document_id) == receipt_fields['document_id']
             ):
@@ -274,6 +287,13 @@ def normalize_phone(value):
 
 def normalize_document_id(value):
     return re.sub(r'[^0-9A-Za-z]+', '', str(value or '')).upper()
+
+
+def normalize_account_number(value):
+    """Strip everything but digits — account numbers are compared purely
+    numerically so dashes/spaces in either the profile or the receipt don't
+    cause a false mismatch."""
+    return re.sub(r'\D+', '', str(value or ''))
 
 
 def _ascii_upper(value):

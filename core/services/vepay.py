@@ -14,6 +14,7 @@ ORIGIN_PHONE_PATH = ('origin', 'phone')
 ORIGIN_ACCOUNT_PATH = ('origin', 'account')
 ORIGIN_BANK_PATH = ('origin', 'bank')
 RECIPIENT_PHONE_PATH = ('recipient', 'phone')
+RECIPIENT_ACCOUNT_PATH = ('recipient', 'account')
 RECIPIENT_DOCUMENT_ID_PATH = ('recipient', 'document_id')
 RECIPIENT_BANK_PATH = ('recipient', 'bank')
 TRANSACTION_KEY_PATH = ('transaction_key',)
@@ -30,6 +31,7 @@ RECEIPT_FIELD_PATHS = {
     'origin_account': ORIGIN_ACCOUNT_PATH,
     'origin_bank': ORIGIN_BANK_PATH,
     'recipient_phone': RECIPIENT_PHONE_PATH,
+    'recipient_account': RECIPIENT_ACCOUNT_PATH,
     'recipient_document_id': RECIPIENT_DOCUMENT_ID_PATH,
     'recipient_bank': RECIPIENT_BANK_PATH,
     'transaction_key': TRANSACTION_KEY_PATH,
