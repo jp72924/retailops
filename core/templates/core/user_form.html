@@ -9,10 +9,10 @@
       <div class="page-title">{% trans "Edit User" %}</div>
       <div class="page-subtitle">{% blocktrans with name=edited_user.get_full_name %}Update account details for {{ name }}{% endblocktrans %}</div>
     </div>
-    <a href="{% url 'user-list' %}" style="color:var(--muted);font-size:0.875rem;">← {% trans "Back to Staff" %}</a>
+    <a href="{% url 'user-list' %}" class="back-link">← {% trans "Back to Users" %}</a>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
+  <div class="responsive-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">
 
     <!-- Edit Form -->
     <div class="card">

@@ -10,7 +10,7 @@
       <div class="page-subtitle">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} profile registered{% plural %}{{ counter }} profiles registered{% endblocktrans %}</div>
     </div>
     <div class="page-header-actions">
-      <a href="{% url 'settings' %}" style="color:var(--muted);font-size:0.875rem;margin-right:16px;">← {% trans "Back to Settings" %}</a>
+      <a href="{% url 'settings' %}" class="back-link">← {% trans "Back to Settings" %}</a>
       <a href="{% url 'recipient-profile-create' %}" class="btn btn-primary">{% trans "+ New Profile" %}</a>
     </div>
   </div>

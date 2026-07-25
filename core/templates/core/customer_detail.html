@@ -4,6 +4,9 @@
 
 {% block content %}
 <div class="page">
+  <div style="margin-bottom:12px;">
+    <a href="{% url 'customer-list' %}" class="back-link">&larr; {% trans "Back to Customers" %}</a>
+  </div>
   <div class="page-header">
     <div>
       <div class="page-title">{{ customer.get_full_name }}</div>
@@ -15,7 +18,7 @@
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
+  <div class="responsive-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;">
 
     <!-- Contact Details -->
     <div class="card">

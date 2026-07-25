@@ -56,7 +56,7 @@ def currency(value):
     sec_str = _format_amount(sec_amount, sec_places)
 
     return format_html(
-        '{}{}<span class="currency-secondary"> \u2248 {}{}</span>',
+        '<span class="currency-pair">{}{}<span class="currency-secondary">\u2248 {}{}</span></span>',
         symbol, primary_str, settings.secondary_currency_symbol, sec_str,
     )
 
@@ -90,4 +90,4 @@ def currency_secondary(value):
     sec_amount = (numeric * settings.secondary_exchange_rate).quantize(
         quantum, rounding=ROUND_HALF_UP
     )
-    return f' \u2248 {settings.secondary_currency_symbol}{_format_amount(sec_amount, sec_places)}'
+    return f'\u2248 {settings.secondary_currency_symbol}{_format_amount(sec_amount, sec_places)}'

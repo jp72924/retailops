@@ -11,7 +11,7 @@
         {% if profile %}{% blocktrans with name=profile|stringformat:"s" %}Update details for {{ name }}{% endblocktrans %}{% else %}{% trans "Add a known-good recipient for OCR-verified kiosk payments" %}{% endif %}
       </div>
     </div>
-    <a href="{% url 'recipient-profile-list' %}" style="color:var(--muted);font-size:0.875rem;">← {% trans "Back" %}</a>
+    <a href="{% url 'recipient-profile-list' %}" class="back-link">← {% trans "Back to Recipient Profiles" %}</a>
   </div>
 
   <div class="card" style="max-width:640px;">

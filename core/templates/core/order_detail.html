@@ -4,6 +4,9 @@
 
 {% block content %}
 <div class="page">
+  <div style="margin-bottom:12px;">
+    <a href="{% url 'order-list' %}" class="back-link">&larr; {% trans "Back to Orders" %}</a>
+  </div>
 
   <!-- Page Header -->
   <div class="page-header">
@@ -81,7 +84,7 @@
 
   <form method="post" action="{% if order %}{% url 'order-detail' order.pk %}{% else %}{% url 'order-create' %}{% endif %}" id="order-form">
     {% csrf_token %}
-    <div style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
+    <div class="responsive-grid-2" style="display:grid;grid-template-columns:1fr 320px;gap:24px;">
       <div style="display:flex;flex-direction:column;gap:24px;">
 
         <!-- Customer -->
@@ -135,8 +138,8 @@
                     <th>{% trans "Product" %}</th>
                     <th>{% trans "SKU" %}</th>
                     <th style="width:80px;">{% trans "Qty" %}</th>
-                    <th style="width:130px;">{% trans "Unit Price" %}</th>
-                    <th style="width:120px;">{% trans "Line Total" %}</th>
+                    <th style="min-width:130px;">{% trans "Unit Price" %}</th>
+                    <th style="min-width:130px;">{% trans "Line Total" %}</th>
                     {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <th style="width:40px;"></th>
                     {% endif %}
@@ -182,7 +185,7 @@
                         <input type="number" name="unit_price_{{ forloop.counter }}" class="form-control" value="{{ item.unit_price }}" step="0.01" min="0" onchange="recalcRow({{ forloop.counter }})">
                         {% else %}{{ item.unit_price|currency }}{% endif %}
                       </td>
-                      <td><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></td>
+                      <td><span class="currency-pair"><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></span></td>
                       {% if order.status == 'draft' or order.status == 'pending' %}
                       <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>
                       {% endif %}
@@ -203,7 +206,7 @@
                 <div class="totals-box">
                   <div class="totals-row">
                     <span>{% trans "Subtotal" %}</span>
-                    <span><span id="subtotal">{{ order.subtotal|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="subtotal-sec">{{ order.subtotal|default:"0.00"|currency_secondary }}</span></span>
+                    <span class="currency-pair"><span id="subtotal">{{ order.subtotal|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="subtotal-sec">{{ order.subtotal|default:"0.00"|currency_secondary }}</span></span>
                   </div>
                   <div class="totals-row">
                     <span>{% trans "Tax" %}</span>
@@ -222,7 +225,7 @@
                   </div>
                   <div class="totals-row total">
                     <span>{% trans "Grand Total" %}</span>
-                    <span><span id="grand-total">{{ order.total_amount|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="grand-total-sec">{{ order.total_amount|default:"0.00"|currency_secondary }}</span></span>
+                    <span class="currency-pair"><span id="grand-total">{{ order.total_amount|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="grand-total-sec">{{ order.total_amount|default:"0.00"|currency_secondary }}</span></span>
                   </div>
                 </div>
               </div>
@@ -388,7 +391,7 @@
   function fmtSecondary(value) {
     if (!SECONDARY_ENABLED) return '';
     const converted = value * SECONDARY_RATE;
-    return ' ≈ ' + SECONDARY_SYMBOL + converted.toFixed(SECONDARY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return '≈ ' + SECONDARY_SYMBOL + converted.toFixed(SECONDARY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   }
 
   function setCurrencyCell(primaryId, value) {
@@ -454,7 +457,7 @@
       <td><input type="number" name="unit_price_${lineCount}" class="form-control"
             value="${PRODUCTS[0]?.price || '0.00'}" step="0.01" min="0"
             onchange="recalcRow(${lineCount})"></td>
-      <td><strong id="line-total-${lineCount}">${fmtCurrency(parseFloat(PRODUCTS[0]?.price || 0))}</strong><span class="currency-secondary" id="line-total-${lineCount}-sec">${fmtSecondary(parseFloat(PRODUCTS[0]?.price || 0))}</span></td>
+      <td><span class="currency-pair"><strong id="line-total-${lineCount}">${fmtCurrency(parseFloat(PRODUCTS[0]?.price || 0))}</strong><span class="currency-secondary" id="line-total-${lineCount}-sec">${fmtSecondary(parseFloat(PRODUCTS[0]?.price || 0))}</span></span></td>
       <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>`;
     tbody.appendChild(row);
     document.getElementById('line-item-count').value = lineCount;

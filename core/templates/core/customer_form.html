@@ -12,7 +12,7 @@
       </div>
     </div>
     <a href="{% if customer %}{% url 'customer-detail' customer.pk %}{% else %}{% url 'customer-list' %}{% endif %}"
-       style="color:var(--muted);font-size:0.875rem;">← {% trans "Back" %}</a>
+       class="back-link">← {% if customer %}{% trans "Back to Customer" %}{% else %}{% trans "Back to Customers" %}{% endif %}</a>
   </div>
 
   <div class="card" style="max-width:800px;">
