@@ -4,13 +4,6 @@
 
 {% block content %}
 <div class="page" style="max-width:{% if user.role.name == 'Admin' %}1040px{% else %}720px{% endif %};">
-  <div class="page-header">
-    <div>
-      <div class="page-title">{% trans "Settings" %}</div>
-      <div class="page-subtitle">{% trans "Manage your personal preferences and regional settings" %}</div>
-    </div>
-  </div>
-
   <form method="post" action="{% url 'settings' %}">
     {% csrf_token %}
 
@@ -23,6 +16,13 @@
       </nav>
       {% endif %}
       <div class="settings-main">
+
+    <div class="page-header">
+      <div>
+        <div class="page-title">{% trans "Settings" %}</div>
+        <div class="page-subtitle">{% trans "Manage your personal preferences and regional settings" %}</div>
+      </div>
+    </div>
 
     <!-- Personal / Regional Preferences -->
     <div class="card settings-section" id="section-regional" style="margin-bottom:24px;">
@@ -360,11 +360,11 @@
     </div>
     {% endif %}
 
-      </div>
-    </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">{% trans "Save Settings" %}</button>
+        </div>
 
-    <div class="form-actions">
-      <button type="submit" class="btn btn-primary">{% trans "Save Settings" %}</button>
+      </div>
     </div>
   </form>
 </div>
