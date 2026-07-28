@@ -130,17 +130,21 @@
         <div class="card-header"><div class="card-title">{% trans "Quick Actions" %}</div></div>
         <div class="card-body" style="padding:12px;">
           <div class="quick-actions">
-            <a href="{% url 'order-create' %}" class="qa-btn">
-              <span class="qa-icon">+</span> {% trans "New Order" %}
+            <a href="{% url 'order-create' %}" class="qa-btn" title="{% trans 'New Order' %}">
+              <span class="qa-icon">+</span> <span class="qa-label">{% trans "New Order" %}</span>
+              <span class="qa-short" aria-hidden="true">{% trans "Order" %}</span>
             </a>
-            <a href="{% url 'customer-create' %}" class="qa-btn">
-              <span class="qa-icon">👤</span> {% trans "Register Customer" %}
+            <a href="{% url 'customer-create' %}" class="qa-btn" title="{% trans 'Register Customer' %}">
+              <span class="qa-icon">👤</span> <span class="qa-label">{% trans "Register Customer" %}</span>
+              <span class="qa-short" aria-hidden="true">{% trans "Customer" %}</span>
             </a>
-            <a href="{% url 'payment-list' %}" class="qa-btn">
-              <span class="qa-icon">💳</span> {% trans "View Payments" %}
+            <a href="{% url 'payment-list' %}" class="qa-btn" title="{% trans 'View Payments' %}">
+              <span class="qa-icon">💳</span> <span class="qa-label">{% trans "View Payments" %}</span>
+              <span class="qa-short" aria-hidden="true">{% trans "Payments" %}</span>
             </a>
-            <a href="{% url 'inventory-list' %}" class="qa-btn">
-              <span class="qa-icon">📦</span> {% trans "Inventory" %}
+            <a href="{% url 'inventory-list' %}" class="qa-btn" title="{% trans 'Inventory' %}">
+              <span class="qa-icon">📦</span> <span class="qa-label">{% trans "Inventory" %}</span>
+              <span class="qa-short" aria-hidden="true">{% trans "Inventory" %}</span>
             </a>
           </div>
         </div>

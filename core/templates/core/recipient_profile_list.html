@@ -4,13 +4,15 @@
 
 {% block content %}
 <div class="page">
+  <div class="page-back">
+    <a href="{% url 'settings' %}" class="btn btn-ghost btn-sm">&larr; {% trans "Back to Settings" %}</a>
+  </div>
   <div class="page-header">
     <div>
       <div class="page-title">{% trans "Recipient Profiles" %}</div>
       <div class="page-subtitle">{% blocktrans count counter=page_obj.paginator.count %}{{ counter }} profile registered{% plural %}{{ counter }} profiles registered{% endblocktrans %}</div>
     </div>
     <div class="page-header-actions">
-      <a href="{% url 'settings' %}" class="back-link">← {% trans "Back to Settings" %}</a>
       <a href="{% url 'recipient-profile-create' %}" class="btn btn-primary">{% trans "+ New Profile" %}</a>
     </div>
   </div>

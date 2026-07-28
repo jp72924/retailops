@@ -1309,3 +1309,7 @@ msgstr "Orden de compra"
 
 msgid "Manual Adjustment"
 msgstr "Ajuste manual"
+
+# Short single-word captions under the mobile Quick Actions icon tiles
+msgid "Order"
+msgstr "Pedido"

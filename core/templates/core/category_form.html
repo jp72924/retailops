@@ -4,6 +4,9 @@
 
 {% block content %}
 <div class="page">
+  <div class="page-back">
+    <a href="{% url 'category-list' %}" class="btn btn-ghost btn-sm">&larr; {% trans "Back to Categories" %}</a>
+  </div>
   <div class="page-header">
     <div>
       <div class="page-title">{% if category %}{% trans "Edit Category" %}{% else %}{% trans "New Category" %}{% endif %}</div>
@@ -11,7 +14,6 @@
         {% if category %}{% blocktrans with name=category.name %}Update details for {{ name }}{% endblocktrans %}{% else %}{% trans "Add a new product category" %}{% endif %}
       </div>
     </div>
-    <a href="{% url 'category-list' %}" class="back-link">← {% trans "Back to Categories" %}</a>
   </div>
 
   <div class="card" style="max-width:640px;">

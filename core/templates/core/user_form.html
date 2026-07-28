@@ -4,12 +4,14 @@
 
 {% block content %}
 <div class="page">
+  <div class="page-back">
+    <a href="{% url 'user-list' %}" class="btn btn-ghost btn-sm">&larr; {% trans "Back to Users" %}</a>
+  </div>
   <div class="page-header">
     <div>
       <div class="page-title">{% trans "Edit User" %}</div>
       <div class="page-subtitle">{% blocktrans with name=edited_user.get_full_name %}Update account details for {{ name }}{% endblocktrans %}</div>
     </div>
-    <a href="{% url 'user-list' %}" class="back-link">← {% trans "Back to Users" %}</a>
   </div>
 
   <div class="responsive-grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:900px;">

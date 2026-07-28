@@ -4,6 +4,9 @@
 
 {% block content %}
 <div class="page">
+  <div class="page-back">
+    <a href="{% url 'recipient-profile-list' %}" class="btn btn-ghost btn-sm">&larr; {% trans "Back to Recipient Profiles" %}</a>
+  </div>
   <div class="page-header">
     <div>
       <div class="page-title">{% if profile %}{% trans "Edit Recipient Profile" %}{% else %}{% trans "New Recipient Profile" %}{% endif %}</div>
@@ -11,7 +14,6 @@
         {% if profile %}{% blocktrans with name=profile|stringformat:"s" %}Update details for {{ name }}{% endblocktrans %}{% else %}{% trans "Add a known-good recipient for OCR-verified kiosk payments" %}{% endif %}
       </div>
     </div>
-    <a href="{% url 'recipient-profile-list' %}" class="back-link">← {% trans "Back to Recipient Profiles" %}</a>
   </div>
 
   <div class="card" style="max-width:640px;">
