@@ -498,7 +498,7 @@ Complete listing of all 59 tools with their signatures and role requirements.
 |---|---|---|---|
 | `retailops_list_categories` | `page?`, `page_size?` | Any | All categories |
 | `retailops_get_category` | `id: int` | Any | Single category by ID |
-| `retailops_create_category` | `name`, `description?`, `parent_category_id?` | Manager+ | Create a category |
+| `retailops_create_category` | `name`, `description?`, `parent_category?` | Manager+ | Create a category |
 | `retailops_update_category` | `id: int`, + any category field | Manager+ | Partial update |
 | `retailops_delete_category` | `id: int` | Manager+ | Delete category |
 
@@ -506,7 +506,7 @@ Complete listing of all 59 tools with their signatures and role requirements.
 
 | Tool | Parameters | Role required | Description |
 |---|---|---|---|
-| `retailops_list_products` | `stock?` (`out`/`low`/`ok`), `search?`, `page?`, `page_size?` | Any | List with stock filter |
+| `retailops_list_products` | `search?`, `category?` (int), `is_active?` (bool), `stock?` (`out`/`low`/`ok`), `unit_of_measure?` (`piece`/`kg`/`liter`/`meter`/`box`/`pack`), `ordering?`, `page?`, `page_size?` | Any | List with live-stock and catalog filters |
 | `retailops_get_product` | `id: int` | Any | Single product with computed `current_stock` |
 | `retailops_create_product` | `sku`, `name`, `category_id`, `unit_price`, `unit_of_measure`, `low_stock_threshold?`, `description?`, `is_active?` | Manager+ | Create product |
 | `retailops_update_product` | `id: int`, + any product field | Manager+ | Partial update |
@@ -537,7 +537,7 @@ Complete listing of all 59 tools with their signatures and role requirements.
 | `retailops_ship_order` | `id: int` | Staff+ | Paid → Shipped |
 | `retailops_deliver_order` | `id: int` | Staff+ | Shipped → Delivered |
 | `retailops_refund_order` | `id: int` | Admin only | Paid → Refunded (restores stock) |
-| `retailops_record_payment` | `sales_order_id: int`, `amount: str`, `payment_method: str`, `reference_number?`, `notes?` | Any | Record a payment; auto-transitions to Paid when fully paid |
+| `retailops_record_payment` | `sales_order_id: int`, `amount: str`, `payment_method: str`, `reference_number?`, `notes?`, `status?` (`pending_review`/`confirmed`), `transaction_key?`, `origin_phone?`, `origin_bank?`, `recipient_bank?`, `recipient_account?`, `ocr_receipt_data?` (dict), `receipt_image_path?` | Any | Record a payment; auto-transitions to Paid when fully paid |
 | `retailops_bulk_confirm_orders` | `order_ids: list[int]` | Manager+ | Confirm multiple Pending orders; partial-success response |
 | `retailops_bulk_ship_orders` | `order_ids: list[int]` | Manager+ | Ship multiple Paid orders; partial-success response |
 | `retailops_bulk_deliver_orders` | `order_ids: list[int]` | Manager+ | Deliver multiple Shipped orders; partial-success response |
@@ -570,8 +570,8 @@ The identifying field is payment-method-dependent: pass `phone` for a `"mobile_p
 | Tool | Parameters | Role required | Description |
 |---|---|---|---|
 | `retailops_list_users` | `page?`, `page_size?` | Admin only | All users |
-| `retailops_get_user` | `id: int` | Admin only | Single user |
-| `retailops_create_user` | `email`, `password`, `role?`, `first_name?`, `last_name?` | Admin only | Create user |
+| `retailops_get_user` | `id: int` | Admin only (any role may retrieve their own record) | Single user |
+| `retailops_create_user` | `email`, `password`, `role` (int, required), `first_name?`, `last_name?`, `is_active?` (default: true) | Admin only | Create user |
 | `retailops_update_user` | `id: int`, + any updatable field | Admin only | Partial update |
 | `retailops_deactivate_user` | `id: int` | Admin only | Soft-deactivate (no login, record preserved) |
 | `retailops_reactivate_user` | `id: int` | Admin only | Re-enable a deactivated user |

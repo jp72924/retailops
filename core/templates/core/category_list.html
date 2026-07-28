@@ -45,7 +45,11 @@
         {% for cat in page_obj %}
         <tr>
           <td>
-            <a href="{% url 'category-edit' cat.pk %}"><strong>{{ cat.name }}</strong></a>
+            {% if user.role and user.role.name in "Manager,Admin" %}
+              <a href="{% url 'category-edit' cat.pk %}"><strong>{{ cat.name }}</strong></a>
+            {% else %}
+              <strong>{{ cat.name }}</strong>
+            {% endif %}
             {% if cat.description %}<div style="font-size:0.8rem;color:var(--muted);">{{ cat.description|truncatechars:60 }}</div>{% endif %}
           </td>
           <td>
@@ -57,14 +61,18 @@
           </td>
           <td>
             {% if cat.parent_category %}
-              <a href="{% url 'category-edit' cat.parent_category.pk %}">{{ cat.parent_category.name }}</a>
+              {% if user.role and user.role.name in "Manager,Admin" %}
+                <a href="{% url 'category-edit' cat.parent_category.pk %}">{{ cat.parent_category.name }}</a>
+              {% else %}
+                {{ cat.parent_category.name }}
+              {% endif %}
             {% else %}—{% endif %}
           </td>
           <td>{{ cat.product_count }}</td>
           <td style="color:var(--muted);">{{ cat.created_at|date:"M j, Y" }}</td>
           <td class="td-actions">
-            <a href="{% url 'category-edit' cat.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
             {% if user.role and user.role.name in "Manager,Admin" %}
+            <a href="{% url 'category-edit' cat.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
             <form method="post" action="{% url 'category-delete' cat.pk %}" class="inline"
                   onsubmit="return confirm('{% blocktrans with name=cat.name|escapejs %}Delete category &quot;{{ name }}&quot;?\nSubcategories will become top-level. This cannot be undone.{% endblocktrans %}')">
               {% csrf_token %}

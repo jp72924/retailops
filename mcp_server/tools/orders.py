@@ -1,8 +1,8 @@
 """
 mcp_server/tools/orders.py
 ----------------------------
-Sales order tools (12 tools) including all lifecycle transitions
-and the payment recording tool.
+Sales order tools (15 tools) including all lifecycle transitions,
+bulk transitions, and the payment recording tool.
 
 Order status machine:
   Draft → submit → Pending → confirm → Confirmed → [payment] → Paid
@@ -157,7 +157,8 @@ def register_order_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         """
         Edit a sales order. Requires Staff, Manager, or Admin role.
 
-        Only allowed while the order is in Draft or Pending status.
+        Only allowed while the order is in Draft status — attempting to edit
+        a Pending or later order returns a 409 wrong_status error.
         Providing items replaces ALL existing line items atomically —
         this is not an item-level patch.
 
@@ -189,8 +190,12 @@ def register_order_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         Only allowed for orders in Draft status. All line items are deleted
         in cascade. This action is irreversible.
 
-        To delete a Pending/Confirmed order, first cancel it
-        (retailops_cancel_order), which is also irreversible but restores stock.
+        A Pending order cannot be deleted or cancelled directly — there is no
+        reject/return-to-draft transition. retailops_cancel_order only accepts
+        Confirmed orders, so a Pending order would need to be confirmed first
+        (retailops_confirm_order, which deducts stock) before it can be
+        cancelled (which then restores that stock) — not equivalent to a
+        clean deletion.
 
         Args:
             id: The order's integer primary key.

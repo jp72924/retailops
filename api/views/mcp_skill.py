@@ -241,6 +241,7 @@ def _build_skill_card(request):
                         "address_line1": "string, optional", "address_line2": "string, optional",
                         "city": "string, optional", "state": "string, optional",
                         "postal_code": "string, optional",
+                        "notes": "string, optional — internal notes visible only to staff",
                     },
                 },
                 {
@@ -298,6 +299,7 @@ def _build_skill_card(request):
                         "category": "int, optional",
                         "is_active": "bool, optional",
                         "stock": "'out'|'low'|'ok', optional",
+                        "unit_of_measure": "'piece'|'kg'|'liter'|'meter'|'box'|'pack', optional",
                         "ordering": "string, optional",
                         "page": "int", "page_size": "int (max 100)",
                     },
@@ -313,7 +315,7 @@ def _build_skill_card(request):
                     "role": "Manager+",
                     "description": "Create a product. Active products require image_path or external_image_url.",
                     "params": {
-                        "sku": "string (required, unique, immutable)",
+                        "sku": "string (required, unique)",
                         "name": "string (required)",
                         "category_id": "int (required)",
                         "unit_price": "decimal string (required, e.g. '9.99')",
@@ -328,7 +330,7 @@ def _build_skill_card(request):
                 {
                     "name": "retailops_update_product",
                     "role": "Manager+",
-                    "description": "Partial update. SKU cannot be changed. Supports external_image_url, image_path, and clear_image.",
+                    "description": "Partial update. This tool has no sku parameter, so it cannot be changed through it — the record itself isn't immutable, so a direct API/back-office edit still can. Supports external_image_url, image_path, and clear_image.",
                     "params": {"id": "int (required)", "...": "any product field except sku", "image_path": "local file path, optional", "clear_image": "bool, optional"},
                 },
                 {
@@ -417,7 +419,7 @@ def _build_skill_card(request):
                 {
                     "name": "retailops_update_order",
                     "role": "Staff+",
-                    "description": "Edit a Draft or Pending order. Providing items REPLACES all line items.",
+                    "description": "Edit a Draft order (409 wrong_status on Pending or later). Providing items REPLACES all line items.",
                     "params": {
                         "id": "int (required)",
                         "items": "list, optional (full replacement if provided)",
@@ -594,7 +596,7 @@ def _build_skill_card(request):
                 },
                 {
                     "name": "retailops_get_user",
-                    "role": "Admin only",
+                    "role": "Admin only (any role may retrieve their own record)",
                     "description": "Single user record (password not returned).",
                     "params": {"id": "int (required)"},
                 },
@@ -765,7 +767,6 @@ def _build_skill_card(request):
             "immutability": {
                 "payments":            "Payment records cannot be edited or deleted.",
                 "inventory_movements": "Movement records are append-only — never edited or deleted.",
-                "product_sku":         "SKU cannot be changed after creation.",
                 "order_number":        "order_number is auto-generated (SO-YYYYMMDD-XXXX) and immutable.",
                 "payment_number":      "payment_number is auto-generated (PAY-YYYYMMDD-XXXX) and immutable.",
             },
@@ -776,6 +777,7 @@ def _build_skill_card(request):
                 "bulk_adjustments":          "Must be a non-empty list.",
                 "update_system_settings":    "At least one field must be provided.",
                 "password_minimum_length":   "8 characters.",
+                "product_sku":               "Not a database-enforced immutable field — update_product simply has no sku parameter, so a new product is the only way to get a different SKU through MCP.",
             },
             "soft_deletes": "Users are soft-deleted (is_active=False), not hard-deleted.",
             "singleton": "SystemSettings always has exactly one row (pk=1); use get/update, never create/delete.",

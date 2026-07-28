@@ -61,7 +61,7 @@ class RetailOpsError(Exception):
             return (
                 "Permission denied. "
                 "The MCP agent account does not have the required role for this action. "
-                "Review the Capability Matrix in MCP_DESIGN.md to see which role is needed."
+                "Review the Tool Catalog (§5) in MCP_GUIDE.md to see which role is needed."
             )
 
         if self.status == 404 or self.code == "not_found":

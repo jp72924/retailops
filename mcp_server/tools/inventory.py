@@ -1,7 +1,7 @@
 """
 mcp_server/tools/inventory.py
 ------------------------------
-Inventory movement tools (3 tools).
+Inventory movement tools (4 tools).
 
 Read operations (list, get) require any authenticated role.
 retailops_adjust_inventory requires Manager or Admin.

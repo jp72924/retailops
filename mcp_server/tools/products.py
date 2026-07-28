@@ -133,8 +133,11 @@ def register_product_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         """
         Update product details (partial update). Requires Manager or Admin role.
 
-        SKU cannot be changed after creation. Activating a product requires an
-        existing image source, external_image_url, or image_path.
+        This tool has no sku parameter, so SKU cannot be changed through it —
+        create a new product if a different SKU is needed. (The underlying
+        record itself is not database-enforced-immutable; a direct API or
+        back-office edit can still change it.) Activating a product requires
+        an existing image source, external_image_url, or image_path.
         """
         if is_active is True and not image_path and external_image_url is None:
             current = await client.get(f"/products/{id}/")

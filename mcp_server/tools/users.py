@@ -49,7 +49,9 @@ def register_user_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
     @mcp.tool()
     async def retailops_get_user(id: int) -> dict:
         """
-        Retrieve a single user account by ID. Requires Admin role.
+        Retrieve a single user account by ID. Requires Admin role, except a
+        user may always retrieve their own record (id matching the caller's
+        own user id) regardless of role.
 
         Password is never returned. Returns the same fields as retailops_list_users
         for a single user.

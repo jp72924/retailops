@@ -70,6 +70,10 @@ def login_view(request):
         user = authenticate(request, username=email, password=password)
         if user is not None:
             login(request, user)
+            if request.POST.get('remember_me'):
+                request.session.set_expiry(None)  # persist for SESSION_COOKIE_AGE (default)
+            else:
+                request.session.set_expiry(0)  # expire when the browser is closed
             return redirect(request.GET.get('next', 'dashboard'))
         error = _('Invalid email or password.')
 
@@ -358,8 +362,16 @@ def customer_edit(request, pk):
 def customer_delete(request, pk):
     """POST: delete customer (only if no associated orders); redirect to customer-list."""
     customer = get_object_or_404(Customer, pk=pk)
-    customer.delete()
-    messages.success(request, f'Customer "{customer.get_full_name()}" deleted.')
+    name = customer.get_full_name()
+    try:
+        customer.delete()
+        messages.success(request, f'Customer "{name}" deleted.')
+    except ProtectedError:
+        messages.error(
+            request,
+            f'Cannot delete "{name}" — they have one or more existing orders. '
+            f'Those orders must be reassigned or removed first.',
+        )
     return redirect('customer-list')
 
 
@@ -779,6 +791,10 @@ def payment_create(request):
 
     if payment_method not in valid_methods:
         messages.error(request, 'Please select a valid payment method.')
+        return redirect('order-detail', pk=order.pk)
+
+    if payment_method in (Payment.BANK_TRANSFER, Payment.CARD, Payment.CHECK) and not reference_number:
+        messages.error(request, 'A reference number is required for bank transfer, card, and check payments.')
         return redirect('order-detail', pk=order.pk)
 
     with transaction.atomic():
