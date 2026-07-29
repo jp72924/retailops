@@ -94,9 +94,14 @@ class OrderViewSet(
         return SalesOrderWriteSerializer
 
     def get_permissions(self):
+        # NOTE: this override replaces permission_classes entirely, including
+        # any set on an @action decorator — so every action must be named here.
+        # bulk_transition declares IsManagerOrAdmin on its decorator, but that
+        # was never consulted, letting Staff bulk-confirm (and so deduct stock)
+        # through an endpoint whose single-order equivalent requires Manager.
         if self.action in ('list', 'retrieve'):
             return [IsAuthenticated()]
-        if self.action in ('confirm', 'cancel'):
+        if self.action in ('confirm', 'cancel', 'bulk_transition'):
             return [IsAuthenticated(), IsManagerOrAdmin()]
         if self.action == 'refund':
             return [IsAuthenticated(), IsAdminRole()]

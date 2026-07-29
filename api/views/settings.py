@@ -172,8 +172,12 @@ class SecondaryRateRefreshView(APIView):
         try:
             rate = update_secondary_exchange_rate(instance)
         except BCVRateError as exc:
+            # Standard {error, code} envelope. This used to answer with
+            # {'errors': [...]}, which no client parses — and which collides
+            # with NON_FIELD_ERRORS_KEY, DRF's key for non-field validation
+            # errors on an unrelated code path.
             return Response(
-                {'errors': [exc.message], 'code': exc.code},
+                {'error': exc.message, 'code': exc.code},
                 status=status.HTTP_502_BAD_GATEWAY,
             )
         return Response({

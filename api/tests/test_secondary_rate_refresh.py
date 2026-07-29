@@ -40,7 +40,10 @@ class SecondaryRateRefreshAPITests(APITestCase):
         finally:
             logging.disable(logging.NOTSET)
         self.assertEqual(resp.status_code, 502)
-        self.assertIn('errors', resp.data)
+        # Standard {error, code} envelope, matching every other API error.
+        self.assertIn('error', resp.data)
+        self.assertIn('code', resp.data)
+        self.assertNotIn('errors', resp.data)
 
     def test_staff_forbidden(self):
         auth_client(self.client, make_user(Role.STAFF))

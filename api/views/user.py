@@ -34,8 +34,15 @@ class UserViewSet(
     POST   /api/v1/users/<id>/reactivate/       — set is_active=True  (Admin)
 
     DELETE is intentionally absent — use deactivate instead.
+
+    Search: ?search=<term> matches email, first_name, last_name.
+    Ordering: ?ordering=<serializer field> (prefix - for desc).
     """
     queryset = User.objects.select_related('role').order_by('first_name', 'last_name')
+
+    # Without this, SearchFilter is a no-op and ?search= silently returns the
+    # full unfiltered list — a result that looks filtered and never was.
+    search_fields = ['email', 'first_name', 'last_name']
 
     def get_serializer_class(self):
         if self.action in ('list', 'retrieve'):
