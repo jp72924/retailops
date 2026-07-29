@@ -7,13 +7,25 @@ on:
 
 jobs:
   django:
+    name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    strategy:
+      # Report every version's result rather than cancelling siblings on the
+      # first failure — a version-specific break is exactly what this catches.
+      fail-fast: false
+      matrix:
+        # Floor 3.10: mcp and psycopg both require it.
+        # Ceiling 3.12: Django 4.2 LTS supports up to 3.12, and requirements.txt
+        # pins Django <5.0. Raise this only when that pin moves.
+        python-version: ["3.10", "3.11", "3.12"]
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
+          cache: pip
 
       - name: Install dependencies
         run: |
