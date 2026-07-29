@@ -1,6 +1,6 @@
-from django.db.models import IntegerField, Sum, Value
+from django.db.models import IntegerField, ProtectedError, Sum, Value
 from django.db.models.functions import Coalesce
-from rest_framework import mixins
+from rest_framework import mixins, status
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
@@ -88,6 +88,27 @@ class ProductViewSet(
         if self.action in ('list', 'retrieve', 'movements'):
             return [IsAuthenticated()]
         return [IsAuthenticated(), IsManagerOrAdmin()]
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Guard: return 409 if the product is referenced by orders or movements.
+
+        Product is protected from two sides — OrderItem.product and
+        InventoryMovement.product are both on_delete=PROTECT — so catching
+        ProtectedError covers both without two separate existence queries.
+        custom_exception_handler has no ProtectedError branch, so without this
+        the delete surfaced as an unhandled 500.
+        """
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            return Response(
+                {
+                    'error': 'Cannot delete a product that has order items or stock movements.',
+                    'code':  'conflict',
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
 
     # ── movements action ─────────────────────────────────────────────────────
 

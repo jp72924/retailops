@@ -17,12 +17,16 @@ class RecipientProfileViewSet(ModelViewSet):
     these records carry bank-account and document identifiers used for fraud
     control, not general catalog data.
 
+    Filters:  ?payment_method=mobile_payment|bank_transfer, ?is_active=true|false.
     Search:   ?search= on label, phone, account_number, bank, document_id.
     Ordering: ?ordering=payment_method|label|created_at.
     """
     queryset = RecipientProfile.objects.order_by('payment_method', 'label')
     serializer_class = RecipientProfileSerializer
     permission_classes = [IsAuthenticated, IsManagerOrAdmin]
+    # DjangoFilterBackend is a global backend, so without filterset_fields a
+    # ?payment_method= query is silently ignored rather than rejected.
+    filterset_fields = ['payment_method', 'is_active']
     search_fields = ['label', 'phone', 'account_number', 'bank', 'document_id']
     ordering_fields = ['payment_method', 'label', 'created_at']
     ordering = ['payment_method', 'label']
