@@ -28,7 +28,7 @@ class RecipientProfileSerializer(serializers.ModelSerializer):
         model = RecipientProfile
         fields = [
             'id', 'label', 'payment_method', 'payment_method_display',
-            'phone', 'account_number', 'bank', 'document_id', 'is_active',
+            'phone', 'account_number', 'bank', 'document_id', 'is_active', 'is_primary',
             'created_by', 'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'created_by', 'created_at', 'updated_at', 'payment_method_display']

@@ -101,6 +101,17 @@
             </div>
           </div>
           {% endif %}
+
+          <div class="form-group">
+            <label class="form-check">
+              <input type="checkbox" name="is_primary" value="on"
+                {% if form_data.is_primary %}checked{% endif %}>
+              {% trans "Primary for this payment method" %}
+            </label>
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
+              {% trans "Only one profile can be primary per payment method. Checking this will automatically un-mark whichever other profile currently holds it. A payment method's only profile is always its primary one." %}
+            </div>
+          </div>
         </div>
 
         <div class="form-actions">

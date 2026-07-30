@@ -52,6 +52,9 @@
           <td>{{ profile.bank }}</td>
           <td>{{ profile.document_id }}</td>
           <td>
+            {% if profile.is_primary %}
+              <span class="badge badge-starred">★ {% trans "Primary" %}</span>
+            {% endif %}
             {% if profile.is_active %}
               <span class="badge badge-active">{% trans "Active" %}</span>
             {% else %}

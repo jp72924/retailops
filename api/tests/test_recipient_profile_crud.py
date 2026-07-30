@@ -1,3 +1,4 @@
+from django.db import IntegrityError
 from rest_framework.test import APITestCase
 
 from core.models import Payment, RecipientProfile, Role
@@ -155,3 +156,117 @@ class RecipientProfileAPITests(APITestCase):
         resp = self.client.get(URL, {'search': '0102123456789012'})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.data['count'], 1)
+
+    def test_first_profile_of_a_method_becomes_primary_automatically(self):
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.post(URL, {
+            'payment_method': Payment.MOBILE_PAYMENT,
+            'phone': '4141234567', 'bank': 'BDV', 'document_id': 'V12345678',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(RecipientProfile.objects.get(pk=resp.data['id']).is_primary)
+
+    def test_second_profile_is_not_primary_unless_asked(self):
+        make_profile(phone='4141111111')
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.post(URL, {
+            'payment_method': Payment.MOBILE_PAYMENT,
+            'phone': '4142222222', 'bank': 'BDV', 'document_id': 'V12345678',
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertFalse(resp.data['is_primary'])
+
+    def test_deleting_the_primary_promotes_the_last_remaining_profile(self):
+        primary = make_profile(phone='4141111111')
+        survivor = make_profile(phone='4142222222')
+        self.assertFalse(survivor.is_primary)
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.delete(f'{URL}{primary.pk}/')
+
+        self.assertEqual(resp.status_code, 204)
+        survivor.refresh_from_db()
+        self.assertTrue(survivor.is_primary)
+
+    def test_deleting_the_primary_leaves_no_primary_when_several_remain(self):
+        primary = make_profile(phone='4141111111')
+        make_profile(phone='4142222222')
+        make_profile(phone='4143333333')
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        self.client.delete(f'{URL}{primary.pk}/')
+
+        self.assertEqual(
+            RecipientProfile.objects.filter(
+                payment_method=Payment.MOBILE_PAYMENT, is_primary=True).count(), 0)
+
+    def test_a_lone_profile_cannot_be_unset_as_primary(self):
+        lone = make_profile(phone='4141111111')
+        self.assertTrue(lone.is_primary)
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        self.client.patch(f'{URL}{lone.pk}/', {'is_primary': False}, format='json')
+
+        lone.refresh_from_db()
+        self.assertTrue(lone.is_primary)
+
+    def test_creating_primary_demotes_previous_primary_of_same_method(self):
+        existing = make_profile(phone='4141111111', is_primary=True)
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.post(URL, {
+            'payment_method': Payment.MOBILE_PAYMENT, 'phone': '4142222222',
+            'bank': 'BDV', 'document_id': 'V12345678', 'is_primary': True,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 201)
+        self.assertTrue(resp.data['is_primary'])
+        existing.refresh_from_db()
+        self.assertFalse(existing.is_primary)
+
+    def test_patching_to_primary_demotes_previous_primary(self):
+        existing = make_profile(phone='4141111111', is_primary=True)
+        other = make_profile(phone='4142222222', is_primary=False)
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.patch(f'{URL}{other.pk}/', {'is_primary': True}, format='json')
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data['is_primary'])
+        existing.refresh_from_db()
+        self.assertFalse(existing.is_primary)
+
+    def test_primary_is_independent_across_payment_methods(self):
+        mobile = make_profile(phone='4141111111', is_primary=True)
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.post(URL, {
+            'payment_method': Payment.BANK_TRANSFER, 'account_number': '0102123456789012',
+            'bank': 'BDV', 'document_id': 'V12345678', 'is_primary': True,
+        }, format='json')
+
+        self.assertEqual(resp.status_code, 201)
+        mobile.refresh_from_db()
+        self.assertTrue(mobile.is_primary)
+
+    def test_filter_by_is_primary(self):
+        make_profile(phone='4141111111', is_primary=True, label='Primary one')
+        make_profile(phone='4142222222', label='Secondary')
+        auth_client(self.client, make_user(Role.MANAGER))
+
+        resp = self.client.get(URL, {'is_primary': 'true'})
+
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data['count'], 1)
+        self.assertEqual(resp.data['results'][0]['label'], 'Primary one')
+
+    def test_db_constraint_blocks_a_second_primary_for_the_same_method(self):
+        make_profile(phone='4141111111', is_primary=True)
+        other = make_profile(phone='4142222222')
+
+        with self.assertRaises(IntegrityError):
+            RecipientProfile.objects.filter(pk=other.pk).update(is_primary=True)

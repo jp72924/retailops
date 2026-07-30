@@ -652,6 +652,7 @@ class RecipientProfile(models.Model):
     bank = models.CharField(max_length=120)
     document_id = models.CharField(max_length=60)
     is_active = models.BooleanField(default=True)
+    is_primary = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -667,6 +668,11 @@ class RecipientProfile(models.Model):
             models.UniqueConstraint(
                 fields=['payment_method', 'phone', 'account_number', 'bank', 'document_id'],
                 name='recipient_profile_unique_combo',
+            ),
+            models.UniqueConstraint(
+                fields=['payment_method', 'is_primary'],
+                condition=models.Q(is_primary=True),
+                name='recipient_profile_one_primary_per_method',
             ),
         ]
         ordering = ['payment_method', 'label']
@@ -684,6 +690,68 @@ class RecipientProfile(models.Model):
                 raise ValidationError({'account_number': 'Required for bank transfer profiles.'})
             if (self.phone or '').strip():
                 raise ValidationError({'phone': 'Not used for bank transfer profiles — leave blank.'})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Tracked so save() can also re-check the method this profile is
+        # moving away from, which may be left with a lone profile to promote.
+        self._original_payment_method = self.payment_method
+
+    @classmethod
+    def demote_other_primaries(cls, payment_method, exclude_pk=None):
+        """
+        Clear is_primary on every other profile sharing payment_method, so the
+        row the caller is about to save becomes the only primary for it.
+
+        Call inside the same transaction.atomic() block as that save, before it.
+        This is a convenience so callers don't have to demote by hand — it is
+        NOT the correctness guarantee. Two concurrent requests can both read
+        "no primary yet" and both proceed; the recipient_profile_one_primary_per_method
+        partial unique index is what actually prevents a double primary, by
+        failing the second commit with IntegrityError.
+        """
+        qs = cls.objects.filter(payment_method=payment_method, is_primary=True)
+        if exclude_pk is not None:
+            qs = qs.exclude(pk=exclude_pk)
+        qs.update(is_primary=False)
+
+    @classmethod
+    def ensure_sole_profile_is_primary(cls, payment_method):
+        """
+        Promote the lone profile of a payment method to primary.
+
+        With nothing to choose between, the choice is implied — a single
+        registered profile is necessarily the one customer-facing systems
+        should show, so it is marked primary without anyone having to say so.
+        Does nothing once a second profile exists (someone must then pick).
+
+        Counts every profile of the method, active or not, matching the scope
+        of the one-primary-per-method constraint. Returns the promoted pk, or
+        None when nothing changed.
+        """
+        rows = list(cls.objects.filter(payment_method=payment_method)
+                    .values_list('pk', 'is_primary')[:2])
+        if len(rows) != 1 or rows[0][1]:
+            return None
+        cls.objects.filter(pk=rows[0][0]).update(is_primary=True)
+        return rows[0][0]
+
+    def _sync_sole_primary(self, *payment_methods):
+        """Apply the lone-profile rule to each method, keeping self in step."""
+        for method in {m for m in payment_methods if m}:
+            if self.ensure_sole_profile_is_primary(method) == self.pk:
+                self.is_primary = True
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self._sync_sole_primary(self.payment_method, self._original_payment_method)
+        self._original_payment_method = self.payment_method
+
+    def delete(self, *args, **kwargs):
+        payment_method = self.payment_method
+        result = super().delete(*args, **kwargs)
+        self.ensure_sole_profile_is_primary(payment_method)
+        return result
 
     def __str__(self):
         identifier = self.phone if self.payment_method == self.MOBILE_PAYMENT else self.account_number

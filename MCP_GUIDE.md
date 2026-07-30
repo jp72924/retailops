@@ -557,12 +557,16 @@ The fraud-prevention allowlist OCR-verified kiosk payments (Mobile Payment / Ban
 
 The identifying field is payment-method-dependent: pass `phone` for a `"mobile_payment"` profile, or `account_number` for a `"bank_transfer"` profile — exactly one of the two, matching `payment_method`; the other must be omitted (the tools reject the wrong one client-side before calling the API).
 
+Each payment method can have at most one `is_primary=true` profile — the one customer-facing systems should display when several are registered. Setting it on one profile automatically clears it from whichever other profile of the same `payment_method` currently holds it, so `mobile_payment` and `bank_transfer` each keep their own independent primary.
+
+A payment method's *only* profile is always its primary one, applied automatically — on create, and again when deleting a profile leaves a single one behind. You only need to pass `is_primary` once a method has two or more profiles to choose between.
+
 | Tool | Parameters | Role required | Description |
 |---|---|---|---|
 | `retailops_list_recipient_profiles` | `search?`, `page?`, `page_size?` | Manager+ | Paginated list, searches label/phone/account_number/bank/document_id |
 | `retailops_get_recipient_profile` | `id: int` | Manager+ | Single profile by ID |
-| `retailops_create_recipient_profile` | `payment_method` (`"mobile_payment"`\|`"bank_transfer"`), `bank`, `document_id`, `phone?` (required for mobile_payment), `account_number?` (required for bank_transfer), `label?` | Manager+ | Create a profile. `payment_method`+`phone`/`account_number`+`bank`+`document_id` must be a unique combination |
-| `retailops_update_recipient_profile` | `id: int`, + any profile field, `is_active?` | Manager+ | Partial update; set `is_active=false` to deactivate without deleting |
+| `retailops_create_recipient_profile` | `payment_method` (`"mobile_payment"`\|`"bank_transfer"`), `bank`, `document_id`, `phone?` (required for mobile_payment), `account_number?` (required for bank_transfer), `label?`, `is_primary?` | Manager+ | Create a profile. `payment_method`+`phone`/`account_number`+`bank`+`document_id` must be a unique combination |
+| `retailops_update_recipient_profile` | `id: int`, + any profile field, `is_active?`, `is_primary?` | Manager+ | Partial update; set `is_active=false` to deactivate without deleting, `is_primary=true` to make it the priority profile for its payment method |
 | `retailops_delete_recipient_profile` | `id: int` | Manager+ | Hard delete — irreversible |
 
 ### Users (7 tools)

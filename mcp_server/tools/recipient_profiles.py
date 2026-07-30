@@ -16,6 +16,13 @@ recipient doesn't match one of these profiles for that payment method.
 Unlike categories/products, every action here — including list and get —
 requires Manager or Admin, since these records carry bank-account and
 document identifiers used for fraud control.
+
+Profiles carry two boolean flags: is_active (whether the profile is matched
+against receipts at all) and is_primary (which single profile per payment
+method customer-facing systems should display when several are registered).
+A payment method's only profile is always its primary one — the flag is
+applied automatically, so is_primary only needs setting once a second
+profile exists for that method.
 """
 
 from typing import Optional
@@ -95,6 +102,7 @@ def register_recipient_profile_tools(mcp: FastMCP, client: RetailOpsClient) -> N
         phone: Optional[str] = None,
         account_number: Optional[str] = None,
         label: Optional[str] = None,
+        is_primary: Optional[bool] = None,
     ) -> dict:
         """
         Create a recipient profile. Requires Manager or Admin role.
@@ -116,6 +124,12 @@ def register_recipient_profile_tools(mcp: FastMCP, client: RetailOpsClient) -> N
                             payment_method is "bank_transfer".
             label:          Optional free-text name to help identify the profile
                             (e.g. "Main store — BDV").
+            is_primary:     If True, this becomes the priority profile shown for
+                            its payment_method, and whichever other profile
+                            currently holds it for that same payment_method is
+                            automatically un-marked. Omit it for the first
+                            profile of a payment_method — a lone profile is
+                            marked primary automatically.
 
         Returns the created profile object including the assigned integer ID.
         """
@@ -129,6 +143,7 @@ def register_recipient_profile_tools(mcp: FastMCP, client: RetailOpsClient) -> N
                 "bank": bank,
                 "document_id": document_id,
                 "label": label,
+                "is_primary": is_primary,
             })
         except RetailOpsError as e:
             raise ValueError(e.user_message())
@@ -143,6 +158,7 @@ def register_recipient_profile_tools(mcp: FastMCP, client: RetailOpsClient) -> N
         document_id: Optional[str] = None,
         label: Optional[str] = None,
         is_active: Optional[bool] = None,
+        is_primary: Optional[bool] = None,
     ) -> dict:
         """
         Update one or more fields on a recipient profile (partial update).
@@ -157,7 +173,9 @@ def register_recipient_profile_tools(mcp: FastMCP, client: RetailOpsClient) -> N
         payment_method, phone/account_number, bank, and document_id must
         remain unique. Set is_active=False to deactivate a profile without
         deleting it — inactive profiles are kept for reference but are never
-        matched against receipts.
+        matched against receipts. Set is_primary=True to make this the priority
+        profile shown for its payment_method — whichever other profile currently
+        holds it for that same payment_method is automatically un-marked.
 
         Args:
             id: The profile's integer primary key (required).
@@ -176,6 +194,7 @@ def register_recipient_profile_tools(mcp: FastMCP, client: RetailOpsClient) -> N
                 "document_id": document_id,
                 "label": label,
                 "is_active": is_active,
+                "is_primary": is_primary,
             })
         except RetailOpsError as e:
             raise ValueError(e.user_message())

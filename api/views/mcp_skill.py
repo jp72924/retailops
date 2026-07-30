@@ -572,12 +572,13 @@ def _build_skill_card(request):
                         "phone": "string, required when payment_method is 'mobile_payment' (omit for bank_transfer)",
                         "account_number": "string, required when payment_method is 'bank_transfer' (omit for mobile_payment)",
                         "label": "string, optional",
+                        "is_primary": "bool, optional — auto-demotes the current primary for the same payment_method; a payment method's only profile is marked primary automatically",
                     },
                 },
                 {
                     "name": "retailops_update_recipient_profile",
                     "role": "Manager+",
-                    "description": "Partial update. Set is_active=false to deactivate without deleting. phone is used for mobile_payment, account_number for bank_transfer — not both.",
+                    "description": "Partial update. Set is_active=false to deactivate without deleting. Set is_primary=true to make this the priority profile for its payment_method — automatically un-marks whichever other profile currently holds it. phone is used for mobile_payment, account_number for bank_transfer — not both.",
                     "params": {"id": "int (required)", "...": "any recipient profile field"},
                 },
                 {

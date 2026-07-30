@@ -1648,17 +1648,22 @@ _DUPLICATE_PROFILE_ERROR = (
 def recipient_profile_create(request):
     if request.method == 'POST':
         label, payment_method, phone, account_number, bank, document_id, errors = _parse_recipient_profile_post(request)
+        is_primary = request.POST.get('is_primary') == 'on'
         form_data = {
             'label': label, 'payment_method': payment_method, 'phone': phone,
             'account_number': account_number, 'bank': bank, 'document_id': document_id,
+            'is_primary': is_primary,
         }
         if not errors:
             try:
-                profile = RecipientProfile.objects.create(
-                    label=label, payment_method=payment_method, phone=phone,
-                    account_number=account_number, bank=bank, document_id=document_id,
-                    created_by=request.user,
-                )
+                with transaction.atomic():
+                    if is_primary:
+                        RecipientProfile.demote_other_primaries(payment_method)
+                    profile = RecipientProfile.objects.create(
+                        label=label, payment_method=payment_method, phone=phone,
+                        account_number=account_number, bank=bank, document_id=document_id,
+                        is_primary=is_primary, created_by=request.user,
+                    )
                 messages.success(request, f'Recipient profile "{profile}" created.')
                 return redirect('recipient-profile-list')
             except IntegrityError:
@@ -1676,10 +1681,11 @@ def recipient_profile_edit(request, pk):
     if request.method == 'POST':
         label, payment_method, phone, account_number, bank, document_id, errors = _parse_recipient_profile_post(request)
         is_active = request.POST.get('is_active') == 'on'
+        is_primary = request.POST.get('is_primary') == 'on'
         form_data = {
             'label': label, 'payment_method': payment_method, 'phone': phone,
             'account_number': account_number, 'bank': bank, 'document_id': document_id,
-            'is_active': is_active,
+            'is_active': is_active, 'is_primary': is_primary,
         }
         if not errors:
             profile.label = label
@@ -1689,8 +1695,12 @@ def recipient_profile_edit(request, pk):
             profile.bank = bank
             profile.document_id = document_id
             profile.is_active = is_active
+            profile.is_primary = is_primary
             try:
-                profile.save()
+                with transaction.atomic():
+                    if is_primary:
+                        RecipientProfile.demote_other_primaries(payment_method, exclude_pk=profile.pk)
+                    profile.save()
                 messages.success(request, f'Recipient profile "{profile}" updated.')
                 return redirect('recipient-profile-list')
             except IntegrityError:
@@ -1702,7 +1712,7 @@ def recipient_profile_edit(request, pk):
         'label': profile.label, 'payment_method': profile.payment_method,
         'phone': profile.phone, 'account_number': profile.account_number,
         'bank': profile.bank, 'document_id': profile.document_id,
-        'is_active': profile.is_active,
+        'is_active': profile.is_active, 'is_primary': profile.is_primary,
     }
     return render(request, 'core/recipient_profile_form.html',
                   {'profile': profile, 'errors': {}, 'form_data': form_data})
