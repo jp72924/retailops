@@ -5,7 +5,9 @@ from django.core.cache import cache
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import Customer, KioskStation, Payment, Role, SalesOrder, SystemSettings
+from core.models import (
+    Customer, KioskStation, Payment, RecipientProfile, Role, SalesOrder, SystemSettings,
+)
 from api.tests.helpers import (
     make_customer,
     make_kiosk_station,
@@ -284,3 +286,91 @@ class KioskProductAndCheckoutTests(APITestCase):
             'receipt_image_base64': png_data_url(),
             'receipt_image_content_type': 'image/png',
         }
+
+
+class KioskRecipientProfileTests(APITestCase):
+    URL = '/api/v1/kiosk/recipient-profiles/'
+
+    def setUp(self):
+        cache.clear()
+        self.station, self.raw_key = make_kiosk_station()
+        self.headers = {'HTTP_AUTHORIZATION': f'KioskKey {self.raw_key}'}
+        self.admin = make_user(Role.ADMIN, email='profiles-admin@example.com')
+
+    def _profile(self, payment_method=Payment.MOBILE_PAYMENT, phone='', account_number='',
+                 bank='Banco de Venezuela', document_id='V12345678', **attrs):
+        return RecipientProfile.objects.create(
+            label=attrs.pop('label', 'Main store'),
+            payment_method=payment_method,
+            phone=phone,
+            account_number=account_number,
+            bank=bank,
+            document_id=document_id,
+            created_by=self.admin,
+            **attrs,
+        )
+
+    def test_requires_a_valid_kiosk_key(self):
+        self._profile(phone='4141234567')
+
+        no_auth = self.client.get(self.URL)
+        self.assertIn(no_auth.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+
+        wrong_scheme = self.client.get(self.URL, HTTP_AUTHORIZATION=f'Token {self.raw_key}')
+        self.assertIn(wrong_scheme.status_code, {status.HTTP_401_UNAUTHORIZED, status.HTTP_403_FORBIDDEN})
+
+        invalid_key = self.client.get(self.URL, HTTP_AUTHORIZATION='KioskKey invalid-key')
+        self.assertEqual(invalid_key.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_returns_one_primary_per_payment_method(self):
+        # Each is the sole profile of its method, so both are primary already.
+        self._profile(phone='4141234567')
+        self._profile(payment_method=Payment.BANK_TRANSFER, account_number='0102123456789012')
+
+        resp = self.client.get(self.URL, **self.headers)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [r['payment_method'] for r in resp.data['results']],
+            [Payment.BANK_TRANSFER, Payment.MOBILE_PAYMENT],
+        )
+        mobile = resp.data['results'][1]
+        self.assertEqual(mobile['payment_method_display'], 'Mobile Payment')
+        self.assertEqual(mobile['bank'], 'Banco de Venezuela')
+        self.assertEqual(mobile['phone'], '4141234567')
+        self.assertEqual(mobile['account_number'], '')
+        self.assertEqual(mobile['document_id'], 'V12345678')
+
+    def test_non_primary_and_inactive_profiles_are_excluded(self):
+        primary = self._profile(phone='4141111111')
+        self._profile(phone='4142222222', label='Backup')  # second of the method: not primary
+        self.assertTrue(RecipientProfile.objects.get(pk=primary.pk).is_primary)
+
+        only_primary = self.client.get(self.URL, **self.headers)
+        self.assertEqual([r['phone'] for r in only_primary.data['results']], ['4141111111'])
+
+        # A deactivated profile keeps is_primary, but must never be displayed.
+        primary.is_active = False
+        primary.save()
+        self.assertTrue(RecipientProfile.objects.get(pk=primary.pk).is_primary)
+
+        resp = self.client.get(self.URL, **self.headers)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['results'], [])
+
+    def test_no_profiles_configured_returns_an_empty_list_not_an_error(self):
+        resp = self.client.get(self.URL, **self.headers)
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['results'], [])
+
+    def test_response_exposes_only_customer_safe_fields(self):
+        self._profile(phone='4141234567')
+
+        resp = self.client.get(self.URL, **self.headers)
+
+        self.assertEqual(
+            set(resp.data['results'][0]),
+            {'payment_method', 'payment_method_display', 'bank',
+             'phone', 'account_number', 'document_id'},
+        )

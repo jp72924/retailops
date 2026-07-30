@@ -8,6 +8,7 @@ from .views import (
     KioskProductLookupView,
     KioskProductSearchView,
     KioskReceiptView,
+    KioskRecipientProfileView,
     KioskRegisterView,
 )
 
@@ -19,6 +20,7 @@ urlpatterns = [
     path('products/',              KioskProductSearchView.as_view(),  name='product-search'),
     path('products/<int:pk>/',     KioskProductDetailView.as_view(),  name='product-detail'),
     path('product/<str:sku>/',     KioskProductLookupView.as_view(),  name='product-lookup'),
+    path('recipient-profiles/',    KioskRecipientProfileView.as_view(), name='recipient-profiles'),
     path('checkout/',              KioskCheckoutView.as_view(),       name='checkout'),
     path('receipt/<int:order_id>/', KioskReceiptView.as_view(),       name='receipt'),
     path('heartbeat/',             KioskHeartbeatView.as_view(),      name='heartbeat'),

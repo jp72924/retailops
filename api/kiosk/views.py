@@ -34,6 +34,7 @@ from .serializers import (
     KioskProductSerializer,
     KioskReceiptItemSerializer,
     KioskReceiptSerializer,
+    KioskRecipientProfileSerializer,
     KioskRegisterSerializer,
 )
 from .throttling import (
@@ -155,6 +156,34 @@ class KioskProductLookupView(KioskAPIMixin, APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         return Response(KioskProductSerializer(product, context={'request': request}).data)
+
+
+# ── Payment recipient (where the customer sends the money) ───────────────────
+
+class KioskRecipientProfileView(KioskAPIMixin, APIView):
+    """
+    GET /api/v1/kiosk/recipient-profiles/ — the primary recipient profile for
+    each payment method, so the kiosk can show the customer where to pay.
+
+    Returns at most one entry per payment method (mobile_payment /
+    bank_transfer), and an empty list when none is configured. Serving this
+    instead of a destination hardcoded in the kiosk keeps the screen and the
+    allowlist that checkout validates receipts against in step, so a customer
+    can't be shown an account their own payment would then be rejected for.
+    """
+    throttle_classes = [KioskScanThrottle]
+
+    def get(self, request):
+        # is_active matters as much as is_primary here: a payment method whose
+        # only profile has been deactivated still carries the primary flag
+        # (see RecipientProfile.ensure_sole_profile_is_primary), and a disabled
+        # account must never reach a customer's screen.
+        profiles = RecipientProfile.objects.filter(
+            is_active=True, is_primary=True,
+        ).order_by('payment_method')
+        return Response(
+            {'results': KioskRecipientProfileSerializer(profiles, many=True).data}
+        )
 
 
 # ── Atomic checkout ──────────────────────────────────────────────────────────

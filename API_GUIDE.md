@@ -1183,6 +1183,7 @@ The identifying field is payment-method-dependent: `mobile_payment` profiles use
 | `PATCH` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Partial update |
 | `DELETE` | `/api/v1/payment-recipient-profiles/{id}/` | Manager+ | Delete |
 
+**Filters:** `?payment_method=mobile_payment|bank_transfer`, `?is_active=true|false`, `?is_primary=true|false`  
 **Search:** `?search=` matches `label`, `phone`, `account_number`, `bank`, `document_id`  
 **Ordering:** `?ordering=payment_method|label|created_at`
 
@@ -1199,8 +1200,11 @@ The identifying field is payment-method-dependent: `mobile_payment` profiles use
 | `bank` | string | Yes | Recipient bank name |
 | `document_id` | string | Yes | Recipient identification/RIF/document number |
 | `is_active` | boolean | No | Defaults to `true`. Inactive profiles are kept on file but never matched. |
+| `is_primary` | boolean | No | Defaults to `false`. Marks the profile customer-facing systems should display for its payment method. |
 
 `(payment_method, phone, account_number, bank, document_id)` must be unique — creating or updating into a duplicate combination returns `400`. `created_by` and timestamps are read-only and set automatically.
+
+**`is_primary` semantics.** At most one profile per `payment_method` can hold the flag, so `mobile_payment` and `bank_transfer` each keep their own independent primary. Setting it on one profile automatically clears it from whichever other profile of the same method currently holds it — no need to unset the old one first. A payment method's *only* profile is always its primary one, applied automatically on create and again when deleting a profile leaves a single one behind, so `is_primary` only needs passing once a method has two or more profiles to choose between.
 
 Response: [RecipientProfile object](#recipientprofile-object).
 
@@ -1436,6 +1440,7 @@ Mobile payment profile (uses `phone`, `account_number` blank):
   "bank": "Banco de Venezuela",
   "document_id": "V-12345678",
   "is_active": true,
+  "is_primary": true,
   "created_by": 2,
   "created_at": "2026-01-01T00:00:00Z",
   "updated_at": "2026-01-01T00:00:00Z"
@@ -1454,6 +1459,7 @@ Bank transfer profile (uses `account_number`, `phone` blank):
   "bank": "Banco de Venezuela",
   "document_id": "J-12345678-9",
   "is_active": true,
+  "is_primary": false,
   "created_by": 2,
   "created_at": "2026-01-01T00:00:00Z",
   "updated_at": "2026-01-01T00:00:00Z"

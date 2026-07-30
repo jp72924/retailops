@@ -94,6 +94,50 @@ https://github.com/jp72924/vepay-api
 Until a Base URL is configured, saving with OCR enabled is rejected — the field
 is required when OCR is on.
 
+### Showing the customer where to pay
+
+For Mobile Payment and Bank Transfer the customer sends money before checkout,
+so the Kiosk has to display a destination. Fetch it rather than hardcoding it:
+
+```
+GET /api/v1/kiosk/recipient-profiles/
+Authorization: KioskKey <station key>
+```
+
+```json
+{
+  "results": [
+    {
+      "payment_method": "mobile_payment",
+      "payment_method_display": "Mobile Payment",
+      "bank": "Banco de Venezuela",
+      "phone": "04141234567",
+      "account_number": "",
+      "document_id": "V-12345678"
+    }
+  ]
+}
+```
+
+One entry per payment method at most — whichever profile is marked **primary**
+in *Settings → Manage Recipient Profiles* (see [is_primary](API_GUIDE.md#412-recipient-profiles)).
+`phone` is populated for Mobile Payment and `account_number` for Bank Transfer;
+the unused one is `""`. Inactive profiles are never returned, so a method whose
+profile has been deactivated simply disappears from the list.
+
+`results` can be empty — nothing is configured yet, or every profile for a
+method is inactive. Treat that as "this payment method is unavailable" rather
+than falling back to a built-in destination.
+
+Fetch once when the payment screen opens and cache it for the transaction; this
+endpoint is rate-limited per station (`kiosk_scan`, 120/min) and is not meant to
+be polled.
+
+Using this endpoint is what keeps the displayed destination and the allowlist in
+the next section in step. A destination hardcoded in the Kiosk can drift from
+the configured profiles, and the customer only finds out at checkout — after
+the money has already been sent.
+
 ### Recipient profile validation (optional)
 
 With OCR enabled, RetailOps can additionally verify that a receipt's OCR-detected

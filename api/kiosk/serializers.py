@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from core.models import Customer, Payment, Product
+from core.models import Customer, Payment, Product, RecipientProfile
 from api.serializers.product import product_image_url
 
 
@@ -84,6 +84,24 @@ class KioskProductSerializer(serializers.ModelSerializer):
 
     def get_image_url(self, obj):
         return product_image_url(obj, self.context.get('request'))
+
+
+class KioskRecipientProfileSerializer(serializers.ModelSerializer):
+    """
+    Customer-safe view of a recipient profile — only what a shopper needs on
+    screen to send the payment. Deliberately narrower than the Manager+
+    RecipientProfileSerializer, which also carries label, created_by and the
+    internal flags. phone and account_number are both always present; exactly
+    one is populated for a given payment method (see RecipientProfile.clean).
+    """
+    payment_method_display = serializers.CharField(
+        source='get_payment_method_display', read_only=True,
+    )
+
+    class Meta:
+        model = RecipientProfile
+        fields = ['payment_method', 'payment_method_display', 'bank',
+                  'phone', 'account_number', 'document_id']
 
 
 class KioskCheckoutItemSerializer(serializers.Serializer):
