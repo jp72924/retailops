@@ -286,7 +286,10 @@ class KioskCheckoutReceiptTests(APITestCase):
         response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(Payment.objects.get().status, Payment.CONFIRMED)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, Payment.CONFIRMED)
+        self.assertEqual(payment.recipient_bank, 'Banco de Venezuela')
+        self.assertEqual(payment.recipient_account, '')
 
     @responses.activate
     def test_recipient_validation_disabled_skips_check(self):

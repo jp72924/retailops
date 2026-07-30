@@ -20,7 +20,10 @@ from core.models import (
 from core.services.receipt_matching import (
     REQUIRED_FIELD_KEYS, compare_receipt_fields, match_recipient_profile,
 )
-from core.services.vepay import TRANSACTION_KEY_PATH, VEPayClient, VEPayError, get_receipt_value
+from core.services.vepay import (
+    RECIPIENT_ACCOUNT_PATH, RECIPIENT_BANK_PATH, TRANSACTION_KEY_PATH,
+    VEPayClient, VEPayError, get_receipt_value,
+)
 
 from .authentication import KioskTokenAuthentication
 from .permissions import IsKioskStation
@@ -349,8 +352,14 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                 transaction_key=receipt_fields['transaction_key'],
                 origin_phone=(receipt_data.get('origin_phone') or '').strip(),
                 origin_bank=(receipt_data.get('origin_bank') or '').strip(),
-                recipient_bank=(receipt_data.get('recipient_bank') or '').strip(),
-                recipient_account=(receipt_data.get('recipient_account') or '').strip(),
+                recipient_bank=(
+                    get_receipt_value(receipt_fields['ocr_receipt_data'], RECIPIENT_BANK_PATH, '')
+                    or receipt_data.get('recipient_bank') or ''
+                ).strip(),
+                recipient_account=(
+                    get_receipt_value(receipt_fields['ocr_receipt_data'], RECIPIENT_ACCOUNT_PATH, '')
+                    or receipt_data.get('recipient_account') or ''
+                ).strip(),
                 ocr_receipt_data=receipt_fields['ocr_receipt_data'],
                 verified_at=receipt_fields['verified_at'],
             )
