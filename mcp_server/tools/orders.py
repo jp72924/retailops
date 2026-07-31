@@ -384,6 +384,8 @@ def register_order_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
                               cash, mobile_payment, bank_transfer, card,
                               check, other.
             reference_number: External reference, e.g. cheque number or bank transaction ID.
+                              REQUIRED for bank_transfer, card and check payments;
+                              optional for cash, mobile_payment and other.
             notes:            Optional internal notes about this payment.
             status:           Optional payment status: confirmed or pending_review.
             transaction_key:   Verified OCR transaction key for receipt methods.

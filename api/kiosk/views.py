@@ -366,9 +366,16 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                 payment_method,
                 now,
             )
+            # Strip each candidate before the `or`, not after it. Stripping the
+            # result let a whitespace-only receipt reference win the `or` (it is
+            # truthy) and then collapse to '', storing a blank reference for a
+            # payment method the API requires one for. str() guards the other
+            # half: a non-string JSON value, e.g. {"reference": 12345}, used to
+            # raise AttributeError inside this atomic block — a 500, not a 400.
             reference_number = (
-                receipt_data.get('reference') or data['payment_reference']
-            ).strip()
+                str(receipt_data.get('reference') or '').strip()
+                or data['payment_reference'].strip()
+            )
 
             payment = Payment(
                 sales_order=order,

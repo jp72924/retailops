@@ -367,7 +367,7 @@ Content-Type: application/json
 
 Response `201 Created` — includes the auto-generated `payment_number`. If `amount_paid >= total_amount`, the order status will have transitioned to `paid` in the same atomic operation.
 
-**Payment methods:** `cash` · `bank_transfer` · `card` · `check` · `other`
+**Payment methods:** `cash` · `mobile_payment` · `bank_transfer` · `card` · `check` · `other`. The `reference_number` shown above is **required** for `bank_transfer`, `card` and `check`.
 
 ---
 
@@ -993,9 +993,11 @@ Payments are **immutable** financial records. They cannot be updated or deleted.
 |-------|------|----------|-------------|
 | `sales_order` | integer | Yes | Order primary key. Must be in `confirmed` status |
 | `amount` | string (decimal) | Yes | Must be > 0 |
-| `payment_method` | string | Yes | `cash` · `bank_transfer` · `card` · `check` · `other` |
-| `reference_number` | string | No | External transaction reference |
+| `payment_method` | string | Yes | `cash` · `mobile_payment` · `bank_transfer` · `card` · `check` · `other` |
+| `reference_number` | string | Conditional | External transaction reference. **Required** for `bank_transfer`, `card` and `check`; optional otherwise |
 | `notes` | string | No | |
+
+**Reference number:** `bank_transfer`, `card` and `check` payments are rejected with `400` and a `reference_number` entry in `details` when none is supplied. This mirrors the same rule in the back-office payment form. Note it stacks with the OCR requirement below — a `bank_transfer` under OCR needs both its own bank reference *and* a `transaction_key` (or manual override `notes`), and a request missing both reports both in one response.
 
 **Auto-transition:** If the cumulative `amount_paid` across all payments for the order reaches or exceeds `total_amount`, the order automatically transitions to `paid` in the same atomic transaction.
 

@@ -66,8 +66,11 @@ STEP 1 - Retrieve the order
 STEP 2 - Collect payment details
   Ask for amount, payment_method, reference_number, notes, and receipt_image_path.
   Allowed methods: cash, mobile_payment, bank_transfer, card, check, other.
-  For mobile_payment or bank_transfer, collect reference_number, paid date,
-  issuing/origin bank, and receipt_image_path when available.
+  reference_number is REQUIRED for bank_transfer, card and check - the request
+  is rejected without it. It is optional for cash, mobile_payment and other.
+  For mobile_payment or bank_transfer, also collect paid date, issuing/origin
+  bank, and receipt_image_path when available. Note bank_transfer needs both:
+  its own reference_number AND the OCR transaction_key from STEP 3.
 
 STEP 3 - Verify receipt when OCR applies
   Call retailops_get_system_settings.

@@ -206,7 +206,7 @@ Once the order is confirmed, payment can be recorded:
 3. Fill in:
    - **Amount** — the amount received. You can record partial payments; the order moves to Paid only once the full amount is covered.
    - **Payment Method** — Cash, Bank Transfer, Card, Check, or Other.
-   - **Reference Number** — optional; a cheque number, bank transfer ID, etc.
+   - **Reference Number** — a cheque number, bank transfer ID, etc. **Required** for Bank Transfer, Card, and Check; optional for Cash and Other.
    - **Notes** — optional internal note.
 4. Click **Save Payment**.
 

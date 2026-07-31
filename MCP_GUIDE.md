@@ -537,7 +537,7 @@ Complete listing of all 59 tools with their signatures and role requirements.
 | `retailops_ship_order` | `id: int` | Staff+ | Paid → Shipped |
 | `retailops_deliver_order` | `id: int` | Staff+ | Shipped → Delivered |
 | `retailops_refund_order` | `id: int` | Admin only | Paid → Refunded (restores stock) |
-| `retailops_record_payment` | `sales_order_id: int`, `amount: str`, `payment_method: str`, `reference_number?`, `notes?`, `status?` (`pending_review`/`confirmed`), `transaction_key?`, `origin_phone?`, `origin_bank?`, `recipient_bank?`, `recipient_account?`, `ocr_receipt_data?` (dict), `receipt_image_path?` | Any | Record a payment; auto-transitions to Paid when fully paid |
+| `retailops_record_payment` | `sales_order_id: int`, `amount: str`, `payment_method: str`, `reference_number?` (required for `bank_transfer`/`card`/`check`), `notes?`, `status?` (`pending_review`/`confirmed`), `transaction_key?`, `origin_phone?`, `origin_bank?`, `recipient_bank?`, `recipient_account?`, `ocr_receipt_data?` (dict), `receipt_image_path?` | Any | Record a payment; auto-transitions to Paid when fully paid |
 | `retailops_bulk_confirm_orders` | `order_ids: list[int]` | Manager+ | Confirm multiple Pending orders; partial-success response |
 | `retailops_bulk_ship_orders` | `order_ids: list[int]` | Manager+ | Ship multiple Paid orders; partial-success response |
 | `retailops_bulk_deliver_orders` | `order_ids: list[int]` | Manager+ | Deliver multiple Shipped orders; partial-success response |

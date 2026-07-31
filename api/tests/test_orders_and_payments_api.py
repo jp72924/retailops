@@ -381,3 +381,138 @@ class PaymentAndReceiptAPITests(APITestCase):
         auth_client(self.client, self.staff)
         forbidden = self.client.get('/api/v1/payments/receipts/healthz/')
         self.assertEqual(forbidden.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class PaymentReferenceNumberValidationTests(APITestCase):
+    """
+    reference_number is mandatory for bank transfer, card and check payments,
+    mirroring the back-office rule in core.views.payment_create. The API used
+    to accept a blank one, so the same rule held on one surface out of four.
+    """
+    REFERENCE_REQUIRED_METHODS = (Payment.BANK_TRANSFER, Payment.CARD, Payment.CHECK)
+    REFERENCE_OPTIONAL_METHODS = (Payment.CASH, Payment.MOBILE_PAYMENT, Payment.OTHER)
+
+    def setUp(self):
+        cache.clear()
+        self.staff = make_user(Role.STAFF, email='staff-payment-reference@example.com')
+        self.product = make_product(sku='REF-001', stock=50, unit_price='10.00')
+        settings = SystemSettings.get()
+        settings.ocr_enabled = True
+        settings.ocr_enabled_methods = [Payment.MOBILE_PAYMENT]
+        settings.save()
+        auth_client(self.client, self.staff)
+
+    def _post(self, **overrides):
+        """
+        POST a payment that covers a fresh Confirmed order.
+
+        A fresh order per call is deliberate: a fully-covered payment flips the
+        order to Paid, after which validate_sales_order would reject the next
+        post and mask what the test is actually asserting.
+        """
+        payload = {
+            'sales_order': make_order(
+                product=self.product, user=self.staff, status=SalesOrder.CONFIRMED,
+            ).pk,
+            'amount': '10.00',
+            'payment_method': Payment.CASH,
+        }
+        payload.update(overrides)
+        return self.client.post('/api/v1/payments/', payload, format='json')
+
+    def test_reference_number_required_for_bank_transfer_card_and_check(self):
+        blank_variants = (
+            ('omitted', {}),
+            ('empty', {'reference_number': ''}),
+            ('whitespace', {'reference_number': '   '}),
+        )
+        for method in self.REFERENCE_REQUIRED_METHODS:
+            for label, variant in blank_variants:
+                with self.subTest(method=method, reference=label):
+                    response = self._post(payment_method=method, **variant)
+                    self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                    # Only the reference rule fires: none of these are receipt
+                    # methods under the OCR settings configured in setUp.
+                    self.assertEqual(set(response.data['details']), {'reference_number'})
+                    self.assertIn(
+                        'reference number is required',
+                        response.data['details']['reference_number'][0],
+                    )
+        self.assertFalse(Payment.objects.exists())
+
+    def test_reference_number_accepted_for_bank_transfer_card_and_check(self):
+        for method in self.REFERENCE_REQUIRED_METHODS:
+            with self.subTest(method=method):
+                reference = f'{method}-REF-001'
+                response = self._post(payment_method=method, reference_number=reference)
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(response.data['reference_number'], reference)
+
+    def test_reference_number_not_required_for_cash_mobile_payment_and_other(self):
+        """Guard against over-broadening the rule beyond the back-office set."""
+        settings = SystemSettings.get()
+        settings.ocr_enabled = False
+        settings.save()
+        for method in self.REFERENCE_OPTIONAL_METHODS:
+            with self.subTest(method=method):
+                response = self._post(payment_method=method)
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                self.assertEqual(response.data['reference_number'], '')
+
+    def test_mobile_payment_under_ocr_still_does_not_require_a_reference(self):
+        response = self._post(
+            payment_method=Payment.MOBILE_PAYMENT,
+            notes='Manual override, receipt to be reviewed.',
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['reference_number'], '')
+        self.assertEqual(response.data['status'], Payment.PENDING_REVIEW)
+
+    def test_reference_and_ocr_requirements_are_reported_together(self):
+        """
+        bank_transfer is the only method that can trip both rules at once, so
+        this is the single live multi-error path through the collection.
+        """
+        settings = SystemSettings.get()
+        settings.ocr_enabled_methods = [Payment.MOBILE_PAYMENT, Payment.BANK_TRANSFER]
+        settings.save()
+
+        response = self._post(payment_method=Payment.BANK_TRANSFER)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            set(response.data['details']),
+            {'reference_number', 'transaction_key', 'notes'},
+        )
+        self.assertFalse(Payment.objects.exists())
+
+    def test_duplicate_transaction_key_is_reported_alone(self):
+        make_payment(
+            user=self.staff,
+            payment_method=Payment.BANK_TRANSFER,
+            transaction_key='tx-dup',
+        )
+        settings = SystemSettings.get()
+        settings.ocr_enabled_methods = [Payment.MOBILE_PAYMENT, Payment.BANK_TRANSFER]
+        settings.save()
+
+        # Reference deliberately omitted: the duplicate conflict must
+        # short-circuit before any missing-field errors are collected.
+        response = self._post(payment_method=Payment.BANK_TRANSFER, transaction_key='tx-dup')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(set(response.data['details']), {'transaction_key'})
+        self.assertIn('already exists', response.data['details']['transaction_key'][0])
+
+    def test_cash_payment_does_not_read_system_settings(self):
+        """
+        Non-receipt methods must not gain a DB round-trip from the restructure —
+        SystemSettings.get() is an uncached get_or_create.
+        """
+        order = make_order(product=self.product, user=self.staff, status=SalesOrder.CONFIRMED)
+        with patch('api.serializers.payment.SystemSettings') as mocked_settings:
+            response = self.client.post('/api/v1/payments/', {
+                'sales_order': order.pk,
+                'amount': '10.00',
+                'payment_method': Payment.CASH,
+            }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        mocked_settings.get.assert_not_called()

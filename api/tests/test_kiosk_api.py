@@ -268,6 +268,31 @@ class KioskProductAndCheckoutTests(APITestCase):
         response = self.client.get(f'/api/v1/kiosk/receipt/{other_order.pk}/', **self.headers)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_whitespace_receipt_reference_falls_back_to_payment_reference(self):
+        """
+        Regression: the derivation stripped the result of the `or` rather than
+        each candidate, so a whitespace-only receipt reference won (truthy) and
+        then collapsed to ''. Kiosk defaults to `card`, which the API requires a
+        reference for — so this stored exactly the blank that rule forbids.
+        """
+        response = self._checkout(receipt={'reference': '   '})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get(payment_number=response.data['payment_number'])
+        self.assertEqual(payment.reference_number, 'kiosk-ref')
+        self.assertEqual(response.data['receipt']['payment_reference'], 'kiosk-ref')
+
+    def test_non_string_receipt_reference_does_not_crash(self):
+        """
+        Regression: a non-string JSON value reached .strip() inside the atomic
+        block, raising AttributeError — an unhandled 500 rather than a 400.
+        """
+        response = self._checkout(receipt={'reference': 12345})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get(payment_number=response.data['payment_number'])
+        self.assertEqual(payment.reference_number, '12345')
+
     def _checkout(self, *, customer_id=None, items=None, payment_method=Payment.CARD, receipt=None):
         return self.client.post('/api/v1/kiosk/checkout/', {
             'customer_id': customer_id or self.customer.pk,
