@@ -478,7 +478,7 @@ def _build_skill_card(request):
                         "sales_order_id": "int (required)",
                         "amount": "decimal string (required, > 0)",
                         "payment_method": "'cash'|'mobile_payment'|'bank_transfer'|'card'|'check'|'other' (required)",
-                        "reference_number": "string, optional",
+                        "reference_number": "string — REQUIRED for bank_transfer, card and check; optional otherwise",
                         "notes": "string, optional",
                         "status": "'pending_review'|'confirmed', optional",
                         "transaction_key": "string, optional",

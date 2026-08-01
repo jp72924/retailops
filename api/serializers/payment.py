@@ -8,6 +8,12 @@ from core.models import Payment, SalesOrder, SystemSettings
 
 RECEIPT_PAYMENT_METHODS = {Payment.MOBILE_PAYMENT, Payment.BANK_TRANSFER}
 
+# Mirrors the back-office rule in core.views.payment_create. The two sets
+# overlap on BANK_TRANSFER, and that overlap is meaningful: such a payment can
+# need both a bank reference and an OCR transaction key, which are different
+# identifiers. Keep them separate, named for the rule each drives.
+REFERENCE_REQUIRED_PAYMENT_METHODS = {Payment.BANK_TRANSFER, Payment.CARD, Payment.CHECK}
+
 
 class ReceiptVerifySerializer(serializers.Serializer):
     image = serializers.FileField()
@@ -120,37 +126,69 @@ class PaymentSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        instance = self.instance
         payment_method = attrs.get(
             'payment_method',
-            self.instance.payment_method if self.instance else None,
+            instance.payment_method if instance else None,
         )
+        # No .strip() needed: the generated CharField has trim_whitespace=True
+        # and DRF trims before the allow_blank check, so "   " is already "".
+        reference_number = attrs.get(
+            'reference_number',
+            instance.reference_number if instance else '',
+        ) or ''
         transaction_key = (attrs.get('transaction_key') or '').strip()
         notes = (attrs.get('notes') or '').strip()
 
+        # A conflict with an existing record, not a missing field on this one —
+        # reported immediately and alone, above the collection below.
         if transaction_key:
             attrs['transaction_key'] = transaction_key
             queryset = Payment.objects.filter(transaction_key=transaction_key)
-            if self.instance is not None:
-                queryset = queryset.exclude(pk=self.instance.pk)
+            if instance is not None:
+                queryset = queryset.exclude(pk=instance.pk)
             if queryset.exists():
                 raise serializers.ValidationError({
                     'transaction_key': 'A payment with this transaction key already exists.'
                 })
 
-        if payment_method in RECEIPT_PAYMENT_METHODS:
+        # ocr_applies is needed by the OCR check below and by the status
+        # side-effects at the bottom, so compute it once — but only for receipt
+        # methods, so a cash payment never reads SystemSettings (an uncached
+        # get_or_create round-trip).
+        is_receipt_method = payment_method in RECEIPT_PAYMENT_METHODS
+        ocr_applies = False
+        if is_receipt_method:
             settings = SystemSettings.get()
             enabled_methods = settings.ocr_enabled_methods or []
             ocr_applies = settings.ocr_enabled and payment_method in enabled_methods
 
-            if ocr_applies and not transaction_key and not notes:
-                raise serializers.ValidationError({
-                    'transaction_key': (
-                        'Verified receipt transaction key is required, or provide '
-                        'manual override notes for pending review.'
-                    ),
-                    'notes': 'Manual override notes are required when no OCR transaction key is supplied.',
-                })
+        # Missing-field rules are collected so a caller sees all of them at once
+        # instead of fixing one and rediscovering the next. Only bank_transfer
+        # can reach more than one: card/check aren't receipt methods, and
+        # mobile_payment doesn't require a reference.
+        errors = {}
 
+        if payment_method in REFERENCE_REQUIRED_PAYMENT_METHODS and not reference_number:
+            errors['reference_number'] = (
+                'A reference number is required for bank transfer, card, and check payments.'
+            )
+
+        if ocr_applies and not transaction_key and not notes:
+            errors['transaction_key'] = (
+                'Verified receipt transaction key is required, or provide '
+                'manual override notes for pending review.'
+            )
+            errors['notes'] = (
+                'Manual override notes are required when no OCR transaction key is supplied.'
+            )
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        # Status side-effects run only once every rule above has passed, still
+        # gated on RECEIPT_PAYMENT_METHODS exactly as before.
+        if is_receipt_method:
             if ocr_applies and not transaction_key:
                 attrs['status'] = Payment.PENDING_REVIEW
             elif attrs.get('ocr_receipt_data') and attrs.get('verified_at') is None:
