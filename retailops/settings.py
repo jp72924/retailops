@@ -280,6 +280,10 @@ MEDIA_ROOT = Path(_MEDIA_ROOT_ENV) if _MEDIA_ROOT_ENV else BASE_DIR / 'media'
 if _MEDIA_ROOT_ENV and not MEDIA_ROOT.is_absolute():
     MEDIA_ROOT = BASE_DIR / MEDIA_ROOT
 
+# Redirects MEDIA_ROOT to a temp directory while tests run, so uploads made by
+# the suite don't land in the real media directory alongside genuine ones.
+TEST_RUNNER = 'retailops.test_runner.MediaIsolatedTestRunner'
+
 def _first_env(env, *names, default=None):
     for name in names:
         value = (env.get(name) or '').strip()
