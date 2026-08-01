@@ -138,6 +138,60 @@ the next section in step. A destination hardcoded in the Kiosk can drift from
 the configured profiles, and the customer only finds out at checkout — after
 the money has already been sent.
 
+### Submitting the receipt at checkout
+
+Sending the image alone is **not enough**. The `receipt` object on
+`POST /api/v1/kiosk/checkout/` must also carry what the customer says they
+paid, because the whole point of the check is comparing their claim against
+what OCR reads off the image. A field you omit counts as a mismatch, not as
+"skip this check":
+
+```json
+{
+  "customer_id": 1,
+  "items": [{"sku": "SKU-1", "quantity": 2}],
+  "payment_reference": "062107921254",
+  "payment_method": "mobile_payment",
+  "receipt": {
+    "receipt_image_base64": "data:image/jpeg;base64,…",
+    "reference": "062107921254",
+    "paid_on": "2026-07-29",
+    "origin_bank": "Banesco"
+  }
+}
+```
+
+| Field | Required | Compared against |
+|---|---|---|
+| `receipt_image_base64` | yes, when OCR applies | the image VEPay parses |
+| `reference` | yes | the reference OCR reads off the receipt |
+| `paid_on` | yes | the receipt date (`YYYY-MM-DD`; `paid_at` also accepted) |
+| `origin_bank` | yes | the issuing bank OCR detects |
+| `amount_usd` | no | the **order total** is always used, never a client value |
+
+Comparison is normalised — bank names, phone formats and date formats do not
+have to match character for character. `receipt_image_content_type` is optional
+alongside a bare base64 string; a `data:` URL carries its own type.
+
+Omitting any of the three text fields yields `422 receipt_field_mismatch`, with
+`expected_fields` showing the empty value you sent:
+
+```json
+{
+  "code": "receipt_field_mismatch",
+  "details": {
+    "field_matches": {"amount_usd": true, "reference": false,
+                      "paid_on": false, "origin_bank": false},
+    "mismatches": {"reference": {"expected": "", "actual": "062107921254"}}
+  }
+}
+```
+
+Note the amount is never taken from the request: the receipt's OCR amount is
+converted to primary currency using the configured secondary exchange rate and
+compared to the order total. A wrong rate therefore fails every receipt
+checkout with an `amount_usd` mismatch.
+
 ### Recipient profile validation (optional)
 
 With OCR enabled, RetailOps can additionally verify that a receipt's OCR-detected
@@ -184,6 +238,11 @@ at least one active recipient profile before it can be turned on.
   station key from backend tooling.
 - Receipt validation fails: check System Settings for OCR enablement, supported
   payment methods, receipt image requirement, and VEPay configuration.
+- `receipt_field_mismatch` with empty values under `expected_fields`: the
+  `receipt` object was sent without `reference`, `paid_on`, or `origin_bank`.
+  These are required alongside the image — see [Submitting the receipt at
+  checkout](#submitting-the-receipt-at-checkout). If only `amount_usd`
+  mismatches, the secondary exchange rate is wrong rather than the receipt.
 - `recipient_mismatch`: the receipt's OCR-detected recipient doesn't match any
   active recipient profile for that payment method — check **Settings → Manage
   Recipient Profiles**, or disable recipient validation if not needed.
