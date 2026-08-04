@@ -41,10 +41,12 @@ env/
 .DS_Store
 Thumbs.db
 
-# Independent RetailOps components kept in separate repositories.
-kiosk/
+# Independent RetailOps components kept in separate repositories. Anchored to
+# the repo root: unanchored, `kiosk/` also matched the tracked api/kiosk/
+# package, so `git add` skipped new files there.
+/kiosk/
 kiosk-wireframe.html
-retailops-cli/
+/retailops-cli/
 scripts/render-kiosk-index.py
 
 # Provider-specific deployment notes kept outside the public backend repo.

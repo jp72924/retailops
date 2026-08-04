@@ -22,6 +22,14 @@ VALIDATION_IS_COMPLETE_PATH = ('validation', 'is_complete')
 VALIDATION_MISSING_FIELDS_PATH = ('validation', 'missing_fields')
 RECEIPT_UPLOAD_FIELD = 'files'
 
+# ocr_timeout_seconds budgets the whole operation, retry included — a kiosk
+# customer is standing at a screen waiting for it. These bound what happens
+# inside that budget.
+CONNECT_TIMEOUT_SECONDS = 5
+RETRY_BACKOFF_SECONDS = 1
+MIN_RETRY_ATTEMPT_SECONDS = 2
+MIN_ATTEMPT_SECONDS = 0.1
+
 RECEIPT_FIELD_PATHS = {
     'payment_bank_app': PAYMENT_BANK_APP_PATH,
     'payment_reference': PAYMENT_REFERENCE_PATH,
@@ -88,6 +96,7 @@ class VEPayClient:
             ),
         }
 
+        deadline = self._deadline()
         response = None
         last_exc = None
         for attempt in range(2):
@@ -96,7 +105,7 @@ class VEPayClient:
                     url,
                     files=files,
                     headers=self._headers(),
-                    timeout=self.timeout,
+                    timeout=self._attempt_timeout(deadline),
                 )
             except requests.Timeout as exc:
                 last_exc = VEPayError(
@@ -119,8 +128,8 @@ class VEPayClient:
                     is_retryable=True,
                 )
 
-            if attempt == 0:
-                time.sleep(1)
+            if attempt == 0 and self._can_retry(deadline):
+                time.sleep(RETRY_BACKOFF_SECONDS)
                 continue
             if last_exc:
                 raise last_exc
@@ -213,6 +222,9 @@ class VEPayClient:
         return receipt
 
     def _healthz_sync(self):
+        # Two probes share one budget for the same reason the retry does: a
+        # slow 404 on /health used to buy /healthz a fresh full timeout.
+        deadline = self._deadline()
         response = None
         for suffix in ('/health', '/healthz'):
             url = f'{self.base_url}{suffix}'
@@ -220,7 +232,7 @@ class VEPayClient:
                 response = requests.get(
                     url,
                     headers=self._headers(),
-                    timeout=self.timeout,
+                    timeout=self._attempt_timeout(deadline),
                 )
             except requests.Timeout as exc:
                 raise VEPayError(
@@ -255,6 +267,32 @@ class VEPayClient:
             'status_code': response.status_code,
             'data': data,
         }
+
+    def _deadline(self):
+        """When the whole operation must be over, retries and probes included."""
+        return time.monotonic() + self.timeout
+
+    def _attempt_timeout(self, deadline):
+        """
+        `(connect, read)` for one attempt, both bounded by the budget left.
+
+        Splitting them lets an unreachable host fail in seconds instead of
+        spending the whole budget on a connection that will never open. Note
+        that `read` is requests' between-bytes timeout, not a total: a server
+        that dribbles bytes indefinitely can still outlast the deadline, which
+        would need a watchdog outside requests to prevent.
+        """
+        remaining = max(deadline - time.monotonic(), MIN_ATTEMPT_SECONDS)
+        return min(CONNECT_TIMEOUT_SECONDS, remaining), remaining
+
+    def _can_retry(self, deadline):
+        """
+        Retry only with room for the backoff plus an attempt long enough to
+        plausibly succeed. Squeezing a 0.2s attempt into what is left would
+        just turn a diagnosable 502 into a misleading timeout.
+        """
+        remaining = deadline - time.monotonic()
+        return remaining >= RETRY_BACKOFF_SECONDS + MIN_RETRY_ATTEMPT_SECONDS
 
     def _headers(self):
         return {'X-API-Key': self.api_key} if self.api_key else {}

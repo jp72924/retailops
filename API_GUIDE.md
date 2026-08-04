@@ -1068,7 +1068,7 @@ System-wide currency display settings. A singleton row — there is always exact
 | `ocr_provider` | string | OCR backend to use. Only `"vepay"` is currently supported (enforced by a model `choices` constraint — other values are rejected with `400`). |
 | `ocr_base_url` | string (URL) | Base URL of the VEPay proxy instance (e.g. `https://your-vepay-instance.example.com`). Required when `ocr_enabled` is `true`; the check re-validates against the merged (stored + patched) state, so a `PATCH` that omits it while `ocr_enabled` is already `true` still enforces this. |
 | `ocr_api_key` | string, write-only masking | API key for the VEPay proxy. **Never returned in cleartext** — `GET`/`PATCH` responses always show `"***"` when a key is stored, or `""` when none is stored. See [API key masking](#ocr-api-key-masking) below for write semantics. |
-| `ocr_timeout_seconds` | integer | Request timeout, in seconds, for calls to the OCR provider. Must be `> 0`. |
+| `ocr_timeout_seconds` | integer | Time budget, in seconds, for a whole call to the OCR provider. The one retry on a 5xx or network failure comes out of this budget rather than on top of it, so a receipt parse takes at most roughly this long end to end; the connect phase is capped at 5s so an unreachable host fails fast instead of spending the budget. Must be `> 0`. |
 | `ocr_max_file_mb` | integer | Maximum accepted receipt image size, in megabytes. Must be `> 0`. |
 | `ocr_strict_amount` | boolean | When `true`, the OCR-extracted amount must match the outstanding balance for the receipt to be accepted. |
 | `ocr_require_complete` | boolean | When `true`, only receipts VEPay marks as a "complete" match are accepted (partial/ambiguous matches are rejected). |

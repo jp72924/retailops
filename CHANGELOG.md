@@ -20,6 +20,28 @@
 
 ### Fixed
 
+- **Kiosk checkout no longer holds a global order-number lock across the VEPay
+  OCR call.** `POST /api/v1/kiosk/checkout/` ran receipt parsing inside its
+  transaction, after `order.save()` had taken the `SELECT FOR UPDATE` row lock
+  on the `SO-{today}` sequence counter — and that lock is released on commit of
+  the outer transaction, not when `SequenceCounter.next_value()` returns. Every
+  order created that day passes through that one row, so a single checkout
+  waiting on VEPay (two attempts against `ocr_timeout_seconds`, up to 61s at the
+  default) blocked all other order creation for the duration. Receipt decoding,
+  OCR and recipient validation now run before the transaction opens; the
+  transaction re-acquires the product locks, re-checks stock, and re-checks the
+  order total and `transaction_key` before writing, so the checkout is still all
+  or nothing and rejects an order whose price moved mid-OCR.
+- **`ocr_timeout_seconds` now budgets a whole OCR call rather than each attempt.**
+  `VEPayClient` applied the configured timeout per request, so the retry on a 5xx
+  or network failure made the real worst case `2 × timeout + 1s` — 61s at the
+  default 30 — and the health check's `/health` → `/healthz` fallback could take
+  `2 × timeout` the same way. Both now run against one deadline: a retry happens
+  only if enough budget remains for the backoff plus an attempt that could
+  plausibly succeed, so a leftover fraction of a second no longer turns a
+  diagnosable `502` into a misleading `timeout`. The connect phase is capped
+  separately at 5s, so an unreachable host fails in seconds instead of consuming
+  the whole budget on a connection that will never open.
 - Kiosk checkout derived `reference_number` by stripping the result of an `or`
   rather than each candidate. A whitespace-only `receipt.reference` won the `or`
   and then collapsed to `''`, storing a blank reference for a `card` payment — the

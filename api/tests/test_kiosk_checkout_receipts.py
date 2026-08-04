@@ -1,10 +1,13 @@
 import base64
 import hashlib
+import json
 from decimal import Decimal
 
 import responses
+from django.core.cache import cache
+from django.db import connections
 from rest_framework import status
-from rest_framework.test import APITestCase
+from rest_framework.test import APITestCase, APITransactionTestCase
 
 from core.models import (
     Customer,
@@ -15,8 +18,16 @@ from core.models import (
     ProductCategory,
     RecipientProfile,
     Role,
+    SalesOrder,
     SystemSettings,
     User,
+)
+from api.tests.helpers import (
+    make_customer,
+    make_kiosk_station,
+    make_product,
+    png_data_url,
+    vepay_payload,
 )
 
 
@@ -477,3 +488,117 @@ class KioskCheckoutReceiptTests(APITestCase):
                 'missing_fields': ['payment.amount.value'],
             },
         }
+
+
+class KioskCheckoutTransactionScopeTests(APITransactionTestCase):
+    """
+    Where the VEPay call sits relative to the checkout transaction.
+
+    Order numbers are drawn from one SequenceCounter row per day under
+    SELECT FOR UPDATE, and SequenceCounter.next_value's own atomic() degrades
+    to a savepoint when the checkout transaction is already open — so the lock
+    is held until *that* transaction commits, not until next_value returns.
+    An OCR round-trip inside the transaction therefore stalls every other
+    order created that day for as long as VEPay takes to answer (two attempts
+    against ocr_timeout_seconds, 30s by default).
+
+    APITransactionTestCase rather than APITestCase: the latter wraps each test
+    in a transaction of its own, which would leave in_atomic_block True no
+    matter where the OCR call ran.
+    """
+
+    def setUp(self):
+        cache.clear()
+        # `requests` is called from an asgiref worker thread, whose own
+        # connections['default'] is a different wrapper that is never in a
+        # transaction. Capture the connection the view itself uses — the test
+        # and the view share a thread — so the callback can read that one.
+        self.view_connection = connections['default']
+        self.station, self.raw_key = make_kiosk_station()
+        self.headers = {'HTTP_AUTHORIZATION': f'KioskKey {self.raw_key}'}
+        self.customer = make_customer(email='scope@example.com', national_id='V30000000')
+        self.product = make_product(sku='SCOPE-001', stock=5, unit_price='10.00')
+        self.provider_url = 'https://vepay.test/v1/receipts/parse'
+
+        sys_settings = SystemSettings.get()
+        sys_settings.receipt_image_required_for_receipt_methods = True
+        sys_settings.ocr_enabled = True
+        sys_settings.ocr_base_url = 'https://vepay.test'
+        sys_settings.ocr_api_key = 'test-key'
+        sys_settings.ocr_enabled_methods = [Payment.MOBILE_PAYMENT]
+        sys_settings.secondary_currency_enabled = True
+        sys_settings.secondary_currency_code = 'VES'
+        sys_settings.secondary_currency_symbol = 'Bs.'
+        sys_settings.secondary_exchange_rate = Decimal('50')
+        sys_settings.save()
+
+    @responses.activate
+    def test_ocr_call_runs_with_no_transaction_open(self):
+        observed = []
+
+        def answer(request):
+            observed.append(self.view_connection.in_atomic_block)
+            return 200, {}, json.dumps(vepay_payload(transaction_key='tx-scope'))
+
+        responses.add_callback(
+            responses.POST, self.provider_url,
+            callback=answer, content_type='application/json',
+        )
+
+        response = self._checkout()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(observed, [False])
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, Payment.CONFIRMED)
+        self.assertEqual(payment.transaction_key, 'tx-scope')
+
+    @responses.activate
+    def test_price_change_during_ocr_is_rejected_not_silently_charged(self):
+        """
+        The flip side of validating the receipt before the transaction: the
+        total it was accepted against is no longer read under a lock. The
+        write block re-checks it, so a price that moves mid-OCR is rejected
+        rather than written at a total the receipt never proved payment for.
+
+        The concurrent write below is only possible because no transaction is
+        open during the call — which is the property the sibling test asserts.
+        """
+        def answer(request):
+            Product.objects.filter(pk=self.product.pk).update(unit_price=Decimal('12.00'))
+            return 200, {}, json.dumps(vepay_payload(transaction_key='tx-drift'))
+
+        responses.add_callback(
+            responses.POST, self.provider_url,
+            callback=answer, content_type='application/json',
+        )
+
+        response = self._checkout()
+
+        self.assertEqual(response.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(response.data['code'], 'amount_mismatch')
+        self.assertEqual(response.data['details']['receipt_amount'], '10.00')
+        self.assertEqual(response.data['details']['order_total'], '12.00')
+        self.assertEqual(SalesOrder.objects.count(), 0)
+        self.assertEqual(Payment.objects.count(), 0)
+
+    def _checkout(self):
+        return self.client.post(
+            '/api/v1/kiosk/checkout/',
+            {
+                'customer_id': self.customer.pk,
+                'items': [{'sku': self.product.sku, 'quantity': 1}],
+                'payment_method': Payment.MOBILE_PAYMENT,
+                'payment_reference': 'REF123',
+                'receipt': {
+                    'reference': 'REF123',
+                    'amount_usd': '10.00',
+                    'paid_on': '2026-05-03',
+                    'origin_bank': 'BDV',
+                    'receipt_image_base64': png_data_url(),
+                    'receipt_image_content_type': 'image/png',
+                },
+            },
+            format='json',
+            **self.headers,
+        )
