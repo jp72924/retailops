@@ -9,6 +9,24 @@ from core.models import SystemSettings
 from core.services.vepay import RECEIPT_UPLOAD_FIELD, VEPayClient, VEPayError
 
 
+class _Clock:
+    """
+    Stand-in for time.monotonic that only moves when a request says it did.
+
+    Keeps budget assertions deterministic and independent of how many times
+    the client happens to read the clock.
+    """
+
+    def __init__(self):
+        self.now = 0.0
+
+    def advance(self, seconds):
+        self.now += seconds
+
+    def __call__(self):
+        return self.now
+
+
 class VEPayClientTests(TestCase):
     def setUp(self):
         self.settings = SystemSettings.get()
@@ -125,6 +143,71 @@ class VEPayClientTests(TestCase):
         self.assertEqual(ctx.exception.code, 'timeout')
         self.assertTrue(ctx.exception.is_retryable)
         self.assertEqual(len(responses.calls), 2)
+
+    @responses.activate
+    def test_parse_receipt_does_not_retry_once_the_budget_is_spent(self):
+        """
+        ocr_timeout_seconds budgets the whole call. A first attempt that eats
+        it leaves nothing to retry with, so the caller waits ~the configured
+        timeout rather than 2x timeout + backoff.
+        """
+        clock = _Clock()
+
+        def slow_timeout(request):
+            clock.advance(4.9)  # of a 5s budget
+            raise requests.Timeout()
+
+        responses.add_callback(responses.POST, self.url, callback=slow_timeout)
+
+        with mock.patch('core.services.vepay.time.monotonic', clock):
+            with mock.patch('core.services.vepay.time.sleep') as sleep:
+                with self.assertRaises(VEPayError) as ctx:
+                    self._parse()
+
+        self.assertEqual(ctx.exception.code, 'timeout')
+        self.assertTrue(ctx.exception.is_retryable)
+        self.assertEqual(len(responses.calls), 1)
+        sleep.assert_not_called()
+
+    @responses.activate
+    def test_parse_receipt_retries_when_the_failure_was_cheap(self):
+        """The budget only suppresses a retry that has no room; a fast failure
+        leaves plenty and is still worth a second attempt."""
+        clock = _Clock()
+
+        def quick_502(request):
+            clock.advance(0.2)
+            return 502, {}, '{"error": "temporary"}'
+
+        responses.add_callback(
+            responses.POST, self.url, callback=quick_502, content_type='application/json',
+        )
+        responses.add(responses.POST, self.url, json={'request_id': 'req-ok'}, status=200)
+
+        with mock.patch('core.services.vepay.time.monotonic', clock):
+            with mock.patch('core.services.vepay.time.sleep') as sleep:
+                data = self._parse()
+
+        self.assertEqual(data['request_id'], 'req-ok')
+        self.assertEqual(len(responses.calls), 2)
+        sleep.assert_called_once_with(1)
+
+    @responses.activate
+    def test_parse_receipt_caps_the_connect_timeout_below_the_budget(self):
+        """An unreachable host should fail on connect in seconds rather than
+        spending the whole budget on a connection that will never open."""
+        self.settings.ocr_timeout_seconds = 30
+        self.settings.save()
+        responses.add(responses.POST, self.url, json={'request_id': 'req-ok'}, status=200)
+
+        with mock.patch(
+            'core.services.vepay.requests.post', wraps=requests.post,
+        ) as post:
+            self._parse()
+
+        connect, read = post.call_args.kwargs['timeout']
+        self.assertEqual(connect, 5)
+        self.assertAlmostEqual(read, 30, delta=1)
 
     @responses.activate
     def test_parse_receipt_4xx_is_not_retryable(self):
