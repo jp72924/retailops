@@ -192,9 +192,10 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
     """
     POST /api/v1/kiosk/checkout/
 
-    Atomic self-checkout: validates stock with row-level locking, creates the
-    order, deducts inventory, records payment, and immediately marks the order
-    DELIVERED — all in a single database transaction.
+    Self-checkout: validates the receipt (including the OCR round-trip to
+    VEPay), then creates the order, deducts inventory, records payment and
+    immediately marks the order DELIVERED — the whole write in a single
+    database transaction, with row-level locking on the products it touches.
     """
     throttle_classes = [KioskCheckoutThrottle]
 
@@ -273,43 +274,56 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
 
     @staticmethod
     def _execute_checkout(data, station, service_user, customer):
-        """Run the full checkout inside a single atomic transaction."""
+        """
+        Validate the receipt first, then write the order in one transaction.
+
+        The VEPay OCR round-trip deliberately runs *before* the transaction
+        opens. `order.save()` draws its number from SequenceCounter, which
+        takes `SELECT FOR UPDATE` on the row for the `SO-{today}` prefix; the
+        `transaction.atomic()` inside next_value degrades to a savepoint under
+        an outer block, so that row stays locked until the *outer* transaction
+        commits. With the OCR call inside, a single kiosk waiting on VEPay
+        (two attempts against a 30s timeout) held the one counter row every
+        order created that day has to pass through — serialising all of them
+        behind a third-party HTTP call.
+
+        Nothing read before the transaction is trusted once inside it: the
+        write block re-resolves the products under row locks, re-checks stock,
+        re-checks the total the receipt was validated against, and re-checks
+        the transaction key.
+        """
+        items = data['items']
+        payment_method = data.get('payment_method') or Payment.CARD
+        receipt_data = data.get('receipt') or {}
+
+        # ── Validate before taking any lock ──────────────────────────────
+        # Same order as the write block below, so which side of the
+        # transaction a check runs on never changes the error a client sees.
+        products = _resolve_products(items)
+        _assert_stock_available(products, items)
+        receipt_fields = _validate_receipt(
+            receipt_data,
+            payment_method,
+            _order_subtotal(products, items),
+        )
+
         now = timezone.now()
 
         with transaction.atomic():
-            # ── Resolve products and acquire row-level locks ──────────
-            products = {}
-            for item in data['items']:
-                try:
-                    product = (
-                        Product.objects
-                        .select_for_update()
-                        .get(sku=item['sku'], is_active=True)
-                    )
-                except Product.DoesNotExist:
-                    raise _InvalidProductError(
-                        f"Product not found or inactive: {item['sku']}"
-                    )
-                products[item['sku']] = product
+            # ── Re-resolve products and acquire row-level locks ───────
+            products = _resolve_products(items, lock=True)
 
             # ── Validate stock (inside lock — eliminates TOCTOU) ─────
-            insufficient = []
-            stock_levels = {}
-            for item in data['items']:
-                product = products[item['sku']]
-                current = (
-                    product.inventory_movements
-                    .aggregate(total=Sum('quantity'))['total'] or 0
-                )
-                stock_levels[item['sku']] = current
-                if current < item['quantity']:
-                    insufficient.append({
-                        'sku': item['sku'],
-                        'requested': item['quantity'],
-                        'available': current,
-                    })
-            if insufficient:
-                raise _InsufficientStockError(insufficient)
+            _assert_stock_available(products, items)
+
+            subtotal = _order_subtotal(products, items)
+            # A unit price that moved while the receipt was in OCR would leave
+            # the order total different from the one the receipt was accepted
+            # against, so the receipt no longer proves payment for this order.
+            _assert_receipt_total_unchanged(receipt_fields, subtotal)
+            # Two checkouts can clear the pre-transaction duplicate check with
+            # the same key concurrently; this is where one of them loses.
+            _assert_transaction_key_unused(receipt_fields['transaction_key'])
 
             # ── Create SalesOrder ────────────────────────────────────
             order = SalesOrder(
@@ -322,19 +336,16 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             )
             order.save()  # triggers order_number generation
 
-            # ── Create line items and compute totals ─────────────────
-            subtotal = Decimal('0.00')
+            # ── Create line items ────────────────────────────────────
             order_items = []
-            for item in data['items']:
+            for item in items:
                 product = products[item['sku']]
-                line_total = product.unit_price * item['quantity']
-                subtotal += line_total
                 order_items.append(SalesOrderItem(
                     sales_order=order,
                     product=product,
                     quantity=item['quantity'],
                     unit_price=product.unit_price,
-                    line_total=line_total,
+                    line_total=product.unit_price * item['quantity'],
                 ))
             SalesOrderItem.objects.bulk_create(order_items)
 
@@ -353,19 +364,11 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                     notes=f'Kiosk sale — {order.order_number}',
                     created_by=service_user,
                 )
-                for item in data['items']
+                for item in items
             ]
             InventoryMovement.objects.bulk_create(movements)
 
             # ── Record payment ───────────────────────────────────────
-            payment_method = data.get('payment_method') or Payment.CARD
-            receipt_data = data.get('receipt') or {}
-            receipt_fields = _payment_receipt_fields(
-                receipt_data,
-                order,
-                payment_method,
-                now,
-            )
             # Strip each candidate before the `or`, not after it. Stripping the
             # result let a whitespace-only receipt reference win the `or` (it is
             # truthy) and then collapse to '', storing a blank reference for a
@@ -375,6 +378,11 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             reference_number = (
                 str(receipt_data.get('reference') or '').strip()
                 or data['payment_reference'].strip()
+            )
+            verified_at = (
+                now
+                if receipt_fields['ocr_receipt_data'] and receipt_fields['transaction_key']
+                else None
             )
 
             payment = Payment(
@@ -397,7 +405,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                     or receipt_data.get('recipient_account') or ''
                 ).strip(),
                 ocr_receipt_data=receipt_fields['ocr_receipt_data'],
-                verified_at=receipt_fields['verified_at'],
+                verified_at=verified_at,
             )
             if receipt_fields['image'] is not None:
                 name, content = receipt_fields['image']
@@ -448,11 +456,74 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
         }
 
 
-def _payment_receipt_fields(receipt_data, order, payment_method, now):
-    """Validate receipt metadata and map it onto Payment fields."""
+def _resolve_products(items, *, lock=False):
+    """Map each requested SKU to its active Product, optionally locking rows."""
+    queryset = Product.objects.select_for_update() if lock else Product.objects
+    products = {}
+    for item in items:
+        try:
+            products[item['sku']] = queryset.get(sku=item['sku'], is_active=True)
+        except Product.DoesNotExist:
+            raise _InvalidProductError(
+                f"Product not found or inactive: {item['sku']}"
+            )
+    return products
+
+
+def _assert_stock_available(products, items):
+    insufficient = []
+    for item in items:
+        current = (
+            products[item['sku']].inventory_movements
+            .aggregate(total=Sum('quantity'))['total'] or 0
+        )
+        if current < item['quantity']:
+            insufficient.append({
+                'sku': item['sku'],
+                'requested': item['quantity'],
+                'available': current,
+            })
+    if insufficient:
+        raise _InsufficientStockError(insufficient)
+
+
+def _order_subtotal(products, items):
+    subtotal = Decimal('0.00')
+    for item in items:
+        subtotal += products[item['sku']].unit_price * item['quantity']
+    return subtotal
+
+
+def _assert_receipt_total_unchanged(receipt_fields, order_total):
+    """Reject an order whose total drifted away from the validated receipt."""
+    validated_total = receipt_fields['validated_total']
+    if validated_total is None:  # nothing was ever checked against a total
+        return
+    order_total = Decimal(str(order_total)).quantize(MONEY_QUANT)
+    if validated_total != order_total:
+        raise _AmountMismatchError(validated_total, order_total)
+
+
+def _assert_transaction_key_unused(transaction_key):
+    if transaction_key and Payment.objects.filter(transaction_key=transaction_key).exists():
+        raise _DuplicateTransactionError(transaction_key)
+
+
+def _validate_receipt(receipt_data, payment_method, order_total):
+    """
+    Validate receipt metadata against an order total and map it onto Payment
+    fields.
+
+    Called before the checkout transaction opens, because the OCR step below
+    is a third-party HTTP call — one retry against a configurable timeout —
+    and must not run while database locks are held (see _execute_checkout).
+    The returned `validated_total` records the total the receipt was accepted
+    against, so the write block can reject the order if that total moved.
+    """
     if not isinstance(receipt_data, dict):
         receipt_data = {}
 
+    order_total = Decimal(str(order_total)).quantize(MONEY_QUANT)
     settings = SystemSettings.get()
     is_receipt_method = payment_method in RECEIPT_PAYMENT_METHODS
     image_present = _receipt_image_present(receipt_data)
@@ -468,7 +539,7 @@ def _payment_receipt_fields(receipt_data, order, payment_method, now):
         )
 
     image_data = (
-        _decode_receipt_image_data(receipt_data, order.order_number, settings)
+        _decode_receipt_image_data(receipt_data, settings)
         if image_present else None
     )
     receipt_match_required = (
@@ -517,7 +588,7 @@ def _payment_receipt_fields(receipt_data, order, payment_method, now):
 
         comparison = compare_receipt_fields(
             vepay_data,
-            _expected_receipt_fields(receipt_data, order),
+            _expected_receipt_fields(receipt_data, order_total),
             settings,
             REQUIRED_FIELD_KEYS,
         )
@@ -554,21 +625,24 @@ def _payment_receipt_fields(receipt_data, order, payment_method, now):
             get_receipt_value(vepay_data, TRANSACTION_KEY_PATH, '') or transaction_key
         ).strip()
 
-    if transaction_key and Payment.objects.filter(transaction_key=transaction_key).exists():
-        raise _DuplicateTransactionError(transaction_key)
+    # Fails fast on a receipt already spent, before the order exists; the write
+    # block repeats the check to settle a race between two live checkouts.
+    _assert_transaction_key_unused(transaction_key)
 
+    # The OCR comparison above checks the receipt amount against order_total,
+    # so a match there validates the total too.
+    validated_total = order_total if receipt_match_required else None
     receipt_amount = receipt_data.get('amount_usd')
     if receipt_amount not in (None, ''):
         try:
             receipt_total = Decimal(str(receipt_amount)).quantize(MONEY_QUANT)
         except (InvalidOperation, ValueError, TypeError):
-            raise _AmountMismatchError(receipt_amount, order.total_amount)
-        order_total = Decimal(str(order.total_amount)).quantize(MONEY_QUANT)
+            raise _AmountMismatchError(receipt_amount, order_total)
         if receipt_total != order_total:
             raise _AmountMismatchError(receipt_total, order_total)
+        validated_total = order_total
 
     ocr_receipt_data = vepay_data or receipt_data.get('ocr_receipt_data') or None
-    verified_at = now if ocr_receipt_data and transaction_key else None
     status_value = Payment.CONFIRMED
     if is_receipt_method and not transaction_key:
         status_value = Payment.PENDING_REVIEW
@@ -577,14 +651,14 @@ def _payment_receipt_fields(receipt_data, order, payment_method, now):
         'status': status_value,
         'transaction_key': transaction_key,
         'ocr_receipt_data': ocr_receipt_data,
-        'verified_at': verified_at,
+        'validated_total': validated_total,
         'image': _receipt_content_file(image_data),
     }
 
 
-def _expected_receipt_fields(receipt_data, order):
+def _expected_receipt_fields(receipt_data, order_total):
     return {
-        'amount_usd': order.total_amount,
+        'amount_usd': order_total,
         'reference': receipt_data.get('reference'),
         'paid_on': receipt_data.get('paid_on') or receipt_data.get('paid_at'),
         'origin_bank': receipt_data.get('origin_bank'),
@@ -600,7 +674,7 @@ def _receipt_image_present(receipt_data):
     return True
 
 
-def _decode_receipt_image_data(receipt_data, order_number, settings=None):
+def _decode_receipt_image_data(receipt_data, settings=None):
     data_url = receipt_data.get('receipt_image_base64') or ''
     if not data_url:
         return None
@@ -649,7 +723,11 @@ def _decode_receipt_image_data(receipt_data, order_number, settings=None):
         'image/heic': 'heic',
         'image/heif': 'heif',
     }.get(content_type, 'jpg')
-    name = f'kiosk-{order_number}-{uuid.uuid4().hex}.{ext}'
+    # Decoding happens before the order exists, so the name carries no order
+    # number — nor does it need to: the stored path is rebuilt from the order
+    # by Payment.receipt_image's upload_to (core.models.receipt_image_upload_path),
+    # and this name only supplies the extension plus the filename VEPay sees.
+    name = f'kiosk-receipt-{uuid.uuid4().hex}.{ext}'
     return {
         'name': name,
         'raw': raw,

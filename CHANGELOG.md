@@ -20,6 +20,18 @@
 
 ### Fixed
 
+- **Kiosk checkout no longer holds a global order-number lock across the VEPay
+  OCR call.** `POST /api/v1/kiosk/checkout/` ran receipt parsing inside its
+  transaction, after `order.save()` had taken the `SELECT FOR UPDATE` row lock
+  on the `SO-{today}` sequence counter — and that lock is released on commit of
+  the outer transaction, not when `SequenceCounter.next_value()` returns. Every
+  order created that day passes through that one row, so a single checkout
+  waiting on VEPay (two attempts against `ocr_timeout_seconds`, up to 61s at the
+  default) blocked all other order creation for the duration. Receipt decoding,
+  OCR and recipient validation now run before the transaction opens; the
+  transaction re-acquires the product locks, re-checks stock, and re-checks the
+  order total and `transaction_key` before writing, so the checkout is still all
+  or nothing and rejects an order whose price moved mid-OCR.
 - Kiosk checkout derived `reference_number` by stripping the result of an `or`
   rather than each candidate. A whitespace-only `receipt.reference` won the `or`
   and then collapsed to `''`, storing a blank reference for a `card` payment — the
