@@ -243,6 +243,12 @@ at least one active recipient profile before it can be turned on.
   These are required alongside the image — see [Submitting the receipt at
   checkout](#submitting-the-receipt-at-checkout). If only `amount_usd`
   mismatches, the secondary exchange rate is wrong rather than the receipt.
+- `amount_mismatch` (`422`): `details` carries both `receipt_amount` and
+  `order_total`. Either the `amount_usd` you sent differs from the order total,
+  or a product's price changed while the receipt was being validated. Nothing is
+  written and the receipt's `transaction_key` stays unspent, so the checkout can
+  be retried — but if the price genuinely moved, the receipt no longer covers
+  the new total and the sale needs an associate.
 - `recipient_mismatch`: the receipt's OCR-detected recipient doesn't match any
   active recipient profile for that payment method — check **Settings → Manage
   Recipient Profiles**, or disable recipient validation if not needed.
