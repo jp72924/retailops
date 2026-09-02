@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% load i18n %}
+{% load i18n l10n %}
 {% block title %}{% trans "Settings" %} | RetailOps{% endblock %}
 
 {% block content %}
@@ -141,7 +141,7 @@
           <div class="form-group">
             <label class="form-label" for="id_secondary_exchange_rate">{% trans "Exchange Rate" %}</label>
             <input type="number" id="id_secondary_exchange_rate" name="secondary_exchange_rate" class="form-control {% if errors.secondary_exchange_rate %}is-invalid{% endif %}"
-              value="{{ sys_settings.secondary_exchange_rate }}" step="0.00000001" min="0">
+              value="{{ sys_settings.secondary_exchange_rate|unlocalize }}" step="0.00000001" min="0">
             {% if errors.secondary_exchange_rate %}
             <div class="invalid-feedback">{{ errors.secondary_exchange_rate }}</div>
             {% endif %}
@@ -166,7 +166,7 @@
             {% trans "Automatically update the exchange rate from an external source" %}
           </label>
           <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-            {% blocktrans %}Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with
+            {% blocktrans trimmed %}Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with
             <code>python manage.py update_bcv_rate</code> or click “Update now”.{% endblocktrans %}
           </div>
         </div>
@@ -269,7 +269,7 @@
           <div class="form-group">
             <label class="form-label" for="id_ocr_timeout_seconds">{% trans "Timeout Seconds" %}</label>
             <input type="number" id="id_ocr_timeout_seconds" name="ocr_timeout_seconds" class="form-control {% if errors.ocr_timeout_seconds %}is-invalid{% endif %}"
-              value="{{ sys_settings.ocr_timeout_seconds }}" min="1" step="1">
+              value="{{ sys_settings.ocr_timeout_seconds|unlocalize }}" min="1" step="1">
             {% if errors.ocr_timeout_seconds %}
             <div class="invalid-feedback">{{ errors.ocr_timeout_seconds }}</div>
             {% endif %}
@@ -278,7 +278,7 @@
           <div class="form-group">
             <label class="form-label" for="id_ocr_max_file_mb">{% trans "Max File Size MB" %}</label>
             <input type="number" id="id_ocr_max_file_mb" name="ocr_max_file_mb" class="form-control {% if errors.ocr_max_file_mb %}is-invalid{% endif %}"
-              value="{{ sys_settings.ocr_max_file_mb }}" min="1" step="1">
+              value="{{ sys_settings.ocr_max_file_mb|unlocalize }}" min="1" step="1">
             {% if errors.ocr_max_file_mb %}
             <div class="invalid-feedback">{{ errors.ocr_max_file_mb }}</div>
             {% endif %}
@@ -287,7 +287,7 @@
           <div class="form-group">
             <label class="form-label" for="id_delete_receipt_image_after_days">{% trans "Receipt Image Retention Days" %}</label>
             <input type="number" id="id_delete_receipt_image_after_days" name="delete_receipt_image_after_days" class="form-control {% if errors.delete_receipt_image_after_days %}is-invalid{% endif %}"
-              value="{{ sys_settings.delete_receipt_image_after_days }}" min="1" step="1">
+              value="{{ sys_settings.delete_receipt_image_after_days|unlocalize }}" min="1" step="1">
             {% if errors.delete_receipt_image_after_days %}
             <div class="invalid-feedback">{{ errors.delete_receipt_image_after_days }}</div>
             {% endif %}

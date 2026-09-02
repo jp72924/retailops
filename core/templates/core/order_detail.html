@@ -1,5 +1,5 @@
 {% extends "core/base.html" %}
-{% load regional i18n %}
+{% load regional i18n l10n %}
 {% block title %}{% if order %}{{ order.order_number }}{% else %}{% trans "New Order" %}{% endif %} | RetailOps{% endblock %}
 
 {% block content %}
@@ -162,7 +162,7 @@
                             {% if order.status == 'draft' or order.status == 'pending' %}
                             <select name="product_{{ forloop.counter }}" class="form-control" style="font-size:0.82rem;" onchange="updateSku(this, {{ forloop.counter }})">
                               {% for p in products %}
-                              <option value="{{ p.pk }}" data-sku="{{ p.sku }}" data-price="{{ p.unit_price }}" data-image-url="{{ p.primary_image_url }}"
+                              <option value="{{ p.pk }}" data-sku="{{ p.sku }}" data-price="{{ p.unit_price|unlocalize }}" data-image-url="{{ p.primary_image_url }}"
                                 {% if item.product_id == p.pk %}selected{% endif %}>
                                 {{ p.name }}
                               </option>
@@ -177,12 +177,12 @@
                       <td class="td-mono" style="color:var(--muted);font-size:0.78rem;" id="sku-{{ forloop.counter }}">{{ item.product.sku }}</td>
                       <td>
                         {% if order.status == 'draft' or order.status == 'pending' %}
-                        <input type="number" name="quantity_{{ forloop.counter }}" class="form-control" value="{{ item.quantity }}" min="1" onchange="recalcRow({{ forloop.counter }})">
+                        <input type="number" name="quantity_{{ forloop.counter }}" class="form-control" value="{{ item.quantity|unlocalize }}" min="1" onchange="recalcRow({{ forloop.counter }})">
                         {% else %}{{ item.quantity }}{% endif %}
                       </td>
                       <td>
                         {% if order.status == 'draft' or order.status == 'pending' %}
-                        <input type="number" name="unit_price_{{ forloop.counter }}" class="form-control" value="{{ item.unit_price }}" step="0.01" min="0" onchange="recalcRow({{ forloop.counter }})">
+                        <input type="number" name="unit_price_{{ forloop.counter }}" class="form-control" value="{{ item.unit_price|unlocalize }}" step="0.01" min="0" onchange="recalcRow({{ forloop.counter }})">
                         {% else %}{{ item.unit_price|currency }}{% endif %}
                       </td>
                       <td><span class="currency-pair"><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></span></td>
@@ -216,7 +216,7 @@
                     <span>{% trans "Discount" %}</span>
                     {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <input type="number" name="discount_amount" class="form-control"
-                      value="{{ order.discount_amount|default:'0.00' }}"
+                      value="{{ order.discount_amount|default:'0.00'|unlocalize }}"
                       step="0.01" min="0" style="width:100px;text-align:right;padding:4px 8px;"
                       onchange="recalcTotals()">
                     {% else %}
@@ -326,7 +326,7 @@
           <div class="form-group">
             <label class="form-label">{% trans "Amount" %} <span class="req">*</span></label>
             <input type="number" name="amount" class="form-control"
-              value="{{ order.amount_outstanding|default:order.total_amount }}"
+              value="{{ order.amount_outstanding|default:order.total_amount|unlocalize }}"
               step="0.01" min="0.01" required>
             {% if order %}
             <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
@@ -382,7 +382,7 @@
   const SECONDARY_ENABLED  = {{ secondary_currency_enabled|yesno:"true,false" }};
   const SECONDARY_SYMBOL   = "{{ secondary_currency_symbol|escapejs }}";
   const SECONDARY_DECIMALS = {{ secondary_decimal_places }};
-  const SECONDARY_RATE     = parseFloat("{{ secondary_exchange_rate|escapejs }}") || 0;
+  const SECONDARY_RATE     = parseFloat("{{ secondary_exchange_rate|unlocalize|escapejs }}") || 0;
 
   function fmtCurrency(value) {
     return CURRENCY_SYMBOL + value.toFixed(CURRENCY_DECIMALS).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -404,7 +404,7 @@
   // Products data for line item JS
   const PRODUCTS = [
     {% for p in products %}
-    { id: {{ p.pk }}, name: "{{ p.name|escapejs }}", sku: "{{ p.sku|escapejs }}", price: "{{ p.unit_price }}", imageUrl: "{{ p.primary_image_url|escapejs }}" },
+    { id: {{ p.pk }}, name: "{{ p.name|escapejs }}", sku: "{{ p.sku|escapejs }}", price: "{{ p.unit_price|unlocalize }}", imageUrl: "{{ p.primary_image_url|escapejs }}" },
     {% endfor %}
   ];
 
