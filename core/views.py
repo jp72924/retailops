@@ -589,6 +589,29 @@ def _order_form_context(order=None, selected_customer=None):
     }
 
 
+def _duplicate_product_error(raw_items):
+    """
+    Return an error message if a product appears on more than one line, else None.
+
+    A product belongs on an order once — ordering several is what the quantity
+    column is for. Two lines for the same product would also fight each other
+    over stock and the line total.
+    """
+    seen = set()
+    for product_id, _qty, _price in raw_items:
+        if product_id in seen:
+            name = None
+            if product_id.isdigit():
+                name = Product.objects.filter(pk=int(product_id)).values_list('name', flat=True).first()
+            label = f'"{name}"' if name else f'id {product_id}'
+            return _(
+                'The product %(label)s is on more than one line. '
+                'Combine them into a single line and set the total quantity there.'
+            ) % {'label': label}
+        seen.add(product_id)
+    return None
+
+
 def _save_order_items(order, raw_items):
     """
     Replace all line items on `order` with `raw_items`.
@@ -597,6 +620,13 @@ def _save_order_items(order, raw_items):
     """
     if not raw_items:
         return 0, 'At least one line item is required.'
+
+    # Backstop — callers check this before opening their transaction, because
+    # they return from inside transaction.atomic() rather than raising, so an
+    # error raised here would still commit whatever preceded it.
+    duplicate = _duplicate_product_error(raw_items)
+    if duplicate:
+        return 0, duplicate
 
     order.items.all().delete()
     subtotal = Decimal('0.00')
@@ -650,6 +680,10 @@ def order_create(request):
 
         if not raw_items:
             errors['line_items'] = 'At least one line item is required.'
+        else:
+            duplicate = _duplicate_product_error(raw_items)
+            if duplicate:
+                errors['line_items'] = duplicate
 
         if errors:
             ctx = _order_form_context(selected_customer=customer)
@@ -720,6 +754,11 @@ def order_detail(request, pk):
         raw_items = _parse_line_items(data)
         if not raw_items:
             messages.error(request, 'At least one line item is required.')
+            return redirect('order-detail', pk=pk)
+
+        duplicate = _duplicate_product_error(raw_items)
+        if duplicate:
+            messages.error(request, duplicate)
             return redirect('order-detail', pk=pk)
 
         with transaction.atomic():

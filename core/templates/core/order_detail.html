@@ -141,7 +141,7 @@
           <div class="card-header">
             <div class="card-title">{% trans "Line Items" %}</div>
             {% if not order or order.status == 'draft' or order.status == 'pending' %}
-            <button type="button" class="btn btn-primary btn-sm" onclick="addLineItem()">{% trans "+ Add Item" %}</button>
+            <button type="button" id="btn-add-item" class="btn btn-primary btn-sm" onclick="addLineItem()">{% trans "+ Add Item" %}</button>
             {% endif %}
           </div>
           <div class="card-body" style="padding:0;">
@@ -195,9 +195,15 @@
                         {% else %}{{ item.quantity }}{% endif %}
                       </td>
                       <td>
+                        {% comment %}
+                          Display only — the price comes from the product. The hidden
+                          input carries the stored snapshot so editing a line never
+                          silently reprices it to the product's current value.
+                        {% endcomment %}
+                        <span id="unit-price-{{ forloop.counter }}">{{ item.unit_price|currency }}</span>
                         {% if order.status == 'draft' or order.status == 'pending' %}
-                        <input type="number" name="unit_price_{{ forloop.counter }}" class="form-control" value="{{ item.unit_price|unlocalize }}" step="0.01" min="0" onchange="recalcRow({{ forloop.counter }})">
-                        {% else %}{{ item.unit_price|currency }}{% endif %}
+                        <input type="hidden" name="unit_price_{{ forloop.counter }}" value="{{ item.unit_price|unlocalize }}">
+                        {% endif %}
                       </td>
                       <td><span class="currency-pair"><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></span></td>
                       {% if order.status == 'draft' or order.status == 'pending' %}
@@ -493,22 +499,68 @@
     return 'IMG';
   }
 
+  // ── One line per product ────────────────────────────────────────────────────
+  // A product may appear on the order only once; quantity is how you order more
+  // than one. Options already taken by another line are disabled so the choice
+  // cannot be made in the first place. The server enforces the same rule.
+
+  function productSelects() {
+    return Array.from(document.querySelectorAll('#line-items-body select[name^="product_"]'));
+  }
+
+  function takenProductIds(exceptSelect) {
+    const ids = new Set();
+    productSelects().forEach(sel => {
+      if (sel !== exceptSelect && sel.value) ids.add(sel.value);
+    });
+    return ids;
+  }
+
+  function syncProductOptions() {
+    const selects = productSelects();
+    selects.forEach(sel => {
+      const taken = takenProductIds(sel);
+      // Never disable this row's own selection — a disabled option that is
+      // still selected would submit anyway and just look broken.
+      Array.from(sel.options).forEach(opt => {
+        opt.disabled = opt.value !== sel.value && taken.has(opt.value);
+      });
+    });
+
+    const addBtn = document.getElementById('btn-add-item');
+    if (addBtn && PRODUCTS.length) {
+      const exhausted = takenProductIds(null).size >= PRODUCTS.length;
+      addBtn.disabled = exhausted;
+      addBtn.title = exhausted ? '{% trans "Every product is already on this order." %}' : '';
+    }
+  }
+
+  function firstAvailableProduct() {
+    const taken = takenProductIds(null);
+    return PRODUCTS.find(p => !taken.has(String(p.id))) || null;
+  }
+
   function addLineItem() {
+    const product = firstAvailableProduct();
+    if (!product) {
+      {# Keep apostrophes out of strings interpolated into single-quoted JS. #}
+      showToast('{% trans "Every product is already on this order. Change the quantity on an existing line instead." %}', 'warning');
+      return;
+    }
     const tbody = document.getElementById('line-items-body');
     const emptyRow = document.getElementById('empty-row');
     if (emptyRow) emptyRow.remove();
     lineCount++;
     const options = PRODUCTS.map(p =>
-      `<option value="${p.id}" data-sku="${escHtml(p.sku)}" data-price="${escHtml(p.price)}" data-image-url="${escHtml(p.imageUrl)}">${escHtml(p.name)}</option>`
+      `<option value="${p.id}" data-sku="${escHtml(p.sku)}" data-price="${escHtml(p.price)}" data-image-url="${escHtml(p.imageUrl)}"${p.id === product.id ? ' selected' : ''}>${escHtml(p.name)}</option>`
     ).join('');
-    const firstProduct = PRODUCTS[0] || {};
     const row = document.createElement('tr');
     row.dataset.line = lineCount;
     row.innerHTML = `
       <td>
         <div class="product-name-cell">
           <div class="product-thumb product-thumb-sm" id="line-thumb-${lineCount}">
-            ${productThumbInnerHtml(firstProduct.imageUrl, firstProduct.name)}
+            ${productThumbInnerHtml(product.imageUrl, product.name)}
           </div>
           <div class="product-name-text">
             <select name="product_${lineCount}" class="form-control" style="font-size:0.82rem;"
@@ -517,23 +569,27 @@
         </div>
       </td>
       <td class="td-mono" style="color:var(--muted);font-size:0.78rem;" id="sku-${lineCount}">
-        ${PRODUCTS[0]?.sku || '—'}
+        ${escHtml(product.sku) || '—'}
       </td>
       <td><input type="number" name="quantity_${lineCount}" class="form-control" value="1" min="1"
             onchange="recalcRow(${lineCount})"></td>
-      <td><input type="number" name="unit_price_${lineCount}" class="form-control"
-            value="${PRODUCTS[0]?.price || '0.00'}" step="0.01" min="0"
-            onchange="recalcRow(${lineCount})"></td>
-      <td><span class="currency-pair"><strong id="line-total-${lineCount}">${fmtCurrency(parseFloat(PRODUCTS[0]?.price || 0))}</strong><span class="currency-secondary" id="line-total-${lineCount}-sec">${fmtSecondary(parseFloat(PRODUCTS[0]?.price || 0))}</span></span></td>
+      <td>
+        <span id="unit-price-${lineCount}">${fmtCurrency(parseFloat(product.price || 0))}</span>
+        <input type="hidden" name="unit_price_${lineCount}" value="${escHtml(product.price) || '0.00'}">
+      </td>
+      <td><span class="currency-pair"><strong id="line-total-${lineCount}">${fmtCurrency(parseFloat(product.price || 0))}</strong><span class="currency-secondary" id="line-total-${lineCount}-sec">${fmtSecondary(parseFloat(product.price || 0))}</span></span></td>
       <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>`;
     tbody.appendChild(row);
     document.getElementById('line-item-count').value = lineCount;
+    syncProductOptions();
+    recalcTotals();
   }
 
   function removeLineItem(btn) {
     const rows = document.querySelectorAll('#line-items-body tr:not(#empty-row)');
     if (rows.length <= 1) { showToast('{% trans "An order must have at least one line item." %}', 'warning'); return; }
     btn.closest('tr').remove();
+    syncProductOptions();
     recalcTotals();
   }
 
@@ -542,8 +598,14 @@
     document.getElementById(`sku-${idx}`).textContent = opt.dataset.sku || '—';
     const thumb = document.getElementById(`line-thumb-${idx}`);
     if (thumb) thumb.innerHTML = productThumbInnerHtml(opt.dataset.imageUrl || '', opt.textContent.trim());
+    // The price follows the product; keep the hidden value and the visible
+    // text in step, since only the hidden one is submitted.
+    const price = opt.dataset.price || '0.00';
     const priceInput = select.closest('tr').querySelector(`[name="unit_price_${idx}"]`);
-    if (priceInput) { priceInput.value = opt.dataset.price || '0.00'; }
+    if (priceInput) { priceInput.value = price; }
+    const priceText = document.getElementById(`unit-price-${idx}`);
+    if (priceText) { priceText.textContent = fmtCurrency(parseFloat(price) || 0); }
+    syncProductOptions();
     recalcRow(idx);
   }
 
@@ -578,6 +640,8 @@
   document.addEventListener('DOMContentLoaded', () => {
     const checked = document.querySelector('[name="payment_method"]:checked');
     if (checked) toggleRefField(checked.value);
+    // Server-rendered rows (editing an existing order) need the same treatment.
+    syncProductOptions();
   });
 </script>
 

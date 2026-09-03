@@ -4,13 +4,14 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
-from core.views import _order_form_context, order_create
+from core.views import _order_form_context, _save_order_items, order_create, order_detail
 from core.models import (
     Customer,
     Product,
     ProductCategory,
     Role,
     SalesOrder,
+    SalesOrderItem,
     User,
 )
 
@@ -284,5 +285,162 @@ class OrderFormCustomerSectionTests(TestCase):
 
         self.assertIn('Please select a customer.', html)
         self.assertEqual(SalesOrder.objects.count(), 0)
+
+
+class OrderDuplicateLineItemTests(TestCase):
+    """A product may appear on an order once; quantity carries the count."""
+
+    def setUp(self):
+        self.user = make_staff()
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(
+            first_name='Ana', last_name='López', email='ana@example.com',
+            national_id='V12345678',
+        )
+        category = ProductCategory.objects.create(name='Widgets')
+        self.widget = Product.objects.create(
+            sku='BO-001', name='Widget', category=category,
+            unit_price=Decimal('10.00'),
+            external_image_url='https://cdn.example.com/widget.png',
+        )
+        self.gadget = Product.objects.create(
+            sku='BO-002', name='Gadget', category=category,
+            unit_price=Decimal('5.00'),
+            external_image_url='https://cdn.example.com/gadget.png',
+        )
+
+    def _post(self, rows, **extra):
+        data = {'customer': str(self.customer.pk), 'discount_amount': '0',
+                'notes': '', 'line_item_count': str(len(rows))}
+        for i, (product, qty) in enumerate(rows, start=1):
+            data[f'product_{i}'] = str(product.pk)
+            data[f'quantity_{i}'] = str(qty)
+            data[f'unit_price_{i}'] = str(product.unit_price)
+        data.update(extra)
+        return data
+
+    def test_duplicate_product_is_rejected_on_create(self):
+        # RequestFactory, not self.client: re-rendering through the test client
+        # trips the Python 3.14 instrumentation bug noted above.
+        request = RequestFactory().post(
+            reverse('order-create'),
+            self._post([(self.widget, 1), (self.widget, 2)]),
+        )
+        request.user = self.user
+        request.session = self.client.session
+        request._messages = FallbackStorage(request)
+
+        response = order_create(request)
+
+        self.assertEqual(response.status_code, 200)  # re-rendered, not redirected
+        self.assertIn('Widget', response.content.decode())
+        self.assertEqual(SalesOrder.objects.count(), 0)
+
+    def test_distinct_products_are_accepted(self):
+        resp = self.client.post(
+            reverse('order-create'),
+            self._post([(self.widget, 1), (self.gadget, 3)]),
+        )
+
+        order = SalesOrder.objects.get()
+        self.assertRedirects(resp, reverse('order-detail', args=[order.pk]),
+                             fetch_redirect_response=False)
+        self.assertEqual(order.items.count(), 2)
+
+    def test_duplicate_names_the_product_and_says_what_to_do(self):
+        _, err = _save_order_items(
+            SalesOrder.objects.create(customer=self.customer, status=SalesOrder.DRAFT,
+                                      created_by=self.user),
+            [(str(self.widget.pk), '1', '10.00'), (str(self.widget.pk), '2', '10.00')],
+        )
+
+        self.assertIn('Widget', err)
+        self.assertIn('more than one line', err)
+
+    def test_existing_items_survive_a_rejected_duplicate_edit(self):
+        """
+        The callers return from inside transaction.atomic() instead of raising,
+        so validating after the delete would silently wipe the order's lines.
+        """
+        order = SalesOrder.objects.create(
+            customer=self.customer, status=SalesOrder.DRAFT, created_by=self.user,
+        )
+        SalesOrderItem.objects.create(
+            sales_order=order, product=self.widget, quantity=1,
+            unit_price=Decimal('10.00'),
+        )
+
+        count, err = _save_order_items(
+            order,
+            [(str(self.gadget.pk), '1', '5.00'), (str(self.gadget.pk), '1', '5.00')],
+        )
+
+        self.assertEqual(count, 0)
+        self.assertIsNotNone(err)
+        order.refresh_from_db()
+        self.assertEqual(order.items.count(), 1)
+        self.assertEqual(order.items.first().product, self.widget)
+
+
+class OrderUnitPriceDisplayTests(TestCase):
+    """
+    Unit price is shown, not typed: it comes from the product. The hidden input
+    still carries the stored value so editing a line never reprices it.
+    """
+
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_staff()
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(
+            first_name='Ana', last_name='López', email='ana@example.com',
+            national_id='V12345678',
+        )
+        category = ProductCategory.objects.create(name='Widgets')
+        self.product = Product.objects.create(
+            sku='BO-001', name='Widget', category=category,
+            unit_price=Decimal('10.00'),
+            external_image_url='https://cdn.example.com/widget.png',
+        )
+
+    def _draft_with_item(self, unit_price):
+        order = SalesOrder.objects.create(
+            customer=self.customer, status=SalesOrder.DRAFT, created_by=self.user,
+        )
+        SalesOrderItem.objects.create(
+            sales_order=order, product=self.product, quantity=1, unit_price=unit_price,
+        )
+        return order
+
+    def test_editable_row_has_no_price_input_only_a_hidden_value(self):
+        order = self._draft_with_item(Decimal('7.50'))
+        request = self.factory.get(reverse('order-detail', args=[order.pk]))
+        request.user = self.user
+        request.session = self.client.session
+        request._messages = FallbackStorage(request)
+
+        html = order_detail(request, order.pk).content.decode()
+
+        self.assertNotIn('type="number" name="unit_price_1"', html)
+        self.assertIn('type="hidden" name="unit_price_1"', html)
+        self.assertIn('id="unit-price-1"', html)
+
+    def test_editing_a_line_keeps_the_stored_price_not_the_product_price(self):
+        """The snapshot is the point: a $7.50 line stays $7.50 after an edit."""
+        order = self._draft_with_item(Decimal('7.50'))
+
+        self.client.post(reverse('order-detail', args=[order.pk]), {
+            'customer': str(self.customer.pk),
+            'discount_amount': '0', 'notes': '',
+            'line_item_count': '1',
+            'product_1': str(self.product.pk),
+            'quantity_1': '4',
+            'unit_price_1': '7.50',  # what the hidden input submits
+        })
+
+        item = order.items.get()
+        self.assertEqual(item.quantity, 4)
+        self.assertEqual(item.unit_price, Decimal('7.50'))
+        self.assertEqual(item.line_total, Decimal('30.00'))
 
 
