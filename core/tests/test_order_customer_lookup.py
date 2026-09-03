@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.contrib.messages import get_messages
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -444,3 +445,50 @@ class OrderUnitPriceDisplayTests(TestCase):
         self.assertEqual(item.line_total, Decimal('30.00'))
 
 
+class OrderEmptyItemsMessageTests(TestCase):
+    def setUp(self):
+        self.factory = RequestFactory()
+        self.user = make_staff()
+        self.client.force_login(self.user)
+        self.customer = Customer.objects.create(
+            first_name='Ana', last_name='López', email='ana@example.com',
+            national_id='V12345678',
+        )
+
+    def test_message_says_what_to_do_and_is_rendered_on_the_page(self):
+        request = self.factory.post(reverse('order-create'), {
+            'customer': str(self.customer.pk),
+            'discount_amount': '0', 'notes': '', 'line_item_count': '0',
+        })
+        request.user = self.user
+        request.session = self.client.session
+        request._messages = FallbackStorage(request)
+
+        html = order_create(request).content.decode()
+
+        self.assertIn('This order has no items.', html)
+        self.assertIn('+ Add Item', html)
+        self.assertEqual(SalesOrder.objects.count(), 0)
+
+    def test_editing_an_order_down_to_zero_items_is_rejected(self):
+        order = SalesOrder.objects.create(
+            customer=self.customer, status=SalesOrder.DRAFT, created_by=self.user,
+        )
+        category = ProductCategory.objects.create(name='Widgets')
+        product = Product.objects.create(
+            sku='BO-009', name='Widget', category=category,
+            unit_price=Decimal('10.00'),
+            external_image_url='https://cdn.example.com/w.png',
+        )
+        SalesOrderItem.objects.create(
+            sales_order=order, product=product, quantity=1, unit_price=Decimal('10.00'),
+        )
+
+        response = self.client.post(reverse('order-detail', args=[order.pk]), {
+            'customer': str(self.customer.pk),
+            'discount_amount': '0', 'notes': '', 'line_item_count': '0',
+        })
+
+        messages = [str(m) for m in get_messages(response.wsgi_request)]
+        self.assertTrue(any('This order has no items.' in m for m in messages), messages)
+        self.assertEqual(order.items.count(), 1)  # existing line survives

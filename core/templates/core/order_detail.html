@@ -66,17 +66,18 @@
         {% endif %}
 
         {% if order.status == 'confirmed' and user.role.name in 'Manager,Admin' %}
-        <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline"
-              onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Cancel order {{ number }}?{% endblocktrans %}')">
-          {% csrf_token %}<button class="btn btn-danger">{% trans "Cancel Order" %}</button>
+        {# The form only carries CSRF and the action; the modal's button submits it. #}
+        <form method="post" action="{% url 'order-cancel' order.pk %}" class="inline" id="cancel-order-form">
+          {% csrf_token %}
         </form>
+        <button type="button" class="btn btn-danger" onclick="openModal('cancel-order-modal')">{% trans "Cancel Order" %}</button>
         {% endif %}
 
         {% if order.status == 'paid' and user.role.name == 'Admin' %}
-        <form method="post" action="{% url 'order-refund' order.pk %}" class="inline"
-              onsubmit="return confirm('{% blocktrans with number=order.order_number|escapejs %}Issue refund for {{ number }}?{% endblocktrans %}')">
-          {% csrf_token %}<button class="btn btn-warning">{% trans "Issue Refund" %}</button>
+        <form method="post" action="{% url 'order-refund' order.pk %}" class="inline" id="refund-order-form">
+          {% csrf_token %}
         </form>
+        <button type="button" class="btn btn-warning" onclick="openModal('refund-order-modal')">{% trans "Issue Refund" %}</button>
         {% endif %}
       {% endif %}
     </div>
@@ -145,6 +146,12 @@
             {% endif %}
           </div>
           <div class="card-body" style="padding:0;">
+            {% if errors.line_items %}
+            <div style="margin:16px 20px 0;padding:10px 14px;border-radius:var(--radius-sm);
+                        background:#FEE2E2;color:#B91C1C;font-size:0.82rem;">
+              {{ errors.line_items }}
+            </div>
+            {% endif %}
             <div class="table-wrap line-items-table" style="border:none;border-radius:0;box-shadow:none;">
               <table>
                 <thead>
@@ -389,6 +396,52 @@
         <button type="submit" class="btn btn-success">{% trans "Record Payment" %}</button>
       </div>
     </form>
+  </div>
+</div>
+{% endif %}
+
+{% if order and order.status == 'confirmed' and user.role.name in 'Manager,Admin' %}
+<div class="modal-overlay" id="cancel-order-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">{% trans "Cancel Order" %}</div>
+      <button type="button" class="modal-close" onclick="closeModal('cancel-order-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px;">
+        {% blocktrans with number=order.order_number %}Cancel order {{ number }}?{% endblocktrans %}
+      </p>
+      <p style="margin:0;color:var(--muted);font-size:0.85rem;">
+        {% trans "The order moves to Cancelled and every line item's stock is returned to inventory. This cannot be undone." %}
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('cancel-order-modal')">{% trans "Keep Order" %}</button>
+      <button type="submit" form="cancel-order-form" class="btn btn-danger">{% trans "Cancel Order" %}</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if order and order.status == 'paid' and user.role.name == 'Admin' %}
+<div class="modal-overlay" id="refund-order-modal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title">{% trans "Issue Refund" %}</div>
+      <button type="button" class="modal-close" onclick="closeModal('refund-order-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin:0 0 12px;">
+        {% blocktrans with number=order.order_number amount=order.total_amount|currency %}Refund {{ amount }} for order {{ number }}?{% endblocktrans %}
+      </p>
+      <p style="margin:0;color:var(--muted);font-size:0.85rem;">
+        {% trans "The order moves to Refunded and every line item's stock is returned to inventory. This cannot be undone, and no money is transferred — record the actual refund with your payment provider separately." %}
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('refund-order-modal')">{% trans "Keep Order" %}</button>
+      <button type="submit" form="refund-order-form" class="btn btn-warning">{% trans "Issue Refund" %}</button>
+    </div>
   </div>
 </div>
 {% endif %}

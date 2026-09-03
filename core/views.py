@@ -619,7 +619,7 @@ def _save_order_items(order, raw_items):
     Returns (items_saved, error_message_or_None).
     """
     if not raw_items:
-        return 0, 'At least one line item is required.'
+        return 0, _('This order has no items. Use "+ Add Item" to add at least one product, set its quantity, and then save.')
 
     # Backstop — callers check this before opening their transaction, because
     # they return from inside transaction.atomic() rather than raising, so an
@@ -679,7 +679,7 @@ def order_create(request):
                 errors['customer'] = 'Invalid customer selected.'
 
         if not raw_items:
-            errors['line_items'] = 'At least one line item is required.'
+            errors['line_items'] = _('This order has no items. Use "+ Add Item" to add at least one product, set its quantity, and then save.')
         else:
             duplicate = _duplicate_product_error(raw_items)
             if duplicate:
@@ -699,7 +699,7 @@ def order_create(request):
                 notes=notes,
                 created_by=request.user,
             )
-            _, err = _save_order_items(order, raw_items)
+            saved_count, err = _save_order_items(order, raw_items)
             if err:
                 messages.error(request, err)
                 ctx = _order_form_context(selected_customer=customer)
@@ -753,7 +753,7 @@ def order_detail(request, pk):
 
         raw_items = _parse_line_items(data)
         if not raw_items:
-            messages.error(request, 'At least one line item is required.')
+            messages.error(request, _('This order has no items. Use "+ Add Item" to add at least one product, set its quantity, and then save.'))
             return redirect('order-detail', pk=pk)
 
         duplicate = _duplicate_product_error(raw_items)
@@ -765,7 +765,7 @@ def order_detail(request, pk):
             order.discount_amount = discount
             order.notes           = notes
             order.save()
-            _, err = _save_order_items(order, raw_items)
+            saved_count, err = _save_order_items(order, raw_items)
             if err:
                 messages.error(request, err)
                 return redirect('order-detail', pk=pk)
