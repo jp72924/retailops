@@ -381,7 +381,7 @@
             <input type="text" name="reference_number" class="form-control"
               placeholder="{% trans 'Transaction ID, check #, etc.' %}">
             <div style="font-size:0.78rem;color:var(--muted);margin-top:4px;">
-              {% trans "Required for bank transfer, card, and check payments." %}
+              {% trans "Required for bank transfer, card, and check payments. Optional for mobile payment." %}
             </div>
           </div>
 
@@ -683,9 +683,12 @@
     setCurrencyCell('grand-total', Math.max(0, grand));
   }
 
-  // Payment method — show/hide reference field
+  // Payment method — show/hide reference field. mobile_payment is offered the
+  // field (a Pago Móvil confirmation always carries a reference) but, unlike
+  // the three below, the server does not require one — see
+  // REFERENCE_REQUIRED_PAYMENT_METHODS in api/serializers/payment.py.
   function toggleRefField(value) {
-    const show = ['bank_transfer', 'card', 'check'].includes(value);
+    const show = ['mobile_payment', 'bank_transfer', 'card', 'check'].includes(value);
     const field = document.getElementById('ref-number-field');
     if (field) field.style.display = show ? '' : 'none';
   }

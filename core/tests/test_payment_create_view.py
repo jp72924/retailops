@@ -114,3 +114,32 @@ class PaymentCreateReferenceNumberTests(TestCase):
         payment = Payment.objects.get()
         self.assertEqual(payment.payment_method, Payment.CASH)
         self.assertEqual(payment.reference_number, '')
+
+    def test_mobile_payment_accepts_a_reference_number_without_requiring_one(self):
+        """
+        The payment modal offers the reference field for mobile payment — a
+        Pago Movil confirmation always carries one — but it stays optional,
+        unlike bank transfer, card and check.
+        """
+        response = self._post(Payment.MOBILE_PAYMENT, 'PM-REF-001')
+
+        self.assertRedirects(
+            response,
+            reverse('order-detail', args=[self.order.pk]),
+            fetch_redirect_response=False,
+        )
+        payment = Payment.objects.get()
+        self.assertEqual(payment.payment_method, Payment.MOBILE_PAYMENT)
+        self.assertEqual(payment.reference_number, 'PM-REF-001')
+
+    def test_mobile_payment_without_a_reference_number_is_still_accepted(self):
+        response = self._post(Payment.MOBILE_PAYMENT)
+
+        self.assertRedirects(
+            response,
+            reverse('order-detail', args=[self.order.pk]),
+            fetch_redirect_response=False,
+        )
+        payment = Payment.objects.get()
+        self.assertEqual(payment.payment_method, Payment.MOBILE_PAYMENT)
+        self.assertEqual(payment.reference_number, '')
