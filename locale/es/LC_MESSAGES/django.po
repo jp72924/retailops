@@ -628,8 +628,8 @@ msgstr "Número de referencia"
 msgid "Transaction ID, check #, etc."
 msgstr "ID de transacción, n.° de cheque, etc."
 
-msgid "Required for bank transfer, card, and check payments."
-msgstr "Requerido para transferencias, tarjetas y cheques."
+msgid "Required for bank transfer, card, and check payments. Optional for mobile payment."
+msgstr "Requerido para transferencias, tarjetas y cheques. Opcional para pago móvil."
 
 msgid "Optional notes…"
 msgstr "Notas opcionales…"
@@ -1072,8 +1072,8 @@ msgstr "¿Eliminar el pedido %(number)s?"
 msgid "Cancel order %(number)s?"
 msgstr "¿Cancelar el pedido %(number)s?"
 
-msgid "Issue refund for %(number)s?"
-msgstr "¿Emitir reembolso para %(number)s?"
+msgid "Refund %(amount)s for order %(number)s?"
+msgstr "¿Reembolsar %(amount)s del pedido %(number)s?"
 
 msgid "Created by %(by)s · %(date)s"
 msgstr "Creado por %(by)s · %(date)s"
@@ -1313,3 +1313,109 @@ msgstr "Ajuste manual"
 # Short single-word captions under the mobile Quick Actions icon tiles
 msgid "Order"
 msgstr "Pedido"
+
+# ── Order form: customer lookup by ID number, mini-card and quick-create modal ──
+msgid "Look up the customer by ID number"
+msgstr "Busque al cliente por su cédula / ID"
+
+msgid "New Customer"
+msgstr "Nuevo cliente"
+
+msgid "Searching…"
+msgstr "Buscando…"
+
+msgid "No customer found with this ID. Use + New to register one."
+msgstr "No se encontró ningún cliente con esta cédula. Use + Nueva para registrar uno."
+
+msgid "Several customers share this ID number. Resolve the duplicates in the customer list."
+msgstr "Varios clientes comparten esta cédula. Resuelva los duplicados en la lista de clientes."
+
+msgid "Lookup failed. Please try again."
+msgstr "La búsqueda falló. Inténtelo de nuevo."
+
+msgid "Enter a valid ID number, or use + New to register a customer."
+msgstr "Ingrese una cédula válida, o use + Nueva para registrar un cliente."
+
+msgid "A customer is required."
+msgstr "Se requiere un cliente."
+
+msgid "An ID number is required."
+msgstr "Se requiere una cédula / ID."
+
+msgid "First name is required."
+msgstr "El nombre es obligatorio."
+
+msgid "Last name is required."
+msgstr "El apellido es obligatorio."
+
+msgid "Email address is required."
+msgstr "El correo electrónico es obligatorio."
+
+msgid "Customer registered."
+msgstr "Cliente registrado."
+
+msgid "This ID number is already registered."
+msgstr "Esta cédula ya está registrada."
+
+msgid "A customer with this email already exists."
+msgstr "Ya existe un cliente con este correo electrónico."
+
+msgid "This customer could not be saved. Please try again."
+msgstr "No se pudo guardar este cliente. Inténtelo de nuevo."
+
+# ── Order form: one line per product ──────────────────────────────────────────
+msgid "Every product is already on this order."
+msgstr "Todos los productos ya están en este pedido."
+
+msgid "Every product is already on this order. Change the quantity on an existing line instead."
+msgstr "Todos los productos ya están en este pedido. Cambie la cantidad en una línea existente."
+
+# ── Order form: line item validation ──────────────────────────────────────────
+msgid "This order has no items. Use \"+ Add Item\" to add at least one product, set its quantity, and then save."
+msgstr "Este pedido no tiene artículos. Use \"+ Agregar artículo\" para añadir al menos un producto, indique su cantidad y luego guarde."
+
+msgid "The product %(label)s is on more than one line. Combine them into a single line and set the total quantity there."
+msgstr "El producto %(label)s aparece en más de una línea. Combínelas en una sola línea e indique allí la cantidad total."
+
+# ── Order cancel / refund confirmation modals ─────────────────────────────────
+msgid "Keep Order"
+msgstr "Conservar pedido"
+
+msgid "The order moves to Cancelled and every line item's stock is returned to inventory. This cannot be undone."
+msgstr "El pedido pasa a Cancelado y el stock de cada línea se devuelve al inventario. Esta acción no se puede deshacer."
+
+msgid "The order moves to Refunded and every line item's stock is returned to inventory. This cannot be undone, and no money is transferred — record the actual refund with your payment provider separately."
+msgstr "El pedido pasa a Reembolsado y el stock de cada línea se devuelve al inventario. Esta acción no se puede deshacer, y no se transfiere dinero — registre el reembolso real con su proveedor de pagos por separado."
+
+# ── "Back to …" navigation links ──────────────────────────────────────────────
+msgid "Back to Orders"
+msgstr "Volver a pedidos"
+
+msgid "Back to Customers"
+msgstr "Volver a clientes"
+
+msgid "Back to Categories"
+msgstr "Volver a categorías"
+
+msgid "Back to Users"
+msgstr "Volver a usuarios"
+
+msgid "Back to Recipient Profiles"
+msgstr "Volver a perfiles de destinatario"
+
+# ── Recipient profile form ────────────────────────────────────────────────────
+msgid "Primary for this payment method"
+msgstr "Principal para este método de pago"
+
+# ── Settings: secondary currency auto-update ──────────────────────────────────
+msgid "Fetches the rate (e.g. BCV) from the URL below. Run on a schedule with <code>python manage.py update_bcv_rate</code> or click “Update now”."
+msgstr "Obtiene la tasa (p. ej. BCV) desde la URL indicada abajo. Ejecútelo de forma programada con <code>python manage.py update_bcv_rate</code> o haga clic en “Actualizar ahora”."
+
+msgid "Only one profile can be primary per payment method. Checking this will automatically un-mark whichever other profile currently holds it. A payment method's only profile is always its primary one."
+msgstr "Solo un perfil puede ser el principal por método de pago. Al marcarlo, se desmarcará automáticamente el perfil que lo tenga actualmente. El único perfil de un método de pago siempre es su principal."
+
+msgid "Back to Customer"
+msgstr "Volver al cliente"
+
+msgid "Dotted path to the numeric rate, e.g. <code>promedio</code> or <code>data.rate</code>."
+msgstr "Ruta con puntos hasta el valor numérico de la tasa, p. ej. <code>promedio</code> o <code>data.rate</code>."
