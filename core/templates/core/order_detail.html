@@ -92,7 +92,7 @@
           <div class="card-header">
             <div class="card-title">{% trans "Customer" %}</div>
             {% if not order or order.status == 'draft' %}
-            <span style="font-size:0.8rem;color:var(--muted);">{% trans "Select a customer for this order" %}</span>
+            <span style="font-size:0.8rem;color:var(--muted);">{% trans "Look up the customer by ID number" %}</span>
             {% endif %}
           </div>
           <div class="card-body">
@@ -105,18 +105,32 @@
               <div class="info-row"><span class="info-label">{% trans "Address" %}</span>{{ order.customer.address_line1 }}, {{ order.customer.city }}, {{ order.customer.state }}</div>
             </div>
             {% else %}
-            <div class="form-group">
-              <label class="form-label" for="id_customer">{% trans "Customer" %} <span class="req">*</span></label>
-              <select id="id_customer" name="customer" class="form-control" required>
-                <option value="">{% trans "— Select customer —" %}</option>
-                {% for c in customers %}
-                <option value="{{ c.pk }}"
-                  {% if order and order.customer_id == c.pk %}selected
-                  {% elif request.GET.customer == c.pk|stringformat:"s" %}selected{% endif %}>
-                  {{ c.get_full_name }} ({{ c.email }})
-                </option>
-                {% endfor %}
-              </select>
+            {% comment %}
+              The hidden pk is the only field the order POST handlers read, so
+              the "customer" contract is unchanged. JS keeps it in step with the
+              ID box below and clears it the moment the two diverge.
+            {% endcomment %}
+            <input type="hidden" id="id_customer" name="customer"
+              value="{% if selected_customer %}{{ selected_customer.pk }}{% endif %}">
+
+            <div class="form-group" style="max-width:380px;">
+              <div style="position:relative;">
+                <label class="form-label" for="id_customer_nid" style="display:block;padding-right:76px;">{% trans "ID Number" %} <span class="req">*</span></label>
+                <button type="button" id="btn-new-customer" class="btn btn-primary btn-sm" style="position:absolute;top:-8px;right:0;padding:3px 6px;">{% trans "+ New" %}</button>
+              </div>
+              <input type="text" id="id_customer_nid" autocomplete="off"
+                class="form-control{% if errors.customer %} is-invalid{% endif %}"
+                value="{% if selected_customer %}{{ selected_customer.national_id|default:'' }}{% endif %}"
+                placeholder="{% trans 'e.g. V12345678' %}" maxlength="20">
+              {% if errors.customer %}<div class="invalid-feedback">{{ errors.customer }}</div>{% endif %}
+              <div id="customer-lookup-status" style="font-size:0.78rem;margin-top:4px;display:none;"></div>
+            </div>
+
+            <div id="customer-card" class="info-panel" style="margin-top:14px;{% if not selected_customer %}display:none;{% endif %}">
+              <div class="info-row"><span class="info-label">{% trans "Name" %}</span><a id="cc-name-link" href="{% if selected_customer %}{% url 'customer-detail' selected_customer.pk %}{% else %}#{% endif %}"><strong id="cc-name">{{ selected_customer.get_full_name|default:"—" }}</strong></a></div>
+              <div class="info-row"><span class="info-label">{% trans "Email" %}</span><span id="cc-email">{{ selected_customer.email|default:"—" }}</span></div>
+              <div class="info-row"><span class="info-label">{% trans "Phone" %}</span><span id="cc-phone">{{ selected_customer.phone|default:"—" }}</span></div>
+              <div class="info-row"><span class="info-label">{% trans "ID Number" %}</span><span id="cc-nid">{{ selected_customer.national_id|default:"—" }}</span></div>
             </div>
             {% endif %}
           </div>
@@ -372,6 +386,59 @@
   </div>
 </div>
 {% endif %}
+
+{% comment %}
+  Quick customer registration. Deliberately outside the payment modal's guard:
+  that guard is false on the create page, which is exactly where this is needed.
+  Plain divs + fetch rather than a form — a real submit would navigate away and
+  discard the line items entered but not yet saved.
+{% endcomment %}
+{% if not order or order.status == 'draft' %}
+<div class="modal-overlay" id="new-customer-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">{% trans "New Customer" %}</div>
+      <button type="button" class="modal-close" id="nc-close">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="gap:16px;">
+        <div class="form-group">
+          <label class="form-label" for="nc-national-id">{% trans "ID Number" %} <span class="req">*</span></label>
+          <input type="text" id="nc-national-id" class="form-control" data-field="national_id"
+            maxlength="20" placeholder="{% trans 'e.g. V12345678' %}">
+          <div class="invalid-feedback" data-err="national_id" style="display:none;"></div>
+        </div>
+        <div class="form-grid form-grid-2">
+          <div class="form-group">
+            <label class="form-label" for="nc-first-name">{% trans "First Name" %} <span class="req">*</span></label>
+            <input type="text" id="nc-first-name" class="form-control" data-field="first_name" maxlength="150">
+            <div class="invalid-feedback" data-err="first_name" style="display:none;"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="nc-last-name">{% trans "Last Name" %} <span class="req">*</span></label>
+            <input type="text" id="nc-last-name" class="form-control" data-field="last_name" maxlength="150">
+            <div class="invalid-feedback" data-err="last_name" style="display:none;"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="nc-email">{% trans "Email Address" %} <span class="req">*</span></label>
+          <input type="email" id="nc-email" class="form-control" data-field="email" placeholder="email@example.com">
+          <div class="invalid-feedback" data-err="email" style="display:none;"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="nc-phone">{% trans "Phone Number" %}</label>
+          <input type="tel" id="nc-phone" class="form-control" data-field="phone" placeholder="04XX-XXXXXXX">
+        </div>
+      </div>
+      <div id="nc-error" style="color:var(--danger);font-size:.8rem;margin-top:12px;display:none;"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="nc-cancel">{% trans "Cancel" %}</button>
+      <button type="button" class="btn btn-primary" id="nc-submit">{% trans "Create" %}</button>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -512,5 +579,212 @@
     const checked = document.querySelector('[name="payment_method"]:checked');
     if (checked) toggleRefField(checked.value);
   });
+</script>
+
+<script>
+// Customer ID lookup + quick registration. Wrapped in an IIFE so nothing here
+// shadows the global openModal/closeModal the payment modal relies on.
+(function () {
+  const nid = document.getElementById('id_customer_nid');
+  if (!nid) return;  // read-only customer panel — nothing to wire up
+
+  const hidden  = document.getElementById('id_customer');
+  const card    = document.getElementById('customer-card');
+  const statusEl = document.getElementById('customer-lookup-status');
+  const orderForm = document.getElementById('order-form');
+
+  const LOOKUP_URL = "{% url 'customer-lookup' %}";
+  const CREATE_URL = "{% url 'customer-quick-create' %}";
+
+  // The hidden pk is only valid for this exact ID string. Every assignment to
+  // hidden.value must update this in the same breath.
+  let resolvedFor = nid.value.trim();
+
+  function setStatus(msg, kind) {
+    if (!msg) { statusEl.style.display = 'none'; return; }
+    statusEl.textContent = msg;
+    statusEl.style.color = kind === 'danger' ? 'var(--danger)' : 'var(--muted)';
+    statusEl.style.display = '';
+  }
+
+  function clearCustomer() {
+    hidden.value = '';
+    resolvedFor = '';
+    card.style.display = 'none';
+  }
+
+  function fillCard(c) {
+    const dash = '—';
+    document.getElementById('cc-name').textContent  = c.full_name || dash;
+    document.getElementById('cc-email').textContent = c.email || dash;
+    document.getElementById('cc-phone').textContent = c.phone || dash;
+    document.getElementById('cc-nid').textContent   = c.national_id || dash;
+    document.getElementById('cc-name-link').href    = c.detail_url;
+    card.style.display = '';
+  }
+
+  // Session expiry redirects to an HTML login page and role_required returns an
+  // HTML 403 — both would make resp.json() throw an opaque syntax error.
+  async function readJson(resp) {
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.includes('application/json')) throw new Error('non-json response');
+    return resp.json();
+  }
+
+  async function doLookup() {
+    const raw = nid.value.trim();
+    if (!raw) { clearCustomer(); setStatus('', null); return; }
+    if (raw === resolvedFor && hidden.value) return;  // already resolved
+
+    setStatus('{% trans "Searching…" %}', null);
+    try {
+      const resp = await fetch(LOOKUP_URL + '?national_id=' + encodeURIComponent(raw),
+                               { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const data = await readJson(resp);
+      if (nid.value.trim() !== raw) return;  // superseded while in flight
+
+      if (data.ok && data.status === 'found') {
+        hidden.value = data.customer.id;
+        resolvedFor = raw;
+        fillCard(data.customer);
+        setStatus('', null);
+      } else if (data.ok && data.status === 'ambiguous') {
+        clearCustomer();
+        setStatus('{% trans "Several customers share this ID number. Resolve the duplicates in the customer list." %}', 'danger');
+      } else {
+        clearCustomer();
+        setStatus('{% trans "No customer found with this ID. Use + New to register one." %}', 'danger');
+      }
+    } catch (err) {
+      clearCustomer();
+      setStatus('{% trans "Lookup failed. Please try again." %}', 'danger');
+    }
+  }
+
+  nid.addEventListener('input', function () {
+    if (nid.value.trim() !== resolvedFor) { clearCustomer(); setStatus('', null); }
+  });
+  nid.addEventListener('blur', doLookup);
+  nid.addEventListener('keydown', function (e) {
+    // Without preventDefault, Enter inside #order-form submits the whole order.
+    if (e.key === 'Enter') { e.preventDefault(); doLookup(); }
+  });
+
+  orderForm.addEventListener('submit', function (e) {
+    if (!hidden.value) {
+      e.preventDefault();
+      setStatus('{% trans "Enter a valid ID number, or use + New to register a customer." %}', 'danger');
+      nid.focus();
+      showToast('{% trans "A customer is required." %}', 'error');
+    }
+  });
+
+  // ── Quick registration modal ───────────────────────────────────────────────
+  const modal   = document.getElementById('new-customer-modal');
+  const btnNew  = document.getElementById('btn-new-customer');
+  if (!modal || !btnNew) return;
+
+  const btnSubmit = document.getElementById('nc-submit');
+  const ncError   = document.getElementById('nc-error');
+  const FIELDS = {
+    national_id: document.getElementById('nc-national-id'),
+    first_name:  document.getElementById('nc-first-name'),
+    last_name:   document.getElementById('nc-last-name'),
+    email:       document.getElementById('nc-email'),
+    phone:       document.getElementById('nc-phone'),
+  };
+
+  function clearModalErrors() {
+    ncError.style.display = 'none';
+    ncError.textContent = '';
+    Object.values(FIELDS).forEach(el => el.classList.remove('is-invalid'));
+    modal.querySelectorAll('[data-err]').forEach(el => {
+      el.style.display = 'none';
+      el.textContent = '';
+    });
+  }
+
+  function showFieldErrors(errors) {
+    let first = null;
+    Object.entries(errors).forEach(([field, msg]) => {
+      if (field === '__all__') {
+        ncError.textContent = msg;
+        ncError.style.display = '';
+        return;
+      }
+      const input = FIELDS[field];
+      const slot = modal.querySelector('[data-err="' + field + '"]');
+      if (input) { input.classList.add('is-invalid'); first = first || input; }
+      if (slot) { slot.textContent = msg; slot.style.display = ''; }
+    });
+    if (first) first.focus();
+  }
+
+  function openCustomerModal() {
+    clearModalErrors();
+    Object.values(FIELDS).forEach(el => { el.value = ''; });
+    // Carry over whatever ID was typed: the usual path here is "not found" → + New.
+    const typed = nid.value.trim();
+    FIELDS.national_id.value = typed;
+    openModal('new-customer-modal');
+    (typed ? FIELDS.first_name : FIELDS.national_id).focus();
+  }
+
+  function closeCustomerModal() { closeModal('new-customer-modal'); }
+
+  btnNew.addEventListener('click', openCustomerModal);
+  document.getElementById('nc-close').addEventListener('click', closeCustomerModal);
+  document.getElementById('nc-cancel').addEventListener('click', closeCustomerModal);
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('open')) closeCustomerModal();
+  });
+
+  btnSubmit.addEventListener('click', async function () {
+    clearModalErrors();
+
+    const values = {};
+    Object.entries(FIELDS).forEach(([k, el]) => { values[k] = el.value.trim(); });
+
+    const required = {
+      national_id: '{% trans "An ID number is required." %}',
+      first_name:  '{% trans "First name is required." %}',
+      last_name:   '{% trans "Last name is required." %}',
+      email:       '{% trans "Email address is required." %}',
+    };
+    const missing = {};
+    Object.entries(required).forEach(([k, msg]) => { if (!values[k]) missing[k] = msg; });
+    if (Object.keys(missing).length) { showFieldErrors(missing); return; }
+
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = '{% trans "Saving…" %}';
+
+    const body = new FormData();
+    body.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+    Object.entries(values).forEach(([k, v]) => body.append(k, v));
+
+    try {
+      const resp = await fetch(CREATE_URL, { method: 'POST', body: body });
+      const data = await readJson(resp);
+      if (data.ok) {
+        // Order matters: value, then the pk, then the marker that ties them.
+        nid.value = data.customer.national_id;
+        hidden.value = data.customer.id;
+        resolvedFor = data.customer.national_id;
+        fillCard(data.customer);
+        setStatus('', null);
+        closeCustomerModal();
+        showToast('{% trans "Customer registered." %}', 'success');
+      } else {
+        showFieldErrors(data.errors || {});
+      }
+    } catch (err) {
+      ncError.textContent = '{% trans "Network error. Please try again." %}';
+      ncError.style.display = '';
+    } finally {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = '{% trans "Create" %}';
+    }
+  });
+})();
 </script>
 {% endblock %}

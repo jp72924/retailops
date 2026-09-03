@@ -50,6 +50,14 @@ urlpatterns = [
     # POST /customers/new/      — create customer; redirect to customer-detail on success
     path('customers/new/', views.customer_create, name='customer-create'),
 
+    # GET  /customers/lookup/?national_id=<raw>  — resolve a customer by ID number
+    #      for the order form (Staff/Manager/Admin, AJAX/JSON)
+    path('customers/lookup/', views.customer_lookup_ajax, name='customer-lookup'),
+
+    # POST /customers/quick-create/  — lean customer registration from the order
+    #      form modal; no address block (Staff/Manager/Admin, AJAX/JSON)
+    path('customers/quick-create/', views.customer_quick_create_ajax, name='customer-quick-create'),
+
     # GET  /customers/<pk>/     — read-only customer summary + order history
     path('customers/<int:pk>/', views.customer_detail, name='customer-detail'),
 

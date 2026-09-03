@@ -7,16 +7,19 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, Q, Sum
+from django.db.models import Count, F, Q, Sum, Value
 from django.db.models.deletion import ProtectedError
+from django.db.models.functions import Replace, Upper
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.conf import settings as django_settings
+from django.urls import reverse
 from django.utils import timezone, translation
 from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .decorators import role_required
+from .services.receipt_matching import normalize_document_id
 from .models import (
     Customer, InventoryMovement, Payment,
     Product, ProductCategory, RecipientProfile, Role,
@@ -237,6 +240,160 @@ def customer_create(request):
     return render(request, 'core/customer_form.html', {'errors': {}, 'form_data': {}})
 
 
+# ── Customer lookup / quick-create (order form AJAX) ──────────────────────────
+
+def _customer_json(customer):
+    """Serialize a Customer for the order form's ID lookup and mini-card."""
+    return {
+        'id':          customer.pk,
+        'national_id': customer.national_id or '',
+        'full_name':   customer.get_full_name(),
+        'first_name':  customer.first_name,
+        'last_name':   customer.last_name,
+        'email':       customer.email,
+        'phone':       customer.phone or '',
+        'detail_url':  reverse('customer-detail', args=[customer.pk]),
+    }
+
+
+def _normalized_national_id_expr():
+    """
+    SQL expression that strips ID punctuation and upper-cases, so a stored
+    "V-12.345.678" can be compared against a normalized "V12345678".
+
+    Approximates normalize_document_id(), which strips every non-alphanumeric
+    via regex — matching it exactly would mean pulling every row into Python.
+    REPLACE/UPPER are ANSI SQL and behave the same on SQLite and PostgreSQL.
+    """
+    expr = F('national_id')
+    for ch in ('-', '.', ' ', '/', ',', '_'):
+        expr = Replace(expr, Value(ch), Value(''))
+    return Upper(expr)
+
+
+@role_required('Staff', 'Manager', 'Admin')
+def customer_lookup_ajax(request):
+    """
+    GET /customers/lookup/?national_id=<raw> — resolve a customer by ID number.
+
+    Matching ignores punctuation and case, so "V-12.345.678", "v12345678" and
+    "V12345678" all find the same customer.
+
+    200 {"ok": true, "status": "found",     "customer": {...}}
+    200 {"ok": true, "status": "not_found"}
+    200 {"ok": true, "status": "ambiguous", "candidates": [...]}
+    400 {"ok": false, "error": "..."}
+
+    "Not found" is a 200: it is the normal result of a partially typed ID,
+    not an error.
+    """
+    raw = request.GET.get('national_id', '').strip()
+    normalized = normalize_document_id(raw)
+    if not normalized:
+        return JsonResponse({'ok': False, 'error': _('An ID number is required.')}, status=400)
+
+    # Fast path — an exact match on the indexed column. Only the raw string is
+    # tried here: uniqueness makes it unambiguous by definition. Matching the
+    # normalized form here instead would let a clean duplicate short-circuit
+    # the ambiguity check below and silently pick one of two people.
+    customer = Customer.objects.filter(national_id=raw).first()
+    if customer is not None:
+        return JsonResponse({'ok': True, 'status': 'found', 'customer': _customer_json(customer)})
+
+    # Slow path: compare normalized values, which catches both a punctuated
+    # input and a punctuated *stored* value, and can see duplicates.
+    matches = list(
+        Customer.objects
+        .exclude(national_id__isnull=True).exclude(national_id='')
+        .annotate(_norm_nid=_normalized_national_id_expr())
+        .filter(_norm_nid=normalized)
+        .order_by('pk')[:3]
+    )
+
+    if not matches:
+        return JsonResponse({'ok': True, 'status': 'not_found'})
+    if len(matches) == 1:
+        return JsonResponse({'ok': True, 'status': 'found', 'customer': _customer_json(matches[0])})
+
+    # Uniqueness is enforced on the raw string, so "V123456" and "V-123456" can
+    # both exist and normalize alike. Never guess which person the order is for.
+    return JsonResponse({
+        'ok': True,
+        'status': 'ambiguous',
+        'candidates': [
+            {'id': c.pk, 'national_id': c.national_id, 'full_name': c.get_full_name()}
+            for c in matches
+        ],
+    })
+
+
+@require_POST
+@role_required('Staff', 'Manager', 'Admin')
+def customer_quick_create_ajax(request):
+    """
+    POST /customers/quick-create/ — register a customer from the order form
+    modal, without the address block the full form requires.
+
+    200 {"ok": true, "customer": {...}}
+    400 {"ok": false, "errors": {"<field>": "<message>", ...}}
+
+    Unlike the model and the full customer form, national_id is REQUIRED here:
+    the order form can only find customers by ID, so one created without it
+    would be invisible to the very screen that just created it.
+    """
+    first_name  = request.POST.get('first_name', '').strip()
+    last_name   = request.POST.get('last_name', '').strip()
+    email       = request.POST.get('email', '').strip()
+    phone       = request.POST.get('phone', '').strip()
+    national_id = request.POST.get('national_id', '').strip()
+    normalized  = normalize_document_id(national_id)
+
+    errors = {}
+    if not normalized:
+        errors['national_id'] = _('An ID number is required.')
+    else:
+        clash = Customer.objects.filter(national_id__in=[national_id, normalized]).exists()
+        if not clash:
+            clash = (
+                Customer.objects
+                .exclude(national_id__isnull=True).exclude(national_id='')
+                .annotate(_norm_nid=_normalized_national_id_expr())
+                .filter(_norm_nid=normalized)
+                .exists()
+            )
+        if clash:
+            errors['national_id'] = _('This ID number is already registered.')
+
+    if not first_name:
+        errors['first_name'] = _('First name is required.')
+    if not last_name:
+        errors['last_name'] = _('Last name is required.')
+    if not email:
+        errors['email'] = _('Email address is required.')
+    elif Customer.objects.filter(email=email).exists():
+        errors['email'] = _('A customer with this email already exists.')
+
+    if errors:
+        return JsonResponse({'ok': False, 'errors': errors}, status=400)
+
+    try:
+        customer = Customer.objects.create(
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            phone=phone,
+            national_id=normalized,  # stored clean, so lookups always hit the fast path
+        )
+    except IntegrityError:
+        # The checks above are racy; the database has the final say.
+        return JsonResponse(
+            {'ok': False, 'errors': {'__all__': _('This customer could not be saved. Please try again.')}},
+            status=400,
+        )
+
+    return JsonResponse({'ok': True, 'customer': _customer_json(customer)})
+
+
 @login_required
 def customer_detail(request, pk):
     """GET: read-only customer summary with order history."""
@@ -413,12 +570,14 @@ def order_list(request):
     })
 
 
-def _order_form_context(order=None):
+def _order_form_context(order=None, selected_customer=None):
     """Build common context dict for the order create/edit form."""
     sys_settings = SystemSettings.get()
+    if selected_customer is None and order is not None:
+        selected_customer = order.customer
     return {
         'order': order,
-        'customers': Customer.objects.order_by('first_name', 'last_name'),
+        'selected_customer': selected_customer,
         'products': Product.objects.filter(is_active=True).order_by('name'),
         'payment_method_choices': Payment.METHOD_CHOICES,
         'currency_symbol': sys_settings.currency_symbol,
@@ -493,7 +652,7 @@ def order_create(request):
             errors['line_items'] = 'At least one line item is required.'
 
         if errors:
-            ctx = _order_form_context()
+            ctx = _order_form_context(selected_customer=customer)
             ctx['errors'] = errors
             messages.error(request, 'Please correct the errors below.')
             return render(request, 'core/order_detail.html', ctx)
@@ -509,14 +668,21 @@ def order_create(request):
             _, err = _save_order_items(order, raw_items)
             if err:
                 messages.error(request, err)
-                ctx = _order_form_context()
+                ctx = _order_form_context(selected_customer=customer)
                 ctx['errors'] = {'line_items': err}
                 return render(request, 'core/order_detail.html', ctx)
 
         messages.success(request, f'Order {order.order_number} created.')
         return redirect('order-detail', pk=order.pk)
 
-    return render(request, 'core/order_detail.html', _order_form_context())
+    # ?customer=<pk> deep link from the customer detail page. filter().first()
+    # rather than get() so a stale link renders a blank form, not a 500.
+    selected = None
+    raw_pk = request.GET.get('customer', '').strip()
+    if raw_pk.isdigit():
+        selected = Customer.objects.filter(pk=int(raw_pk)).first()
+    return render(request, 'core/order_detail.html',
+                  _order_form_context(selected_customer=selected))
 
 
 @role_required('Staff', 'Manager', 'Admin')
@@ -542,12 +708,14 @@ def order_detail(request, pk):
         # Allow customer re-selection while in Draft
         if order.status == SalesOrder.DRAFT:
             customer_id = data.get('customer', '').strip()
-            if customer_id:
-                try:
-                    order.customer = Customer.objects.get(pk=int(customer_id))
-                except (Customer.DoesNotExist, ValueError):
-                    messages.error(request, 'Invalid customer selected.')
-                    return redirect('order-detail', pk=pk)
+            if not customer_id:
+                messages.error(request, 'A customer is required.')
+                return redirect('order-detail', pk=pk)
+            try:
+                order.customer = Customer.objects.get(pk=int(customer_id))
+            except (Customer.DoesNotExist, ValueError):
+                messages.error(request, 'Invalid customer selected.')
+                return redirect('order-detail', pk=pk)
 
         raw_items = _parse_line_items(data)
         if not raw_items:
