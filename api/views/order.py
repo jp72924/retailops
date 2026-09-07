@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from django.db import transaction
-from django.db.models import Q, Sum, Value
+from django.db.models import DecimalField, OuterRef, Prefetch, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import mixins, status
@@ -10,11 +10,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
-from core.models import InventoryMovement, SalesOrder
+from core.models import InventoryMovement, Payment, SalesOrder
 from api.filters import SalesOrderFilter
 from api.permissions import IsAdminRole, IsManagerOrAdmin, IsStaffOrAbove
 from api.throttling import OrderTransitionRateThrottle
 from api.serializers.order import SalesOrderReadSerializer, SalesOrderWriteSerializer
+from api.views.product import _annotated_products
 
 
 _TRANSITION_ACTIONS = frozenset({'submit', 'confirm', 'ship', 'deliver', 'cancel', 'refund'})
@@ -24,17 +25,39 @@ def _annotated_orders():
     """
     Base queryset for orders with the _amount_paid annotation baked in.
 
-    Avoids the N+1 triggered by SalesOrder.amount_paid / amount_outstanding
-    properties on list views (each calls payments.aggregate()).
+    _amount_paid uses a correlated Subquery rather than Sum() over the reverse
+    relation.  Sum() forces a LEFT JOIN + GROUP BY, and DRF pagination calls
+    .count() on this queryset on every list request -- Django cannot count a
+    grouped query without wrapping it as a subquery and materialising every
+    group, which cost a fixed ~230ms per request independent of page size.
+    Subquery.contains_aggregate is False, so QuerySet._annotate() never sets
+    group_by and the pagination count stays a plain COUNT(*) on core_salesorder.
+
+    The items prefetch reuses _annotated_products() so the nested
+    ProductSerializer reads the _stock annotation instead of falling back to
+    Product.current_stock -- a plain @property that fires one aggregate per
+    call, and which the serializer calls three times per product
+    (current_stock, is_low_stock, is_out_of_stock).
     """
+    money = DecimalField(max_digits=12, decimal_places=2)
+    confirmed_payment_total = (
+        Payment.objects
+        .filter(sales_order=OuterRef('pk'), status=Payment.CONFIRMED)
+        .values('sales_order')
+        .annotate(total=Sum('amount'))
+        .values('total')
+    )
     return (
         SalesOrder.objects
         .select_related('customer', 'created_by', 'confirmed_by')
-        .prefetch_related('items__product__category')
+        .prefetch_related(
+            Prefetch('items__product', queryset=_annotated_products().order_by())
+        )
         .annotate(
             _amount_paid=Coalesce(
-                Sum('payments__amount', filter=Q(payments__status='confirmed')),
+                Subquery(confirmed_payment_total, output_field=money),
                 Value(Decimal('0.00')),
+                output_field=money,
             )
         )
         .order_by('-created_at')

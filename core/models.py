@@ -339,6 +339,13 @@ class SalesOrder(models.Model):
     confirmed_at = models.DateTimeField(null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
 
+    class Meta:
+        # /api/v1/orders/ lists newest-first by default; without this index
+        # every page sorts the whole table to return 25 rows.
+        indexes = [
+            models.Index(fields=['-created_at'], name='salesorder_created_idx'),
+        ]
+
     def save(self, *args, **kwargs):
         if not self.order_number:
             self.order_number = self._generate_order_number()
@@ -459,6 +466,10 @@ class Payment(models.Model):
                 name='payment_transaction_key_unique_when_set',
             ),
         ]
+        # /api/v1/payments/ lists newest-first by default.
+        indexes = [
+            models.Index(fields=['-created_at'], name='payment_created_idx'),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.payment_number:
@@ -516,6 +527,13 @@ class InventoryMovement(models.Model):
         related_name='inventory_movements',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        # /api/v1/inventory/ and the per-product movements action both list
+        # newest-first.
+        indexes = [
+            models.Index(fields=['-created_at'], name='invmovement_created_idx'),
+        ]
 
     def __str__(self):
         sign = '+' if self.quantity >= 0 else ''
