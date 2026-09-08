@@ -8,6 +8,8 @@ from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, Permis
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.exceptions import EmptyOrderError, OrderStateError
+
 
 # ─── SequenceCounter ─────────────────────────────────────────────────────────
 
@@ -153,6 +155,26 @@ class Customer(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        """
+        Store national_id in its normalized form.
+
+        Matching ignores punctuation and case, so "V-12.345.678" and "V12345678"
+        are the same person. Normalizing on write is what makes the column's
+        existing unique=True mean *normalized* uniqueness, and it is why the
+        kiosk can identify a customer the back office registered, and the other
+        way round.
+
+        Imported here rather than at module scope: core.services.receipt_matching
+        imports core.models, so a top-level import would be circular.
+        """
+        from core.services.receipt_matching import normalize_document_id
+
+        # '' and None both mean "no ID"; store None so the unique index does not
+        # treat two blanks as a collision.
+        self.national_id = normalize_document_id(self.national_id) or None
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.first_name} {self.last_name}'
@@ -360,6 +382,44 @@ class SalesOrder(models.Model):
     def __str__(self):
         return self.order_number
 
+    def confirm(self, user):
+        """
+        Pending -> Confirmed, deducting stock for every line item.
+
+        This is the only supported way to confirm an order.  Confirmation is
+        where stock actually leaves the building, so the availability check and
+        the status change happen in one transaction with the product rows
+        locked -- an order can never reach Confirmed while leaving a product
+        negative, and two concurrent confirmations cannot both pass the check.
+
+        Raises:
+            OrderStateError         if the order is not currently Pending.
+            EmptyOrderError         if it has no line items.
+            InsufficientStockError  if any line exceeds available stock; the
+                                    exception lists every offending product.
+
+        Callers translate these into their own surface's error format; see
+        api/views/order.py and core/views.py.
+        """
+        # Imported here rather than at module scope: core.services.inventory
+        # imports core.models, so a top-level import would be circular.
+        from core.services.inventory import deduct_stock_for_order
+
+        if self.status != self.PENDING:
+            raise OrderStateError(self.PENDING, self.status)
+        if not self.items.exists():
+            raise EmptyOrderError()
+
+        with transaction.atomic():
+            deduct_stock_for_order(self, user)
+            self.status = self.CONFIRMED
+            self.confirmed_by = user
+            self.confirmed_at = timezone.now()
+            self.save(update_fields=[
+                'status', 'confirmed_by', 'confirmed_at', 'updated_at',
+            ])
+        return self
+
     @property
     def amount_paid(self):
         result = self.payments.filter(status='confirmed').aggregate(total=models.Sum('amount'))
@@ -388,6 +448,18 @@ class SalesOrderItem(models.Model):
     tax_rate = models.DecimalField(max_digits=6, decimal_places=4, default=0)
     line_total = models.DecimalField(max_digits=12, decimal_places=2)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            # A product belongs on an order once; quantity is how you order more
+            # than one. The rule is checked in the API serializer and the
+            # back-office view, but only this constraint also covers the admin
+            # inline and manage.py shell.
+            models.UniqueConstraint(
+                fields=['sales_order', 'product'],
+                name='salesorderitem_unique_product_per_order',
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         self.line_total = self.quantity * self.unit_price

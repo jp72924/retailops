@@ -10,6 +10,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.viewsets import GenericViewSet
 
+from core.exceptions import (
+    DomainError,
+    EmptyOrderError,
+    InsufficientStockError,
+    OrderStateError,
+)
 from core.models import InventoryMovement, Payment, SalesOrder
 from api.filters import SalesOrderFilter
 from api.permissions import IsAdminRole, IsManagerOrAdmin, IsStaffOrAbove
@@ -19,6 +25,33 @@ from api.views.product import _annotated_products
 
 
 _TRANSITION_ACTIONS = frozenset({'submit', 'confirm', 'ship', 'deliver', 'cancel', 'refund'})
+
+
+# Domain rule violations carry their own HTTP shape. Both confirm() and
+# bulk_transition() raise the same exceptions, so the mapping lives once here
+# rather than being restated per action -- that duplication is how the two
+# drifted apart before, letting bulk confirm bypass checks the single-order
+# path enforced.
+def _domain_error_payload(exc):
+    """Return the {error, code, ...} body for a DomainError."""
+    if isinstance(exc, InsufficientStockError):
+        return {
+            'error': 'Insufficient stock',
+            'code': 'insufficient_stock',
+            # Top-level key, matching the kiosk checkout's existing contract
+            # (api/kiosk/views.py) so clients parse one shape for one code.
+            'insufficient': exc.shortfalls,
+        }
+    if isinstance(exc, EmptyOrderError):
+        return {'error': str(exc), 'code': 'no_items'}
+    if isinstance(exc, OrderStateError):
+        return {'error': str(exc), 'code': 'wrong_status'}
+    return {'error': str(exc), 'code': 'domain_error'}
+
+
+def _domain_error_response(exc):
+    """409 Response for a DomainError."""
+    return Response(_domain_error_payload(exc), status=status.HTTP_409_CONFLICT)
 
 
 def _annotated_orders():
@@ -219,37 +252,16 @@ class OrderViewSet(
         """
         POST /api/v1/orders/<id>/confirm/  —  Pending → Confirmed.
         Side-effect: deducts stock via InventoryMovement per line item.
+
+        Rejects the transition with 409 insufficient_stock if any line exceeds
+        available stock. The rule lives in SalesOrder.confirm(); this method
+        only translates its failures into the API error envelope.
         """
         order = self.get_object()
-        err = self._require_status(order, SalesOrder.PENDING)
-        if err:
-            return err
-
-        if not order.items.exists():
-            return Response(
-                {'error': 'Cannot confirm an order with no line items.', 'code': 'no_items'},
-                status=status.HTTP_409_CONFLICT,
-            )
-
-        with transaction.atomic():
-            order.status       = SalesOrder.CONFIRMED
-            order.confirmed_by = request.user
-            order.confirmed_at = timezone.now()
-            order.save(update_fields=['status', 'confirmed_by', 'confirmed_at', 'updated_at'])
-
-            movements = [
-                InventoryMovement(
-                    product=item.product,
-                    movement_type=InventoryMovement.SALE,
-                    quantity=-item.quantity,
-                    reference_type=InventoryMovement.SALES_ORDER,
-                    reference_id=order.pk,
-                    notes=f'Stock deducted on confirmation of {order.order_number}',
-                    created_by=request.user,
-                )
-                for item in order.items.select_related('product').all()
-            ]
-            InventoryMovement.objects.bulk_create(movements)
+        try:
+            order.confirm(request.user)
+        except DomainError as exc:
+            return _domain_error_response(exc)
 
         return Response(SalesOrderReadSerializer(self.get_object()).data)
 
@@ -425,31 +437,24 @@ class OrderViewSet(
             try:
                 with transaction.atomic():
                     if action_name == 'confirm':
-                        if not order.items.exists():
-                            failed.append({'id': oid, 'error': 'Order has no line items.'})
-                            continue
-                        order.status       = SalesOrder.CONFIRMED
-                        order.confirmed_by = request.user
-                        order.confirmed_at = timezone.now()
-                        order.save(update_fields=['status', 'confirmed_by', 'confirmed_at', 'updated_at'])
-                        InventoryMovement.objects.bulk_create([
-                            InventoryMovement(
-                                product=item.product,
-                                movement_type=InventoryMovement.SALE,
-                                quantity=-item.quantity,
-                                reference_type=InventoryMovement.SALES_ORDER,
-                                reference_id=order.pk,
-                                notes=f'Stock deducted on confirmation of {order.order_number}',
-                                created_by=request.user,
-                            )
-                            for item in order.items.select_related('product').all()
-                        ])
+                        # Same SalesOrder.confirm() the single-order action
+                        # calls, so bulk confirmation enforces the identical
+                        # stock rule. Re-implementing the transition here is
+                        # what previously let this path skip checks.
+                        order.confirm(request.user)
                     elif action_name == 'ship':
                         order.status = SalesOrder.SHIPPED
                         order.save(update_fields=['status', 'updated_at'])
                     elif action_name == 'deliver':
                         order.status = SalesOrder.DELIVERED
                         order.save(update_fields=['status', 'updated_at'])
+            except DomainError as exc:
+                payload = _domain_error_payload(exc)
+                entry = {'id': oid, 'error': payload['error'], 'code': payload['code']}
+                if 'insufficient' in payload:
+                    entry['insufficient'] = payload['insufficient']
+                failed.append(entry)
+                continue
             except Exception as exc:
                 failed.append({'id': oid, 'error': str(exc)})
                 continue

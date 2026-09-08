@@ -300,7 +300,9 @@ Each product in the response includes `current_stock`, `is_low_stock`, and `is_o
 
 ### Step 4 — Create a Draft Order
 
-Orders are created in **Draft** status. Supply the customer ID and at least one line item. If `unit_price` is omitted from a line item, the product's current catalogue price is used as the snapshot.
+Orders are created in **Draft** status. Supply the customer ID and at least one line item.
+
+Line prices are **server-derived**: the product's catalogue price is always used. Sending `unit_price`, `line_total` or `tax_rate` on a line item is rejected with `400`. A product may appear on an order **only once** - use `quantity` to order more than one.
 
 ```http
 POST /api/v1/orders/
@@ -313,7 +315,7 @@ Content-Type: application/json
   "tax_amount": "15.00",
   "items": [
     {"product_id": 7, "quantity": 3},
-    {"product_id": 12, "quantity": 1, "unit_price": "89.99"}
+    {"product_id": 12, "quantity": 1}
   ]
 }
 ```
@@ -671,7 +673,7 @@ Response `200 OK`:
 | `last_name` | string | Yes | |
 | `email` | string | Yes | Must be unique (case-insensitive) |
 | `phone` | string | No | |
-| `national_id` | string \| null | No | National identity document number (e.g. `"V-12345678"`). Must be unique across all customers. |
+| `national_id` | string \| null | No | National identity document number (e.g. `"V-12345678"`). Required. Unique after punctuation and case are stripped, so `V-12.345.678` and `V12345678` are the same customer. Stored normalized. |
 | `date_of_birth` | string (YYYY-MM-DD) \| null | No | Customer date of birth |
 | `gender` | string \| null | No | `"M"` (Masculino) or `"F"` (Femenino). Omit or send blank for unspecified. |
 | `address_line1` | string | No | |
@@ -923,7 +925,7 @@ All single-order transition endpoints accept **no request body** and return the 
 |-------|------|----------|-------------|
 | `product_id` | integer | Yes | Must be an active product |
 | `quantity` | integer | Yes | Minimum 1 |
-| `unit_price` | string (decimal) | No | Price snapshot. If omitted, the product's current `unit_price` is used |
+| `unit_price` | - | - | **Not accepted.** The catalogue price is always used; sending this returns `400` |
 
 When items are supplied on an update, they **replace** all existing line items and totals are recalculated.
 

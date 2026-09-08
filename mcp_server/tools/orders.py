@@ -12,7 +12,9 @@ Order status machine:
                                                    Paid → refund → Refunded
 
 Inventory side-effects:
-  confirm  → negative InventoryMovement per line item (deduct stock)
+  confirm  → negative InventoryMovement per line item (deduct stock).
+             Refused with 409 insufficient_stock if any line exceeds the
+             product's available stock; stock never goes negative.
   cancel   → positive InventoryMovement per line item (restore stock)
   refund   → positive InventoryMovement per line item (restore stock)
 
@@ -123,8 +125,12 @@ def register_order_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
             items:           List of line items (required, minimum 1). Each item is a dict:
                                { "product_id": int,         ← required
                                  "quantity":   int,         ← required (>= 1)
-                                 "unit_price": "9.99",      ← optional, defaults to product price
-                                 "tax_rate":   "0.0000" }   ← optional, defaults to 0
+                                 }
+                             Prices are NOT accepted: the line price always comes
+                             from the product catalogue, and sending unit_price
+                             (or line_total / tax_rate) is rejected with 400.
+                             A product may appear only once per order -- use
+                             quantity to order more than one.
             discount_amount: Order-level discount as decimal string, e.g. "10.00".
                              Defaults to "0.00".
             tax_amount:      Additional order-level tax as decimal string. Defaults to "0.00".
@@ -246,6 +252,13 @@ def register_order_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         Constraints:
           - Order must currently be in Pending status.
           - Order must have at least one line item.
+          - Every line item must have enough stock. Confirmation is refused
+            with 409 insufficient_stock if any product would go negative;
+            the error lists each short product with its requested and
+            available quantities. Stock is never allowed to go negative, so
+            an order cannot be confirmed on inventory that does not exist --
+            receive stock first (retailops_adjust_inventory) or reduce the
+            order quantities.
 
         Args:
             id: The order's integer primary key.

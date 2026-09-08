@@ -19,6 +19,11 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .decorators import role_required
+from .exceptions import EmptyOrderError, InsufficientStockError
+from .services.customers import (
+    check_national_id,
+    normalized_national_id_expr,
+)
 from .services.receipt_matching import normalize_document_id
 from .models import (
     Customer, InventoryMovement, Payment,
@@ -32,8 +37,12 @@ from .models import (
 def _parse_line_items(post_data):
     """
     Extract line-item tuples from POST data.
-    Returns a list of (product_id_str, quantity_str, unit_price_str).
+    Returns a list of (product_id_str, quantity_str).
     Skips index slots where product is absent (handles JS remove-row gaps).
+
+    The price is deliberately not read from the form. It comes from the product
+    catalogue in _save_order_items -- a hidden input is client-controlled, so
+    trusting it let a crafted POST set any price, including a negative one.
     """
     try:
         count = int(post_data.get('line_item_count', 0))
@@ -47,7 +56,6 @@ def _parse_line_items(post_data):
         items.append((
             product_id,
             post_data.get(f'quantity_{n}', '').strip(),
-            post_data.get(f'unit_price_{n}', '').strip(),
         ))
     return items
 
@@ -191,8 +199,10 @@ def customer_create(request):
             errors['email'] = 'Email address is required.'
         elif Customer.objects.filter(email=email).exists():
             errors['email'] = 'A customer with this email already exists.'
-        if national_id and Customer.objects.filter(national_id=national_id).exists():
-            errors['national_id'] = 'This ID number is already registered.'
+        try:
+            national_id = check_national_id(national_id)
+        except ValueError as exc:
+            errors['national_id'] = str(exc)
         if gender and gender not in ('M', 'F'):
             errors['gender'] = 'Invalid gender value.'
 
@@ -256,21 +266,6 @@ def _customer_json(customer):
     }
 
 
-def _normalized_national_id_expr():
-    """
-    SQL expression that strips ID punctuation and upper-cases, so a stored
-    "V-12.345.678" can be compared against a normalized "V12345678".
-
-    Approximates normalize_document_id(), which strips every non-alphanumeric
-    via regex — matching it exactly would mean pulling every row into Python.
-    REPLACE/UPPER are ANSI SQL and behave the same on SQLite and PostgreSQL.
-    """
-    expr = F('national_id')
-    for ch in ('-', '.', ' ', '/', ',', '_'):
-        expr = Replace(expr, Value(ch), Value(''))
-    return Upper(expr)
-
-
 @role_required('Staff', 'Manager', 'Admin')
 def customer_lookup_ajax(request):
     """
@@ -305,7 +300,7 @@ def customer_lookup_ajax(request):
     matches = list(
         Customer.objects
         .exclude(national_id__isnull=True).exclude(national_id='')
-        .annotate(_norm_nid=_normalized_national_id_expr())
+        .annotate(_norm_nid=normalized_national_id_expr())
         .filter(_norm_nid=normalized)
         .order_by('pk')[:3]
     )
@@ -346,23 +341,13 @@ def customer_quick_create_ajax(request):
     email       = request.POST.get('email', '').strip()
     phone       = request.POST.get('phone', '').strip()
     national_id = request.POST.get('national_id', '').strip()
-    normalized  = normalize_document_id(national_id)
 
     errors = {}
-    if not normalized:
-        errors['national_id'] = _('An ID number is required.')
-    else:
-        clash = Customer.objects.filter(national_id__in=[national_id, normalized]).exists()
-        if not clash:
-            clash = (
-                Customer.objects
-                .exclude(national_id__isnull=True).exclude(national_id='')
-                .annotate(_norm_nid=_normalized_national_id_expr())
-                .filter(_norm_nid=normalized)
-                .exists()
-            )
-        if clash:
-            errors['national_id'] = _('This ID number is already registered.')
+    normalized = None
+    try:
+        normalized = check_national_id(national_id)
+    except ValueError as exc:
+        errors['national_id'] = str(exc)
 
     if not first_name:
         errors['first_name'] = _('First name is required.')
@@ -439,8 +424,10 @@ def customer_edit(request, pk):
             errors['email'] = 'Email address is required.'
         elif Customer.objects.filter(email=email).exclude(pk=customer.pk).exists():
             errors['email'] = 'A customer with this email already exists.'
-        if national_id and Customer.objects.filter(national_id=national_id).exclude(pk=customer.pk).exists():
-            errors['national_id'] = 'This ID number is already registered.'
+        try:
+            national_id = check_national_id(national_id, exclude_pk=customer.pk)
+        except ValueError as exc:
+            errors['national_id'] = str(exc)
         if gender and gender not in ('M', 'F'):
             errors['gender'] = 'Invalid gender value.'
 
@@ -598,7 +585,7 @@ def _duplicate_product_error(raw_items):
     over stock and the line total.
     """
     seen = set()
-    for product_id, _qty, _price in raw_items:
+    for product_id, _qty in raw_items:
         if product_id in seen:
             name = None
             if product_id.isdigit():
@@ -615,7 +602,7 @@ def _duplicate_product_error(raw_items):
 def _save_order_items(order, raw_items):
     """
     Replace all line items on `order` with `raw_items`.
-    `raw_items` is a list of (product_id_str, quantity_str, unit_price_str).
+    `raw_items` is a list of (product_id_str, quantity_str).
     Returns (items_saved, error_message_or_None).
     """
     if not raw_items:
@@ -630,13 +617,15 @@ def _save_order_items(order, raw_items):
 
     order.items.all().delete()
     subtotal = Decimal('0.00')
-    for product_id, qty_str, price_str in raw_items:
+    for product_id, qty_str in raw_items:
         try:
             product = Product.objects.get(pk=int(product_id))
         except (Product.DoesNotExist, ValueError):
             return 0, f'Product with id {product_id} not found.'
         quantity = max(1, int(qty_str)) if qty_str.isdigit() else 1
-        unit_price = _to_decimal(price_str, product.unit_price)
+        # The catalogue is the only source of a line price. Orders can only be
+        # edited while Draft or Pending, so this never reprices a confirmed sale.
+        unit_price = product.unit_price
         item = SalesOrderItem(
             sales_order=order,
             product=product,
@@ -664,7 +653,7 @@ def order_create(request):
     if request.method == 'POST':
         data        = request.POST
         customer_id = data.get('customer', '').strip()
-        discount    = _to_decimal(data.get('discount_amount', '0'))
+        discount    = max(Decimal('0.00'), _to_decimal(data.get('discount_amount', '0')))
         notes       = data.get('notes', '').strip()
         raw_items   = _parse_line_items(data)
 
@@ -736,7 +725,7 @@ def order_detail(request, pk):
             return redirect('order-detail', pk=pk)
 
         data     = request.POST
-        discount = _to_decimal(data.get('discount_amount', '0'))
+        discount = max(Decimal('0.00'), _to_decimal(data.get('discount_amount', '0')))
         notes    = data.get('notes', '').strip()
 
         # Allow customer re-selection while in Draft
@@ -818,22 +807,30 @@ def order_confirm(request, pk):
     """
     order = get_object_or_404(SalesOrder, pk=pk, status=SalesOrder.PENDING)
 
-    with transaction.atomic():
-        order.status       = SalesOrder.CONFIRMED
-        order.confirmed_by = request.user
-        order.confirmed_at = timezone.now()
-        order.save()
-
-        for item in order.items.select_related('product').all():
-            InventoryMovement.objects.create(
-                product=item.product,
-                movement_type=InventoryMovement.SALE,
-                quantity=-item.quantity,
-                reference_type=InventoryMovement.SALES_ORDER,
-                reference_id=order.pk,
-                notes=f'Stock deducted on confirmation of {order.order_number}',
-                created_by=request.user,
+    # SalesOrder.confirm() owns the rule: it locks the products, verifies
+    # stock, deducts it and flips the status in one transaction. This view
+    # only turns a refusal into a message the operator can act on.
+    try:
+        order.confirm(request.user)
+    except InsufficientStockError as exc:
+        for shortfall in exc.shortfalls:
+            messages.error(
+                request,
+                _('%(sku)s: %(requested)s requested, %(available)s in stock.') % {
+                    'sku': shortfall['sku'],
+                    'requested': shortfall['requested'],
+                    'available': shortfall['available'],
+                },
             )
+        messages.error(
+            request,
+            _('%(order)s was not confirmed. Add stock for the products above, '
+              'or reduce the quantities on the order.') % {'order': order.order_number},
+        )
+        return redirect('order-detail', pk=pk)
+    except EmptyOrderError as exc:
+        messages.error(request, str(exc))
+        return redirect('order-detail', pk=pk)
 
     messages.success(request, f'{order.order_number} confirmed.')
     return redirect('order-detail', pk=pk)

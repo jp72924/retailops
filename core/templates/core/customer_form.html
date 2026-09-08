@@ -68,7 +68,7 @@
               <input type="text" id="id_national_id" name="national_id"
                 class="form-control{% if errors.national_id %} is-invalid{% endif %}"
                 value="{{ form_data.national_id|default:'' }}"
-                placeholder="{% trans 'e.g. V12345678' %}" maxlength="20">
+                placeholder="{% trans 'e.g. V12345678' %}" maxlength="20" required>
               {% if errors.national_id %}<div class="invalid-feedback">{{ errors.national_id }}</div>{% endif %}
             </div>
 
