@@ -5,6 +5,7 @@ from django.contrib.messages.storage.fallback import FallbackStorage
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
+from core.services.receipt_matching import normalize_document_id
 from core.views import _order_form_context, _save_order_items, order_create, order_detail
 from core.models import (
     Customer,
@@ -72,10 +73,28 @@ class CustomerLookupTests(TestCase):
         self.assertEqual(resp.json()['status'], 'found')
         self.assertEqual(resp.json()['customer']['id'], c.pk)
 
+    def _legacy_customer(self, raw_national_id, **kwargs):
+        """
+        Create a row holding a punctuated ID, as rows written before national
+        IDs were normalized on write still can.
+
+        Customer.save() now normalizes, so this state can no longer be reached
+        through the ORM -- which is the point of the fix. queryset.update()
+        bypasses save() and writes the raw value directly, reproducing a
+        pre-migration row so the lookup's compatibility path stays covered.
+        """
+        # Created under a throwaway ID: the normalized form is usually already
+        # taken by the sibling row this pair exists to test.
+        placeholder = 'TMP%d' % (Customer.objects.count() + 1)
+        customer = self._customer(placeholder, **kwargs)
+        Customer.objects.filter(pk=customer.pk).update(national_id=raw_national_id)
+        customer.refresh_from_db()
+        return customer
+
     def test_duplicates_that_normalize_alike_are_reported_not_guessed(self):
-        # Uniqueness is on the raw string, so both of these can legally exist.
+        # Legacy rows: raw uniqueness once let both spellings coexist.
         self._customer('V123456', email='a@example.com')
-        self._customer('V-123456', email='b@example.com')
+        self._legacy_customer('V-123456', email='b@example.com')
 
         resp = self.client.get(self.url, {'national_id': 'V.123.456'})
 
@@ -87,7 +106,7 @@ class CustomerLookupTests(TestCase):
     def test_exact_raw_match_wins_over_ambiguity(self):
         """Typing one of the raw values resolves it via the indexed fast path."""
         exact = self._customer('V123456', email='a@example.com')
-        self._customer('V-123456', email='b@example.com')
+        self._legacy_customer('V-123456', email='b@example.com')
 
         resp = self.client.get(self.url, {'national_id': 'V123456'})
 
@@ -352,7 +371,7 @@ class OrderDuplicateLineItemTests(TestCase):
         _, err = _save_order_items(
             SalesOrder.objects.create(customer=self.customer, status=SalesOrder.DRAFT,
                                       created_by=self.user),
-            [(str(self.widget.pk), '1', '10.00'), (str(self.widget.pk), '2', '10.00')],
+            [(str(self.widget.pk), '1'), (str(self.widget.pk), '2')],
         )
 
         self.assertIn('Widget', err)
@@ -373,7 +392,7 @@ class OrderDuplicateLineItemTests(TestCase):
 
         count, err = _save_order_items(
             order,
-            [(str(self.gadget.pk), '1', '5.00'), (str(self.gadget.pk), '1', '5.00')],
+            [(str(self.gadget.pk), '1'), (str(self.gadget.pk), '1')],
         )
 
         self.assertEqual(count, 0)
@@ -385,8 +404,15 @@ class OrderDuplicateLineItemTests(TestCase):
 
 class OrderUnitPriceDisplayTests(TestCase):
     """
-    Unit price is shown, not typed: it comes from the product. The hidden input
-    still carries the stored value so editing a line never reprices it.
+    Unit price is shown, never submitted: it comes from the product catalogue,
+    server-side.
+
+    This previously kept a hidden input carrying the stored snapshot, to stop an
+    edit repricing an old line. But a hidden field is client-controlled, and no
+    surface compared it to the catalogue -- a crafted POST could set any price,
+    including a negative one. Orders are editable only while Draft or Pending,
+    so the snapshot still freezes at confirmation and nothing can reprice a
+    real sale.
     """
 
     def setUp(self):
@@ -413,7 +439,8 @@ class OrderUnitPriceDisplayTests(TestCase):
         )
         return order
 
-    def test_editable_row_has_no_price_input_only_a_hidden_value(self):
+    def test_editable_row_submits_no_price_at_all(self):
+        """Not a text input, not a hidden one. The price is display-only."""
         order = self._draft_with_item(Decimal('7.50'))
         request = self.factory.get(reverse('order-detail', args=[order.pk]))
         request.user = self.user
@@ -422,12 +449,15 @@ class OrderUnitPriceDisplayTests(TestCase):
 
         html = order_detail(request, order.pk).content.decode()
 
-        self.assertNotIn('type="number" name="unit_price_1"', html)
-        self.assertIn('type="hidden" name="unit_price_1"', html)
+        self.assertNotIn('name="unit_price_1"', html)
         self.assertIn('id="unit-price-1"', html)
 
-    def test_editing_a_line_keeps_the_stored_price_not_the_product_price(self):
-        """The snapshot is the point: a $7.50 line stays $7.50 after an edit."""
+    def test_editing_a_draft_line_takes_the_catalogue_price(self):
+        """
+        Inverted from the old policy. A Draft line is repriced to the catalogue
+        on save, because a Draft is not yet a sale -- and because the price the
+        browser sends cannot be trusted.
+        """
         order = self._draft_with_item(Decimal('7.50'))
 
         self.client.post(reverse('order-detail', args=[order.pk]), {
@@ -436,13 +466,46 @@ class OrderUnitPriceDisplayTests(TestCase):
             'line_item_count': '1',
             'product_1': str(self.product.pk),
             'quantity_1': '4',
-            'unit_price_1': '7.50',  # what the hidden input submits
         })
 
         item = order.items.get()
         self.assertEqual(item.quantity, 4)
-        self.assertEqual(item.unit_price, Decimal('7.50'))
-        self.assertEqual(item.line_total, Decimal('30.00'))
+        self.assertEqual(item.unit_price, Decimal('10.00'))  # catalogue, not 7.50
+        self.assertEqual(item.line_total, Decimal('40.00'))
+
+    def test_a_tampered_price_is_ignored(self):
+        """A crafted POST cannot set the price; the catalogue wins."""
+        order = self._draft_with_item(Decimal('10.00'))
+
+        self.client.post(reverse('order-detail', args=[order.pk]), {
+            'customer': str(self.customer.pk),
+            'discount_amount': '0', 'notes': '',
+            'line_item_count': '1',
+            'product_1': str(self.product.pk),
+            'quantity_1': '1',
+            'unit_price_1': '-5.00',   # was accepted verbatim before this fix
+        })
+
+        item = order.items.get()
+        self.assertEqual(item.unit_price, Decimal('10.00'))
+        self.assertEqual(item.line_total, Decimal('10.00'))
+        order.refresh_from_db()
+        self.assertGreaterEqual(order.subtotal, Decimal('0.00'))
+
+    def test_a_negative_discount_cannot_inflate_the_total(self):
+        order = self._draft_with_item(Decimal('10.00'))
+
+        self.client.post(reverse('order-detail', args=[order.pk]), {
+            'customer': str(self.customer.pk),
+            'discount_amount': '-100', 'notes': '',
+            'line_item_count': '1',
+            'product_1': str(self.product.pk),
+            'quantity_1': '1',
+        })
+
+        order.refresh_from_db()
+        self.assertEqual(order.discount_amount, Decimal('0.00'))
+        self.assertEqual(order.total_amount, Decimal('10.00'))
 
 
 class OrderEmptyItemsMessageTests(TestCase):

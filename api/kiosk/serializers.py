@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from core.models import Customer, Payment, Product, RecipientProfile
+from core.services.customers import check_national_id
+from core.services.receipt_matching import normalize_document_id
 from api.serializers.product import product_image_url
 
 
@@ -8,8 +10,15 @@ class KioskIdentifySerializer(serializers.Serializer):
     national_id = serializers.CharField(min_length=6, max_length=20)
 
     def validate_national_id(self, value):
-        # Strip dots and dashes for normalisation, keep alphanumeric + prefix.
-        return value.strip()
+        """
+        Normalize so a shopper finds themselves however they type the cedula.
+
+        The previous comment claimed this stripped dots and dashes; it only
+        called strip(), so a customer stored as "V-12.345.678" was a 404 for
+        anyone typing "V12345678". min_length runs on the raw value first, so
+        a too-short entry is still rejected before it gets here.
+        """
+        return normalize_document_id(value)
 
 
 class KioskIdentifyResponseSerializer(serializers.Serializer):
@@ -30,13 +39,18 @@ class KioskRegisterSerializer(serializers.Serializer):
     city         = serializers.CharField(max_length=100)
 
     def validate_national_id(self, value):
-        value = value.strip()
-        if Customer.objects.filter(national_id=value).exists():
+        """
+        Same rule the API and the back office apply: unique under
+        normalization, so the kiosk cannot register a second record for
+        someone who already exists under a different spelling.
+        """
+        try:
+            return check_national_id(value)
+        except ValueError:
             raise serializers.ValidationError(
                 'A customer with this ID already exists.',
                 code='duplicate_national_id',
             )
-        return value
 
     def validate_email(self, value):
         if Customer.objects.filter(email=value).exists():
@@ -121,6 +135,12 @@ class KioskCheckoutSerializer(serializers.Serializer):
 
     def validate_items(self, value):
         # Deduplicate: merge items with the same SKU.
+        #
+        # Deliberately different from the back office and the REST API, which
+        # reject a repeated product. At a self-checkout, scanning the same item
+        # twice means quantity two -- turning that into an error would be a
+        # regression. Both surfaces end with the same invariant: one line per
+        # product on the saved order.
         merged = {}
         for item in value:
             sku = item['sku']

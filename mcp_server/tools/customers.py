@@ -86,7 +86,9 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
             last_name:     Customer's last name (required).
             email:         Contact email — must be unique (required).
             phone:         Phone number.
-            national_id:   National/tax identification number (e.g. cédula, DNI, SSN). Must be unique if provided.
+            national_id:   National/tax identification number (e.g. cedula, DNI, SSN). REQUIRED, and unique
+                           after punctuation and case are stripped: "V-12.345.678" and
+                           "V12345678" are the same person. Stored normalized.
             date_of_birth: Date of birth, ISO format "YYYY-MM-DD".
             gender:        "M" or "F".
             address_line1: Primary street address.
@@ -141,7 +143,8 @@ def register_customer_tools(mcp: FastMCP, client: RetailOpsClient) -> None:
         Update one or more fields on an existing customer (partial update).
 
         Only the fields you provide are changed; omitted fields are left as-is.
-        national_id must remain unique if provided. gender is "M" or "F".
+        national_id is required and must remain unique under normalization
+          (punctuation and case are stripped before comparing). gender is "M" or "F".
         date_of_birth is ISO format "YYYY-MM-DD".
 
         Args:

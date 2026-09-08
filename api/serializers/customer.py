@@ -32,6 +32,17 @@ class CustomerSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at',
         ]
         read_only_fields = ['id', 'full_name', 'created_at', 'updated_at']
+        extra_kwargs = {
+            # The column stays nullable for rows written before this rule, but
+            # no user-facing write path may omit it: a customer without an ID
+            # is invisible to the order form's lookup and to the kiosk, both of
+            # which can only find people by ID.
+            'national_id': {
+                'required': True,
+                'allow_null': False,
+                'allow_blank': False,
+            },
+        }
 
     def get_full_name(self, obj) -> str:
         return obj.get_full_name()
@@ -47,13 +58,20 @@ class CustomerSerializer(serializers.ModelSerializer):
         return value
 
     def validate_national_id(self, value):
-        if not value:
-            return value
-        qs = Customer.objects.filter(national_id=value)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError(
-                'A customer with this national ID already exists.'
+        """
+        Required, and unique under normalization.
+
+        Delegates to core.services.customers so the API, both back-office
+        forms, the order form's quick-create modal and kiosk registration all
+        apply one rule. Uniqueness on the raw string alone let "V123456" and
+        "V-123456" coexist as two records for one person.
+        """
+        from core.services.customers import check_national_id
+
+        try:
+            return check_national_id(
+                value,
+                exclude_pk=self.instance.pk if self.instance else None,
             )
-        return value
+        except ValueError as exc:
+            raise serializers.ValidationError(str(exc))

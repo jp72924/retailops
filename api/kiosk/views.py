@@ -13,6 +13,9 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from core.exceptions import InsufficientStockError
+from core.services.customers import find_customer_by_national_id
+from core.services.inventory import assert_stock_available
 from core.models import (
     Customer, InventoryMovement, KioskStation, Payment, Product,
     RecipientProfile, SalesOrder, SalesOrderItem, SystemSettings,
@@ -68,11 +71,14 @@ class KioskIdentifyView(KioskAPIMixin, APIView):
         serializer = KioskIdentifySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        try:
-            customer = Customer.objects.get(
-                national_id=serializer.validated_data['national_id'],
-            )
-        except Customer.DoesNotExist:
+        # Shared resolver, not a bare .get(): it also reaches rows written
+        # before IDs were normalized (a stored "V-12.345.678" for a shopper
+        # typing "V12345678"), and it returns one row rather than raising
+        # MultipleObjectsReturned on a legacy pair -- a 500 on the first screen.
+        customer = find_customer_by_national_id(
+            serializer.validated_data['national_id']
+        )
+        if customer is None:
             return Response(
                 {'error': 'Customer not found', 'code': 'not_found'},
                 status=status.HTTP_404_NOT_FOUND,
@@ -221,12 +227,12 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             result = self._execute_checkout(
                 data, station, service_user, customer,
             )
-        except _InsufficientStockError as exc:
+        except InsufficientStockError as exc:
             return Response(
                 {
                     'error': 'Insufficient stock',
                     'code': 'insufficient_stock',
-                    'insufficient': exc.details,
+                    'insufficient': exc.shortfalls,
                 },
                 status=status.HTTP_409_CONFLICT,
             )
@@ -471,20 +477,17 @@ def _resolve_products(items, *, lock=False):
 
 
 def _assert_stock_available(products, items):
-    insufficient = []
-    for item in items:
-        current = (
-            products[item['sku']].inventory_movements
-            .aggregate(total=Sum('quantity'))['total'] or 0
-        )
-        if current < item['quantity']:
-            insufficient.append({
-                'sku': item['sku'],
-                'requested': item['quantity'],
-                'available': current,
-            })
-    if insufficient:
-        raise _InsufficientStockError(insufficient)
+    """
+    Defer to the shared stock rule in core.services.inventory.
+
+    The kiosk keys its lines by SKU while the rule works on Product rows, so
+    all this does is bridge the two. Keeping the arithmetic in one place means
+    a kiosk checkout and a back-office confirmation can never disagree about
+    whether a product is in stock.
+    """
+    assert_stock_available(
+        (products[item['sku']], item['quantity']) for item in items
+    )
 
 
 def _order_subtotal(products, items):
@@ -772,12 +775,6 @@ def _receipt_paid_date(receipt_data):
             return value.isoformat()
 
     return ''
-
-
-class _InsufficientStockError(Exception):
-    def __init__(self, details):
-        self.details = details
-        super().__init__('Insufficient stock')
 
 
 class _InvalidProductError(Exception):

@@ -203,14 +203,13 @@
                       </td>
                       <td>
                         {% comment %}
-                          Display only — the price comes from the product. The hidden
-                          input carries the stored snapshot so editing a line never
-                          silently reprices it to the product's current value.
+                          Display only, and not submitted. The price comes from the
+                          product catalogue server-side; data-price exists purely so
+                          the running line total can be shown without a round trip.
+                          A submitted price -- even a hidden one -- is client-chosen.
                         {% endcomment %}
-                        <span id="unit-price-{{ forloop.counter }}">{{ item.unit_price|currency }}</span>
-                        {% if order.status == 'draft' or order.status == 'pending' %}
-                        <input type="hidden" name="unit_price_{{ forloop.counter }}" value="{{ item.unit_price|unlocalize }}">
-                        {% endif %}
+                        <span id="unit-price-{{ forloop.counter }}"
+                              data-price="{{ item.unit_price|unlocalize }}">{{ item.unit_price|currency }}</span>
                       </td>
                       <td><span class="currency-pair"><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></span></td>
                       {% if order.status == 'draft' or order.status == 'pending' %}
@@ -581,10 +580,19 @@
     });
 
     const addBtn = document.getElementById('btn-add-item');
-    if (addBtn && PRODUCTS.length) {
-      const exhausted = takenProductIds(null).size >= PRODUCTS.length;
-      addBtn.disabled = exhausted;
-      addBtn.title = exhausted ? '{% trans "Every product is already on this order." %}' : '';
+    if (addBtn) {
+      // An empty catalogue and a fully-used catalogue both leave nothing to
+      // add, but they are different problems with different fixes -- register
+      // a product versus change a quantity. Telling them apart matters most
+      // on a fresh install, where the catalogue is empty by definition.
+      if (!PRODUCTS.length) {
+        addBtn.disabled = true;
+        addBtn.title = '{% trans "No products have been registered yet." %}';
+      } else {
+        const exhausted = takenProductIds(null).size >= PRODUCTS.length;
+        addBtn.disabled = exhausted;
+        addBtn.title = exhausted ? '{% trans "Every product is already on this order." %}' : '';
+      }
     }
   }
 
@@ -594,9 +602,13 @@
   }
 
   function addLineItem() {
+    {# Keep apostrophes out of strings interpolated into single-quoted JS. #}
+    if (!PRODUCTS.length) {
+      showToast('{% trans "No products have been registered yet. Add a product to the catalogue before adding it to an order." %}', 'warning');
+      return;
+    }
     const product = firstAvailableProduct();
     if (!product) {
-      {# Keep apostrophes out of strings interpolated into single-quoted JS. #}
       showToast('{% trans "Every product is already on this order. Change the quantity on an existing line instead." %}', 'warning');
       return;
     }
@@ -627,8 +639,7 @@
       <td><input type="number" name="quantity_${lineCount}" class="form-control" value="1" min="1"
             onchange="recalcRow(${lineCount})"></td>
       <td>
-        <span id="unit-price-${lineCount}">${fmtCurrency(parseFloat(product.price || 0))}</span>
-        <input type="hidden" name="unit_price_${lineCount}" value="${escHtml(product.price) || '0.00'}">
+        <span id="unit-price-${lineCount}" data-price="${escHtml(product.price) || '0.00'}">${fmtCurrency(parseFloat(product.price || 0))}</span>
       </td>
       <td><span class="currency-pair"><strong id="line-total-${lineCount}">${fmtCurrency(parseFloat(product.price || 0))}</strong><span class="currency-secondary" id="line-total-${lineCount}-sec">${fmtSecondary(parseFloat(product.price || 0))}</span></span></td>
       <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>`;
@@ -651,20 +662,22 @@
     document.getElementById(`sku-${idx}`).textContent = opt.dataset.sku || '—';
     const thumb = document.getElementById(`line-thumb-${idx}`);
     if (thumb) thumb.innerHTML = productThumbInnerHtml(opt.dataset.imageUrl || '', opt.textContent.trim());
-    // The price follows the product; keep the hidden value and the visible
-    // text in step, since only the hidden one is submitted.
+    // The price follows the product. Nothing here is submitted -- the server
+    // reads the catalogue price when it saves -- so this only keeps the
+    // displayed figure and the running total honest.
     const price = opt.dataset.price || '0.00';
-    const priceInput = select.closest('tr').querySelector(`[name="unit_price_${idx}"]`);
-    if (priceInput) { priceInput.value = price; }
     const priceText = document.getElementById(`unit-price-${idx}`);
-    if (priceText) { priceText.textContent = fmtCurrency(parseFloat(price) || 0); }
+    if (priceText) {
+      priceText.dataset.price = price;
+      priceText.textContent = fmtCurrency(parseFloat(price) || 0);
+    }
     syncProductOptions();
     recalcRow(idx);
   }
 
   function recalcRow(idx) {
     const qty   = parseFloat(document.querySelector(`[name="quantity_${idx}"]`)?.value || 0);
-    const price = parseFloat(document.querySelector(`[name="unit_price_${idx}"]`)?.value || 0);
+    const price = parseFloat(document.getElementById(`unit-price-${idx}`)?.dataset.price || 0);
     setCurrencyCell(`line-total-${idx}`, qty * price);
     recalcTotals();
   }
@@ -674,7 +687,7 @@
     document.querySelectorAll('#line-items-body tr[data-line]').forEach(row => {
       const idx = row.dataset.line;
       const qty   = parseFloat(row.querySelector(`[name="quantity_${idx}"]`)?.value || 0);
-      const price = parseFloat(row.querySelector(`[name="unit_price_${idx}"]`)?.value || 0);
+      const price = parseFloat(row.querySelector(`#unit-price-${idx}`)?.dataset.price || 0);
       subtotal += qty * price;
     });
     const discount = parseFloat(document.querySelector('[name="discount_amount"]')?.value || 0);

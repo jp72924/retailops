@@ -1370,6 +1370,20 @@ msgstr "Todos los productos ya están en este pedido."
 msgid "Every product is already on this order. Change the quantity on an existing line instead."
 msgstr "Todos los productos ya están en este pedido. Cambie la cantidad en una línea existente."
 
+# ── Order form: empty product catalogue (distinct from a used-up one) ────────
+msgid "No products have been registered yet."
+msgstr "Aún no hay productos registrados."
+
+msgid "No products have been registered yet. Add a product to the catalogue before adding it to an order."
+msgstr "Aún no hay productos registrados. Registre un producto en el catálogo antes de agregarlo a un pedido."
+
+# ── Order confirmation: insufficient stock ───────────────────────────────────
+msgid "%(sku)s: %(requested)s requested, %(available)s in stock."
+msgstr "%(sku)s: %(requested)s solicitados, %(available)s en existencia."
+
+msgid "%(order)s was not confirmed. Add stock for the products above, or reduce the quantities on the order."
+msgstr "%(order)s no fue confirmado. Agregue existencias para los productos anteriores, o reduzca las cantidades del pedido."
+
 # ── Order form: line item validation ──────────────────────────────────────────
 msgid "This order has no items. Use \"+ Add Item\" to add at least one product, set its quantity, and then save."
 msgstr "Este pedido no tiene artículos. Use \"+ Agregar artículo\" para añadir al menos un producto, indique su cantidad y luego guarde."

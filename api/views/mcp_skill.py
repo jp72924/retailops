@@ -235,7 +235,7 @@ def _build_skill_card(request):
                         "email": "string (required, unique)",
                         "country": "string (default: 'United States')",
                         "phone": "string, optional",
-                        "national_id": "string, optional, unique if provided (e.g. cédula, DNI, SSN)",
+                        "national_id": "string, REQUIRED, unique after punctuation and case are stripped -- V-12.345.678 == V12345678 (e.g. cédula, DNI, SSN)",
                         "date_of_birth": "date string 'YYYY-MM-DD', optional",
                         "gender": "'M' or 'F', optional",
                         "address_line1": "string, optional", "address_line2": "string, optional",
@@ -410,7 +410,7 @@ def _build_skill_card(request):
                     "description": "Create a Draft order. items must be non-empty. Does NOT affect stock.",
                     "params": {
                         "customer_id": "int (required)",
-                        "items": "list (required, ≥1) of {product_id, quantity, unit_price?, tax_rate?}",
+                        "items": "list (required, ≥1) of {product_id, quantity} -- price is server-derived from the catalogue; each product may appear only once",
                         "discount_amount": "decimal string, optional",
                         "tax_amount": "decimal string, optional",
                         "notes": "string, optional",
@@ -739,7 +739,8 @@ def _build_skill_card(request):
             "states": ["draft", "pending", "confirmed", "paid", "shipped", "delivered", "cancelled", "refunded"],
             "transitions": [
                 {"from": "draft",     "to": "pending",   "tool": "retailops_submit_order",  "role": "Staff+",   "inventory": "none"},
-                {"from": "pending",   "to": "confirmed", "tool": "retailops_confirm_order", "role": "Manager+", "inventory": "DEDUCT per line item"},
+                {"from": "pending",   "to": "confirmed", "tool": "retailops_confirm_order", "role": "Manager+", "inventory": "DEDUCT per line item",
+                 "note": "409 insufficient_stock if any line exceeds available stock; stock never goes negative"},
                 {"from": "confirmed", "to": "paid",      "tool": "retailops_record_payment","role": "any",      "inventory": "none",
                  "note": "Auto-transition when total_paid >= total_amount"},
                 {"from": "paid",      "to": "shipped",   "tool": "retailops_ship_order",    "role": "Staff+",   "inventory": "none"},
@@ -750,6 +751,8 @@ def _build_skill_card(request):
             ],
             "key_rules": [
                 "Stock is ONLY deducted at confirm_order — not at create or submit.",
+                "Confirmation is refused (409 insufficient_stock) if any line exceeds available stock. "
+                "Stock can never go negative; receive inventory first, or reduce the order quantities.",
                 "Stock is restored at cancel_order and refund_order.",
                 "Once an order is paid, it can only be refunded (Admin only), never cancelled.",
                 "Delivered and refunded orders are terminal — no further transitions.",
@@ -773,7 +776,7 @@ def _build_skill_card(request):
             },
             "validation": {
                 "adjust_inventory_quantity": "Must be non-zero.",
-                "create_order_items":        "Must contain at least 1 item.",
+                "create_order_items":        "Must contain at least 1 item. Each product may appear on only one line -- use quantity for more than one. unit_price / line_total / tax_rate are server-derived and rejected if sent.",
                 "bulk_order_ids":            "Must be a non-empty list.",
                 "bulk_adjustments":          "Must be a non-empty list.",
                 "update_system_settings":    "At least one field must be provided.",
