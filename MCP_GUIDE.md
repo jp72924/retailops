@@ -424,7 +424,7 @@ STEP 1 — Find or create the customer
 2. **Creates the `FastMCP` app** with the server name and system instructions
 3. **Creates the shared `RetailOpsClient`** instance
 4. **Registers all tools, resources, and prompts** by calling each `register_*` function
-5. **Runs the server** with graceful shutdown (client connection pools are closed on exit)
+5. **Runs the server**, then releases the client connection pools on exit (best-effort — see the shutdown note below)
 
 ```python
 mcp = FastMCP(
@@ -447,6 +447,29 @@ mcp.run(transport=_transport)
 ```
 
 The `instructions` string is included in every MCP session initialization response. It tells the connected AI model what system it is talking to and what kinds of operations are available — serving the same role as a system prompt.
+
+**Shutdown and the shared client — read before changing it.** `RetailOpsClient` is
+created once at import and shared by all 59 tool closures, so its lifetime is the
+*process*, not the session. It is closed in a `finally` after `mcp.run()` returns,
+inside a `try`/`except` that logs at debug and swallows.
+
+That guard is load-bearing. The pooled connections are bound to the event loop
+`mcp.run()` owned and has already closed, so closing them afterwards raises
+`RuntimeError: Event loop is closed` on a normal shutdown. Left unguarded, every
+clean exit returns a non-zero status, which makes crashes indistinguishable from
+normal termination for any supervisor or MCP client that reads the exit code.
+
+> **Note:** The obvious-looking alternative — moving the close into a FastMCP
+> `lifespan` so it runs inside the server's own loop — is wrong here, and fails
+> in a way that is easy to miss. The low-level `Server` enters and exits its
+> lifespan around *each* session: `streamable_http_manager.py` calls
+> `app.run(...)` per session, and the SSE path calls `_mcp_server.run(...)` per
+> connection. Closing the shared pool there would tear it down when the first
+> client disconnects and break every subsequent client. Under stdio, where one
+> process serves one session, it would appear to work — so it tests clean on the
+> transport most people develop against and fails only in multi-client
+> deployments. If the pool ever needs a genuinely in-loop close, give each
+> session its own client rather than closing the shared one.
 
 ---
 
@@ -1232,6 +1255,13 @@ async def main():
 
 asyncio.run(main())
 ```
+
+> **Integrating a standalone agent runtime?** Tools such as PicoClaw, OpenClaw,
+> and Hermes Agent are long-running processes with their own config schema,
+> secret store, chat channels, and shell access. They connect as MCP clients
+> using the transports above, but the integration decisions — which RetailOps
+> role the agent holds, how its token is stored, how 59 tools fit its model's
+> context — are covered in `AGENT_INTEGRATION.md`.
 
 ---
 
