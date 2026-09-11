@@ -62,6 +62,8 @@ Kiosk project.
 
 ## Documentation
 
+- `ARCHITECTURE.md` - system architecture and cross-project interaction map
+- `MULTI_TENANCY.md` - multi-tenant SaaS feasibility study and migration path
 - `INSTALL.md` - local setup and developer workflow
 - `KIOSK_INTEGRATION.md` - connecting an external RetailOps Kiosk station
 - `DATABASE_CONFIGURATION.md` - SQLite, PostgreSQL, and Cloud SQL profiles
