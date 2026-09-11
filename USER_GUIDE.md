@@ -22,7 +22,7 @@ This guide walks you through the day-to-day use of RetailOps: how to log in, reg
 
 ## 1. Roles & What Each Can Do
 
-Every user in RetailOps is assigned one of three roles. Your role controls which buttons and pages you can access.
+Every human user in RetailOps is assigned one of three roles. Your role controls which buttons and pages you can access.
 
 | Action | Staff | Manager | Admin |
 |--------|:-----:|:-------:|:-----:|
@@ -30,6 +30,7 @@ Every user in RetailOps is assigned one of three roles. Your role controls which
 | Register and edit customers | Yes | Yes | Yes |
 | Change your own time-zone and language preferences | Yes | Yes | Yes |
 | Create a new sales order | Yes | Yes | Yes |
+| Delete a Draft order | Yes | Yes | Yes |
 | Submit an order for review (Draft → Pending) | Yes | Yes | Yes |
 | Record payments against confirmed orders | Yes | Yes | Yes |
 | Approve/confirm an order (Pending → Confirmed) | — | Yes | Yes |
@@ -39,10 +40,13 @@ Every user in RetailOps is assigned one of three roles. Your role controls which
 | Add or edit products | — | Yes | Yes |
 | Add or edit product categories | — | Yes | Yes |
 | Record manual stock adjustments | — | Yes | Yes |
-| Change system currency settings | — | Yes | Yes |
+| Set up recipient profiles (fraud-check allowlist) | — | Yes | Yes |
+| Change system currency, exchange-rate, and OCR settings | — | — | Yes |
 | Manage staff accounts | — | — | Yes |
 
 If you try to perform an action your role does not allow, the system will show a "Permission Denied" page.
+
+> You may notice a fourth role, **Kiosk**, listed when inviting a new user (Section 10). It exists only for the automated service accounts that power self-service kiosk terminals — it is not meant for a human account. Don't assign it when inviting a staff member.
 
 ---
 
@@ -52,8 +56,9 @@ If you try to perform an action your role does not allow, the system will show a
 
 1. Open RetailOps in your browser. You will land on the **Login** page automatically.
 2. Enter your **email address** and **password**.
-3. Click **Log In**.
-4. You will be taken to the **Dashboard**.
+3. Optionally tick **Remember me** to stay signed in after you close the browser; leave it unticked on a shared or public computer, and your session will end as soon as the browser closes.
+4. Click **Log In**.
+5. You will be taken to the **Dashboard**.
 
 If you see "Invalid email or password", double-check your credentials. Contact your Admin if you cannot log in.
 
@@ -82,7 +87,7 @@ The Dashboard is your home screen. It gives you a quick snapshot of the business
 - **Summary cards** at the top show orders this month, total revenue, payments outstanding, and how many products are running low on stock.
 - **Recent Orders** tab lists the five most recent orders with their current status.
 - **Inventory Alerts** tab lists products that have fallen below their low-stock threshold.
-- **Quick Actions** sidebar has shortcut buttons for the most common tasks: New Customer, New Order, Record Payment, Add Product.
+- **Quick Actions** sidebar has shortcut buttons for the most common destinations: **New Order**, **Register Customer**, **View Payments**, and **Inventory**. The last two jump to the Payments and Inventory list pages rather than opening a form directly — to record a payment, open the order it belongs to (Section 6); to add a product, open Inventory and click **Add Product** (Section 9).
 
 Use the navigation bar at the top to move between sections: **Dashboard**, **Orders**, **Customers**, **Inventory**, **Categories**, **Payments**, **Settings**, and (Admins only) **Users**.
 
@@ -117,6 +122,10 @@ Every order must be linked to a customer, so customers need to be registered bef
 4. Click **Save Customer**.
 5. You will be taken to the customer's profile page, which shows their contact details and full order history.
 
+### Registering a customer while creating an order
+
+You don't have to leave the order screen to register someone new. If you type an ID number on the New Order page and no match is found, click **+ New** next to the ID field — a short form appears (ID number, first name, last name, email, phone) that creates the customer and attaches them to the order in progress, without losing any line items you've already entered. It skips the address fields, so use the full form above if you need those on file. See Section 5, Step 1.
+
 ### Editing a customer
 
 1. From the customer list or their profile page, click **Edit**.
@@ -125,7 +134,7 @@ Every order must be linked to a customer, so customers need to be registered bef
 
 ### Searching for a customer
 
-On the Customers page, type a name or email into the search bar and press Enter. The list will filter to matching records.
+On the Customers page, type a name, email, phone number, or ID number into the search bar and press Enter. The list will filter to matching records.
 
 ### Deleting a customer
 
@@ -150,21 +159,20 @@ Each stage is described below.
 *Who can do this: Staff, Manager, Admin*
 
 1. Click **Orders** in the navigation bar, then click **New Order**.
-2. Select the **Customer** from the dropdown. If the customer is not listed, register them first (see Section 4).
+2. Enter the customer's **ID Number** in the lookup field. As soon as it matches, a mini-card confirms who it resolved to (name, email, phone, ID). If nothing matches, click **+ New** beside the field to register them on the spot — see Section 4, *Registering a customer while creating an order*.
 3. Add line items:
    - Click **Add Item**.
-   - Select a **Product** from the dropdown or type a SKU. The unit price will fill in automatically based on the product's current price.
-   - Enter the **Quantity**.
-   - Repeat for each product in the order.
+   - Select a **Product** from the dropdown. Its unit price fills in automatically and is not editable here — it always matches the product's current price at the moment the line is added, not something you type by hand.
+   - Enter the **Quantity** — this is also how you order more than one of the same product. Each product can appear on **only one line per order**; picking a product already on the order is rejected (its option is disabled in every other row).
+   - Repeat for each additional product in the order.
    - To remove a line, click the trash icon on that row.
 4. Optionally fill in:
    - **Discount** — a fixed amount to subtract from the subtotal.
-   - **Tax** — a fixed tax amount to add.
    - **Notes** — any internal notes about this order.
 5. Review the totals at the bottom of the line-items table.
 6. Click **Save Order**.
 
-The order is saved as a **Draft**. A unique order number is assigned automatically (format: `SO-YYYYMMDD-XXXX`). The order can still be edited freely while it is in Draft.
+The order is saved as a **Draft**. A unique order number is assigned automatically (format: `SO-YYYYMMDD-XXXX`). The order can still be edited freely while it is in Draft — including changing the customer — and a Draft can be permanently deleted from the Orders list if you decide not to proceed with it (no stock has been touched yet at this stage).
 
 ---
 
@@ -205,8 +213,8 @@ Once the order is confirmed, payment can be recorded:
 2. Click **Record Payment**. A payment form appears (either in a modal or a side panel).
 3. Fill in:
    - **Amount** — the amount received. You can record partial payments; the order moves to Paid only once the full amount is covered.
-   - **Payment Method** — Cash, Bank Transfer, Card, Check, or Other.
-   - **Reference Number** — a cheque number, bank transfer ID, etc. **Required** for Bank Transfer, Card, and Check; optional for Cash and Other.
+   - **Payment Method** — Cash, Mobile Payment, Bank Transfer, Card, Check, or Other.
+   - **Reference Number** — a cheque number, bank transfer ID, mobile-payment confirmation code, etc. **Required** for Bank Transfer, Card, and Check; optional for Cash, Mobile Payment, and Other.
    - **Notes** — optional internal note.
 4. Click **Save Payment**.
 
@@ -309,7 +317,7 @@ Click the **history icon** (or "View Movements" button) on any product row. A si
    - **Name** — the display name.
    - **Category** — select from the existing categories.
    - **Unit of Measure** — Piece, Kilogram, Liter, Meter, Box, or Pack.
-   - **Unit Price** — the default selling price. This can be overridden per order line.
+   - **Unit Price** — the selling price. Order lines always use whatever this is set to at the moment the product is added — it cannot be typed over on the order itself, so update it here if the price needs to change.
    - **Low Stock Threshold** — the quantity below which the system will flag this product as low stock. Default is 10.
    - **Description** — optional.
 3. Click **Save Product**.
@@ -374,13 +382,13 @@ Click **Users** in the navigation bar (visible to Admins only) to manage who has
 
 ### Inviting a new user
 
-1. On the Users page, click **Invite User**. A form appears.
+1. On the Users page, click **+ Invite New User**. A modal appears.
 2. Fill in:
    - **First Name** and **Last Name**.
    - **Email address** — this will be their login username.
-   - **Role** — Staff, Manager, or Admin.
-   - **Password** — set an initial password for them. Ask them to change it after first login.
-3. Click **Send Invite** (or Save, depending on the version).
+   - **Role** — choose **Staff**, **Manager**, or **Admin**. (The list also shows **Kiosk** — leave that one alone; it's reserved for automated kiosk-terminal accounts, not people. See the note in Section 1.)
+   - **Temporary Password** — set an initial password for them. Ask them to change it after first login.
+3. Click **Create User**.
 
 The user can now log in with the email and password you provided.
 
@@ -411,7 +419,7 @@ You cannot deactivate your own account.
 
 ## 11. Settings & Preferences
 
-Click **Settings** in the navigation bar. The page is split into two areas: personal preferences that apply only to you, and system-wide settings that only Admins and Managers can change.
+Click **Settings** in the navigation bar. The page is split into two areas: personal preferences that apply only to you, and system-wide settings that only Admins can change. If you are a Manager or Staff member, you will only see the personal-preferences area described below — the currency, exchange-rate, and OCR sections don't appear on your Settings page at all.
 
 ### Your personal preferences
 
@@ -422,9 +430,9 @@ Click **Settings** in the navigation bar. The page is split into two areas: pers
 
 Click **Save Preferences** to apply your changes. The new time-zone and language take effect on the next page you visit.
 
-### System currency settings (Manager / Admin)
+### System currency settings (Admin only)
 
-*Who can do this: Manager, Admin*
+*Who can do this: Admin only*
 
 These settings control how monetary amounts are displayed everywhere in RetailOps — the order list, order detail page, dashboard cards, payment records, and so on. They do **not** convert any of the prices already stored in the database; only the **display** changes.
 
@@ -481,13 +489,18 @@ External schedulers and AI agents can trigger the same update over the API:
 POST /api/v1/settings/secondary-rate/refresh/   (Manager or Admin token)
 ```
 
+> This API endpoint accepts a Manager's token, even though the **Update now**
+> button in the back office is only visible to Admins — the two surfaces are
+> gated independently, so a Manager can trigger a refresh over the API but not
+> from this page.
+
 > Until you enable auto-update, the exchange rate stays **static** — it keeps the
 > value you set until someone changes it. The kiosk PWA, if your business uses
 > one, has its own live-rate pipeline and is unaffected by this value.
 
-### Receipt OCR settings (Manager / Admin)
+### Receipt OCR settings (Admin only)
 
-*Who can do this: Manager, Admin*
+*Who can do this: Admin only*
 
 If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk, you can turn on automatic verification of the payment receipt screenshots customers upload. Verification is handled by a server-side proxy to **VEPay**, which reads the receipt image and reports back what it found (amount, date, reference, recipient) so RetailOps can check it against the order before accepting the payment.
 
@@ -511,27 +524,28 @@ If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk
 
 > Turning OCR off (unticking **Enable receipt OCR verification**) stops receipts from being checked, but the rest of the configuration — base URL, key, timeouts, method selection — stays on file so you can re-enable it later without re-entering everything.
 
-### Recipient profile validation (Manager / Admin)
+### Recipient profile validation (Manager / Admin to set up, Admin to enable)
 
-*Who can do this: Manager, Admin*
+*Who can set up profiles: Manager, Admin — who can turn the check on: Admin only*
 
 If your business accepts Mobile Payment or Bank Transfer through RetailOps Kiosk with receipt-screenshot verification, you can add an extra fraud check: RetailOps compares the **recipient** details that OCR reads off the screenshot against a list of your own known-good accounts — the recipient's phone number for Mobile Payment, or the recipient's bank account number for Bank Transfer, plus the bank and identification/document number in both cases. A screenshot that doesn't name one of these accounts as the recipient is rejected, even if everything else about it looks legitimate — this catches a customer paying into the wrong account (or someone else's account) and submitting that screenshot as if it were a valid payment to you.
 
-**Setting up recipient profiles:**
+**Setting up recipient profiles** *(Manager or Admin)*:
 
-1. On the **Settings** page, find **Manage Recipient Profiles** in the Receipt OCR Settings card and open it.
+1. The **Manage Recipient Profiles** link is only shown on the Settings page inside the Admin-only Receipt OCR Settings card, so today an Admin needs to open it for you, or send you the page's URL directly — a Manager who navigates there is fully able to create, edit, and manage profiles once on the page, but has no button of their own to get there.
 2. Click **+ New Profile** and fill in:
    - **Label** — an optional name to help you recognize the profile later (e.g. "Main store — BDV").
    - **Payment Method** — Mobile Payment or Bank Transfer. The form switches the next field automatically based on this choice:
      - **Mobile Payment** → **Recipient Phone** — the phone number your customers see when paying.
      - **Bank Transfer** → **Recipient Account Number** — the bank account number your customers transfer into.
    - **Recipient Bank**, **Recipient Document/ID Number** — both always required, regardless of payment method.
-3. Save. Add one profile per account/payment-method combination you accept payments into.
+   - **Primary for this payment method** — marks this as *the* profile to show customer-facing systems when more than one is registered for the same payment method (e.g. more than one Mobile Payment account). At most one profile per payment method can be primary: ticking it here automatically un-ticks whichever other profile currently holds it. If this is the only profile you have for a payment method, it is made primary for you automatically — you don't need to tick anything.
+3. Save. Add one profile per account/payment-method combination you accept payments into. The list marks the current primary of each payment method with a **★ Primary** badge.
 4. Profiles can be edited or marked **Active/Inactive** at any time; deactivating a profile keeps it on file for reference without using it for matching. Deleting a profile removes it permanently.
 
-**Turning on the check:**
+**Turning on the check** *(Admin only)*:
 
-Back on the Settings page, tick **Reject payments whose receipt recipient doesn't match a known-good profile** in the Receipt OCR Settings card and save. RetailOps will not let you enable this until at least one active recipient profile exists for at least one payment method.
+On the Settings page's Receipt OCR Settings card, tick **Reject payments whose receipt recipient doesn't match a known-good profile** and save. RetailOps will not let you enable this until at least one active recipient profile exists. A Manager can set up and maintain the profiles above, but only an Admin can flip this switch.
 
 > Recipient validation is independent of the existing amount/reference/date checks — it only looks at *who the money was sent to*. Small formatting differences (dashes in phone numbers or account numbers, accents in bank names, punctuation in document numbers) are normalized automatically, so profiles don't need to match the screenshot text exactly.
 
