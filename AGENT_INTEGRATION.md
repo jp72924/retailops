@@ -302,8 +302,9 @@ stock?" If you get a real answer back, it's connected end to end.
 
 ### Other runtimes
 
-OpenClaw and Hermes Agent aren't documented yet. Once they are, they'll
-follow this same structure.
+OpenClaw is validated and documented in Full Reference §10 — it doesn't
+have its own Quick Start yet, so follow §10 directly. Hermes Agent isn't
+documented yet; once it is, it'll follow this same structure.
 
 ---
 
@@ -615,6 +616,7 @@ scheduler, and includes a native MCP client.
 |---|---|
 | PicoClaw version | v0.3.1 |
 | Platform | Linux x86_64, systemd-based distribution (binaries also published for Windows, macOS, FreeBSD, Android, and ARM/RISC-V/MIPS/LoongArch) |
+| Minimum hardware | 1 shared vCPU / 1GB RAM — no memory pressure observed running alongside the RetailOps dev server |
 | Deployment | `systemd` service, dedicated system user (production); also validated running directly under the invoking user's own account, no service, no dedicated user (development) |
 | Transport | stdio |
 | Result | 59 tools, MCP protocol `2025-11-25`, server `RetailOps 1.28.1` |
@@ -1152,19 +1154,351 @@ those as diagnostic confirmation, not as the fix to ship.
 
 ### 10. Integration: OpenClaw
 
-**Status: not yet validated.**
+[OpenClaw](https://github.com/openclaw/openclaw) is a Node.js agent runtime
+distributed via `npm`, with a single JSON5 configuration file and native MCP
+client and server support. Three differences from §9 run through the rest of
+this section: its MCP server registration accepts a working directory
+natively, its default chat-channel authorization model is pairing rather
+than a pre-configured allowlist, and it ships its own cross-platform service
+installer instead of requiring a hand-written unit file.
 
-To complete this section, work through §2 and record the answers, then follow
-the same step structure used for PicoClaw:
+**Validated configuration — Linux**
 
-- [ ] Transports supported (stdio, SSE, streamable-HTTP)
-- [ ] Secret injection mechanism (`env` map, env file, external secret store)
-- [ ] Whether a per-server working directory is configurable, or whether
-      `PYTHONPATH` is needed as in §9 Step 5
-- [ ] Deferred / lazy tool loading support, and the default (§6)
-- [ ] Chat-channel allowlisting model
-- [ ] Which RetailOps role the runtime should hold (§4)
-- [ ] Verified tool count and MCP protocol version from the connectivity probe
+| Item | Value |
+|---|---|
+| OpenClaw version | 2026.9.4 |
+| Platform | Linux x86_64 |
+| Minimum hardware | 2 vCPU / 2GB RAM — the gateway process alone used ~370MB+ at idle; 1GB total was insufficient once combined with the RetailOps dev server, causing new SSH connections to the host to start failing under memory pressure |
+| Deployment | Running directly under the invoking user's own account, no service, no dedicated user (development only — each step below notes the production alternative) |
+| Transport | stdio |
+| Result | 59 tools against the RetailOps MCP server, Telegram pairing validated end to end, `Staff` role's `403` on order confirmation confirmed in the server log |
+| Validated | 2026-09-11 |
+
+Steps below default to the Linux layout you'd use for local development,
+with production and Windows alternatives called out where they differ.
+
+#### Step 1: Install OpenClaw
+
+```bash
+curl -fsSL https://openclaw.ai/install.sh | bash
+```
+
+Installs under your own account, no `sudo` required. The installer
+provisions Node.js 24 via NodeSource if it isn't already present, and — if
+the global `npm` prefix isn't writable without elevated privileges — falls
+back automatically to a user-local prefix (`~/.npm-global`), adding it to
+`PATH` in `~/.bashrc`. Open a new shell, or `source ~/.bashrc; hash -r`,
+then confirm:
+
+```bash
+openclaw --version
+```
+
+Expected: `OpenClaw 2026.9.4 (<build>)`.
+
+In production, install under a dedicated account instead — same command,
+same account-creation step as §9 Step 1; nothing about the OpenClaw
+installer itself changes.
+
+**On Windows:**
+
+```powershell
+iwr -useb https://openclaw.ai/install.ps1 | iex
+openclaw --version
+openclaw doctor
+```
+
+This installs the CLI directly; OpenClaw also publishes a GUI desktop
+installer, not used here since it doesn't fit this document's command-line
+flow. The Windows path above is documented by OpenClaw itself and was not
+independently re-verified for this integration the way the Linux steps
+were.
+
+#### Step 2: Configure the runtime (onboarding)
+
+OpenClaw keeps one configuration file, `~/.openclaw/openclaw.json` (JSON5),
+instead of PicoClaw's split `config.json` / `.security.yml`. The
+non-interactive onboarding flow writes it in one step:
+
+```bash
+openclaw onboard \
+  --non-interactive \
+  --accept-risk \
+  --flow quickstart \
+  --mode local \
+  --auth-choice openrouter-api-key \
+  --openrouter-api-key "<provider-api-key>" \
+  --gateway-bind loopback \
+  --skip-daemon \
+  --skip-channels
+
+openclaw models set openrouter/z-ai/glm-5.3-flash
+```
+
+Identical on Windows — no filesystem paths are involved.
+
+| Flag | Why |
+|---|---|
+| `--mode local` | Runs the gateway on this machine rather than pointing at a remote one. |
+| `--gateway-bind loopback` | Binds the gateway's WebSocket to `127.0.0.1` only — nothing on the network can reach it. |
+| `--skip-daemon` | Don't install a service yet; Step 7 covers that, dev and production separately. |
+| `--skip-channels` | Chat channels are configured in Step 6, after the MCP server exists. |
+
+With `--skip-daemon`, onboarding ends with a benign warning —
+`Gateway did not become reachable at ws://127.0.0.1:18789` — because no
+gateway process is running yet to reach. The configuration is written
+correctly regardless; there's nothing to fix here. The relevant parts of
+the result:
+
+```json
+{
+  "gateway": {
+    "mode": "local",
+    "port": 18789,
+    "bind": "loopback",
+    "auth": { "mode": "token", "token": "<generated>" }
+  },
+  "auth": {
+    "profiles": {
+      "openrouter:default": { "provider": "openrouter", "mode": "api_key" }
+    }
+  },
+  "agents": { "defaults": { "model": { "primary": "openrouter/auto" } } }
+}
+```
+
+(`models set`, run right after, updates `agents.defaults.model.primary` to
+the model you chose.)
+
+#### Step 3: Confirm secret storage
+
+Unlike PicoClaw, there's no separate secrets file to write by hand — the
+onboarding above already wrote the OpenRouter key and the gateway's auth
+token into `openclaw.json` and a state database under `~/.openclaw/state/`,
+both restricted to the owning account (`600`). Confirm:
+
+```bash
+openclaw secrets audit
+```
+
+Identical on Windows. This reports both values as `PLAINTEXT_FOUND` —
+expected, and the same protection level `.security.yml` gets in §9 Step 3.
+OpenClaw also offers an optional, team-scoped secret store
+(`openclaw secrets store set <name> --kind secret --value-file <path>`)
+that keeps values referenced rather than inlined in the config file; it
+wasn't used for this validated run and suits a shared, multi-operator
+deployment better than a single-account one.
+
+#### Step 4: Provision a RetailOps token
+
+Create a dedicated service account and mint its token in one step — same
+principle as §4/§5, adapted to also create the account if it doesn't exist
+yet:
+
+```bash
+cd /path/to/retailops
+.venv/bin/python manage.py shell -c "from core.models import User, Role; from rest_framework.authtoken.models import Token; role=Role.objects.get(name=Role.STAFF); user,_=User.objects.get_or_create(email='<agent-service-account>', defaults={'first_name':'OpenClaw','last_name':'Dev','role':role,'is_active':True}); user.set_unusable_password(); user.save(update_fields=['password']); token,_=Token.objects.get_or_create(user=user); print('token prefix', token.key[:6])"
+```
+
+`set_unusable_password()` means this account authenticates with its API
+token only — it can never log in through the web UI, matching a service
+account that should have no interactive session at all.
+
+**On Windows:**
+
+```bash
+cd /d "C:\path\to\retailops" && .venv\Scripts\python.exe manage.py shell -c "from core.models import User, Role; from rest_framework.authtoken.models import Token; role=Role.objects.get(name=Role.STAFF); user,_=User.objects.get_or_create(email='<agent-service-account>', defaults={'first_name':'OpenClaw','last_name':'Dev','role':role,'is_active':True}); user.set_unusable_password(); user.save(update_fields=['password']); token,_=Token.objects.get_or_create(user=user); print('token prefix', token.key[:6])"
+```
+
+#### Step 5: Register the RetailOps MCP server
+
+```bash
+openclaw mcp add retailops \
+  --command /path/to/retailops/.venv/bin/python \
+  --arg -m --arg mcp_server.server \
+  --cwd /path/to/retailops \
+  --env RETAILOPS_BASE_URL=http://127.0.0.1:8000/api/v1 \
+  --env RETAILOPS_API_TOKEN=<token-from-step-4> \
+  --env RETAILOPS_TIMEOUT=30
+```
+
+**Why `--cwd` instead of `PYTHONPATH`:** OpenClaw's `mcp add` accepts a
+working directory directly. `python -m mcp_server.server` resolves the
+package relative to that directory rather than to whatever `cwd` the
+gateway process happens to have, so the `PYTHONPATH` workaround §9 Step 5
+documents for PicoClaw is unnecessary here.
+
+**On Windows:**
+
+```powershell
+openclaw mcp add retailops `
+  --command C:\path\to\retailops\.venv\Scripts\python.exe `
+  --arg -m --arg mcp_server.server `
+  --cwd C:\path\to\retailops `
+  --env RETAILOPS_BASE_URL=http://127.0.0.1:8000/api/v1 `
+  --env RETAILOPS_API_TOKEN=<token-from-step-4> `
+  --env RETAILOPS_TIMEOUT=30
+```
+
+`mcp add` probes the server before saving, so a successful run already
+confirms connectivity — there's no separate "add, then test" split the way
+PicoClaw has. To re-check later, or from a different terminal:
+
+```bash
+openclaw mcp probe retailops
+```
+
+Expected: `retailops: 59 tools, resources, prompts, Codex approval auto` —
+the same underlying RetailOps MCP server PicoClaw validates, reached
+through a different client. Unlike PicoClaw's `mcp test`, this output
+doesn't include an MCP protocol version string, so this integration
+documents the tool count only. There's also no flag equivalent to
+PicoClaw's `--no-deferred`: OpenClaw has no deferred/lazy-loading mode for
+MCP servers — a registered server is probed and connected eagerly, always.
+
+`openclaw mcp doctor retailops --probe` additionally flags:
+
+```
+warning: env.RETAILOPS_API_TOKEN contains a literal sensitive value; prefer an environment-backed value outside committed config
+```
+
+Expected, given Step 3's default — the same class of finding `secrets
+audit` already reported for the OpenRouter key.
+
+#### Step 6: Connect a chat channel (Telegram)
+
+```bash
+openclaw channels add --channel telegram --token "<telegram-bot-token>"
+openclaw channels list
+```
+
+Identical on Windows. Expected:
+`Telegram default: installed, configured, enabled, token=***`.
+
+OpenClaw defaults to `dmPolicy: "pairing"` rather than PicoClaw's
+pre-configured `allow_from` allowlist — instead of listing an approved
+Telegram user ID up front, the bot pairs with whoever messages it first,
+with an explicit approval step. This step only registers the account;
+pairing itself happens in Step 8, once the gateway from Step 7 is actually
+running and polling.
+
+#### Step 7: Run
+
+Two long-running processes, in separate terminals — the RetailOps backend
+however you already run it (see `INSTALL.md`), and the gateway:
+
+```bash
+openclaw gateway run
+```
+
+For a background process that survives closing the terminal:
+
+```bash
+setsid nohup openclaw gateway --port 18790 > ~/openclaw-gateway.log 2>&1 < /dev/null &
+disown
+```
+
+**On Windows**, run `openclaw gateway run` in its own terminal window —
+there's no direct equivalent to `nohup`/`disown`; for something that
+survives closing the window, use the production installer below instead
+of trying to background it.
+
+In production, OpenClaw installs its own service, rather than the
+hand-written `systemd` unit §9 Step 7 uses for PicoClaw:
+
+```bash
+openclaw gateway install
+openclaw gateway status --json
+```
+
+This generates and starts a `systemd` unit on Linux, a `launchd` agent on
+macOS, or a Windows Scheduled Task — whichever applies to the machine it
+runs on. It wasn't exercised for this validated run (which used the
+foreground/`nohup` path above throughout), and its generated unit's
+hardening wasn't audited the way PicoClaw's hand-written one was — treat
+it as documented behavior from OpenClaw itself, not as independently
+verified here.
+
+**On Windows**, `openclaw gateway install` wraps a generated `gateway.cmd`
+script in a `gateway.vbs` launcher run from Task Scheduler, so the
+background gateway doesn't pop a visible console window. Stop it with:
+
+```powershell
+schtasks /end /tn "OpenClaw Gateway"
+```
+
+or PowerShell's `Stop-ScheduledTask`.
+
+#### Step 8: Verify
+
+Unlike §9, where `mcp test` (Step 6) checks connectivity independently of
+the chat channel, OpenClaw's Telegram channel can't respond — or issue a
+pairing code — until the gateway from Step 7 is actually running. That's
+why this integration's verification ladder comes last here instead of
+before "Run."
+
+Message the bot once. The first message from an unrecognized sender gets a
+pairing code instead of a reply:
+
+```text
+OpenClaw: access not configured.
+Your Telegram user id: <id>
+Pairing code: <code>
+Ask the bot owner to approve with:
+openclaw pairing approve telegram <code>
+```
+
+Approve it:
+
+```bash
+openclaw pairing list --channel telegram --account default
+openclaw pairing approve telegram <code>
+```
+
+Identical on Windows. The pending code exists only in the running gateway
+process's memory, not on disk — if the gateway restarts before you approve
+it, the code is gone and the sender has to message again for a new one.
+
+This ladder (§7) has been walked to rung 6 end to end, the same as
+PicoClaw's validated run: a real message returned the correct identity and
+role (`Staff`); a test customer and a test sales order were created
+through the Telegram channel; and attempting to confirm that order was
+blocked, with the real `403` confirmed in the RetailOps server log, not
+just the model's own account of what happened:
+
+```
+Forbidden: /api/v1/orders/2/confirm/
+"POST /api/v1/orders/2/confirm/ HTTP/1.1" 403 89
+```
+
+When the confirmation failed, the agent twice suggested being given a
+token with a higher role to complete it. Both suggestions were declined —
+see §4 and §8. That refusal, not the suggestion, is the correct outcome:
+the `Staff` role's boundary held exactly as configured.
+
+#### Production hardening — not independently verified
+
+Everything above was validated for a single-account development setup
+only — no dedicated system user, no reverse proxy, no supervisor beyond a
+bare `nohup`'d process. `openclaw gateway install` (Step 7) exists and is
+documented by OpenClaw, but its generated service definition wasn't
+hardening-audited here the way PicoClaw's hand-written `systemd` unit was
+in §9. Separately: PicoClaw's two Linux-specific gotchas (the
+inherited-`cwd` `.env` lookup failure, and the `ALLOWED_HOSTS` /
+`SECURE_SSL_REDIRECT` reverse-proxy bypass) are properties of the
+RetailOps Django backend under a multi-user, proxied topology — not of
+PicoClaw specifically — so they plausibly recur for OpenClaw under that
+same topology. That's a hypothesis, not a finding: it hasn't been tested
+against OpenClaw running as a dedicated system account behind a reverse
+proxy.
+
+#### OpenClaw troubleshooting
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Onboarding ends with `Gateway did not become reachable` | Expected with `--skip-daemon` — no gateway is running yet to probe | Ignore it; confirm the config directly with `cat ~/.openclaw/openclaw.json` or `openclaw config get gateway` |
+| `mcp doctor retailops --probe` warns about a literal value in `env.RETAILOPS_API_TOKEN` | Expected given Step 3's default plaintext storage | Ignore it for a single-account setup, or move the token into the team secret store (Step 3) |
+| A Telegram sender's pairing code no longer works | The gateway restarted after the code was issued but before it was approved — codes live in memory only | Have the sender message the bot again for a fresh code |
 
 ---
 
