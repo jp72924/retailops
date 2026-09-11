@@ -219,5 +219,11 @@ if __name__ == "__main__":
     try:
         mcp.run(transport=_transport)
     finally:
-        # Release the httpx connection pool on any exit
-        anyio.run(client.close)
+        # Best-effort pool release. The pooled connections are bound to the event
+        # loop mcp.run() owned and has already closed, so this can raise — and a
+        # failed cleanup must not turn a clean shutdown into a non-zero exit,
+        # which would make crashes indistinguishable from normal termination.
+        try:
+            anyio.run(client.close)
+        except Exception:
+            logger.debug("Connection pool cleanup skipped at shutdown", exc_info=True)

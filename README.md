@@ -68,6 +68,7 @@ Kiosk project.
 - `MEDIA_STORAGE_CONFIGURATION.md` - local, GCS, and S3-compatible media storage
 - `API_GUIDE.md` - REST API reference
 - `MCP_GUIDE.md` - MCP server integration
+- `AGENT_INTEGRATION.md` - connecting external agent runtimes to the MCP layer
 
 RetailOps can be deployed on Linux servers, PaaS platforms, or managed cloud
 environments as long as Django, PostgreSQL-compatible database settings, and
