@@ -1132,6 +1132,12 @@ disabling `SECURE_SSL_REDIRECT`, resolves either symptom individually but
 weakens a setting that protects all traffic, not just the agent's — treat
 those as diagnostic confirmation, not as the fix to ship.
 
+Both gotchas above are properties of the RetailOps backend under a
+multi-user, proxied topology, not of PicoClaw specifically — §10 confirms
+neither reproduces for OpenClaw, whose native `--cwd` MCP registration and
+a from-the-start proxied backend URL remove each precondition
+structurally.
+
 #### PicoClaw troubleshooting
 
 | Symptom | Cause | Fix |
@@ -1168,10 +1174,10 @@ installer instead of requiring a hand-written unit file.
 |---|---|
 | OpenClaw version | 2026.9.4 |
 | Platform | Linux x86_64 |
-| Minimum hardware | 2 vCPU / 2GB RAM — the gateway process alone used ~370MB+ at idle; 1GB total was insufficient once combined with the RetailOps dev server, causing new SSH connections to the host to start failing under memory pressure |
-| Deployment | Running directly under the invoking user's own account, no service, no dedicated user (development only — each step below notes the production alternative) |
+| Minimum hardware | 2 vCPU / 2GB RAM — the gateway process alone used ~370MB+ at idle; 1GB total was insufficient once combined with the RetailOps dev server, causing new SSH connections to the host to start failing under memory pressure. Under real Telegram traffic in a hardened production deployment the gateway settled around 470–520MB; production hardware itself wasn't separately stress-tested at the 2GB floor. |
+| Deployment | `systemd` service, dedicated system user (production — see Step 7; the built-in service installer does not work for this kind of account, see "Linux-specific gotchas"); also validated running directly under the invoking user's own account, no service, no dedicated user (development) |
 | Transport | stdio |
-| Result | 59 tools against the RetailOps MCP server, Telegram pairing validated end to end, `Staff` role's `403` on order confirmation confirmed in the server log |
+| Result | 59 tools against the RetailOps MCP server, Telegram pairing validated end to end, `Staff` role's `403` on order confirmation confirmed in the server log — validated in both a single-account development setup and a hardened, dedicated-account production deployment behind a reverse proxy; see "Linux-specific gotchas" for what did and didn't carry over from PicoClaw's own findings |
 | Validated | 2026-09-11 |
 
 Steps below default to the Linux layout you'd use for local development,
@@ -1270,6 +1276,23 @@ the result:
 (`models set`, run right after, updates `agents.defaults.model.primary` to
 the model you chose.)
 
+The `--flow quickstart` default selects a `tools.profile` of `"coding"`,
+which includes `terminal` (opens and drives a shell) and `process`
+(controls active exec sessions) — real command execution, reachable from
+any chat channel once one is connected, on by default. OpenClaw's own
+external documentation describes a tool literally named `exec` enabled
+under a `mode=full` default; no tool by that name exists in the actual
+catalog — `terminal`/`process` are what actually carry that risk. This is
+OpenClaw's equivalent of PicoClaw's `tools.exec` finding in §9 Step 2's
+table — review §8 before exposing the bot. Deny both explicitly:
+
+```bash
+echo '{"tools":{"deny":["exec","terminal","process"]}}' | openclaw config patch --stdin
+```
+
+`config patch` only accepts a patch via `--stdin` or `--file` — it rejects
+a JSON object passed as a positional argument.
+
 #### Step 3: Confirm secret storage
 
 Unlike PicoClaw, there's no separate secrets file to write by hand — the
@@ -1282,12 +1305,19 @@ openclaw secrets audit
 ```
 
 Identical on Windows. This reports both values as `PLAINTEXT_FOUND` —
-expected, and the same protection level `.security.yml` gets in §9 Step 3.
-OpenClaw also offers an optional, team-scoped secret store
+expected, and the same protection level `.security.yml` gets in §9 Step 3;
+`openclaw doctor` flags the same `gateway.auth.token` finding in a
+hardened production install too, with no change in severity. OpenClaw also
+offers an optional, team-scoped secret store
 (`openclaw secrets store set <name> --kind secret --value-file <path>`)
 that keeps values referenced rather than inlined in the config file; it
-wasn't used for this validated run and suits a shared, multi-operator
-deployment better than a single-account one.
+wasn't used for this validated run — reconsidered specifically for
+production, where a `secretRef` value takes the form
+`{"source": "env"|"file"|"exec"|"store", "provider": ..., "id": ...}` (all
+three fields required), and reaffirmed as not worth standing up a whole
+secrets provider for one credential already sitting in a
+`600`-permissioned file, the same reasoning that holds for a single-account
+deployment.
 
 #### Step 4: Provision a RetailOps token
 
@@ -1375,6 +1405,17 @@ openclaw channels list
 Identical on Windows. Expected:
 `Telegram default: installed, configured, enabled, token=***`.
 
+That's the quick path for a literal token. In production, read it from a
+restricted file instead:
+
+```bash
+openclaw channels add --channel telegram --token-file <path-to-token-file>
+```
+
+The flag is `--token-file` (kebab-case) — `--tokenFile`, the camelCase form
+the config schema's `tokenFile` field name would suggest, is not a
+recognized option and the CLI rejects it outright.
+
 OpenClaw defaults to `dmPolicy: "pairing"` rather than PicoClaw's
 pre-configured `allow_from` allowlist — instead of listing an approved
 Telegram user ID up front, the bot pairs with whoever messages it first,
@@ -1403,25 +1444,83 @@ there's no direct equivalent to `nohup`/`disown`; for something that
 survives closing the window, use the production installer below instead
 of trying to background it.
 
-In production, OpenClaw installs its own service, rather than the
-hand-written `systemd` unit §9 Step 7 uses for PicoClaw:
+In production, try OpenClaw's own service installer first — it generates
+and starts a `systemd` unit on Linux, a `launchd` agent on macOS, or a
+Windows Scheduled Task, whichever applies to the machine it runs on:
 
 ```bash
 openclaw gateway install
 openclaw gateway status --json
 ```
 
-This generates and starts a `systemd` unit on Linux, a `launchd` agent on
-macOS, or a Windows Scheduled Task — whichever applies to the machine it
-runs on. It wasn't exercised for this validated run (which used the
-foreground/`nohup` path above throughout), and its generated unit's
-hardening wasn't audited the way PicoClaw's hand-written one was — treat
-it as documented behavior from OpenClaw itself, not as independently
-verified here.
+Against a dedicated, non-interactive system account (the same kind of
+account §9 Step 1 creates for PicoClaw), this fails outright:
+
+```
+SERVICE_DEFINITION_UNKNOWN: Service definition cannot be safely inspected.
+```
+
+— even after enabling `systemd` lingering for that account
+(`loginctl enable-linger <agent-user>`) and exporting `XDG_RUNTIME_DIR` by
+hand. It wants an active systemd **user** session, which a non-interactive
+account can't structurally provide. See "Linux-specific gotchas" for the
+full finding.
+
+The validated production path is a hand-written `systemd` **system** unit
+instead — the same hardening §9 Step 7 uses for PicoClaw, pointed at
+OpenClaw:
+
+```ini
+[Unit]
+Description=OpenClaw agent runtime (RetailOps integration)
+After=network-online.target
+Wants=network-online.target
+# If RetailOps' own backend runs as a systemd unit too, add it here so
+# OpenClaw does not start before the API is reachable, e.g.:
+# After=network-online.target retailops.service
+
+[Service]
+Type=simple
+User=<agent-user>
+Group=<agent-user>
+WorkingDirectory=/home/<agent-user>
+ExecStart=/home/<agent-user>/.npm-global/bin/openclaw gateway run
+Restart=on-failure
+RestartSec=10
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/<agent-user>/.openclaw /home/<agent-user>/.cache
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Save as `/etc/systemd/system/openclaw.service`, then:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now openclaw.service
+sudo systemctl status openclaw.service
+journalctl -u openclaw.service -f
+```
+
+`~/.cache` in `ReadWritePaths` is not optional — see "Linux-specific
+gotchas" for what happens without it.
 
 **On Windows**, `openclaw gateway install` wraps a generated `gateway.cmd`
 script in a `gateway.vbs` launcher run from Task Scheduler, so the
-background gateway doesn't pop a visible console window. Stop it with:
+background gateway doesn't pop a visible console window — this integration
+didn't validate whether the same account-type restriction applies there.
+Stop it with:
 
 ```powershell
 schtasks /end /tn "OpenClaw Gateway"
@@ -1476,21 +1575,61 @@ token with a higher role to complete it. Both suggestions were declined —
 see §4 and §8. That refusal, not the suggestion, is the correct outcome:
 the `Staff` role's boundary held exactly as configured.
 
-#### Production hardening — not independently verified
+#### Linux-specific gotchas
 
-Everything above was validated for a single-account development setup
-only — no dedicated system user, no reverse proxy, no supervisor beyond a
-bare `nohup`'d process. `openclaw gateway install` (Step 7) exists and is
-documented by OpenClaw, but its generated service definition wasn't
-hardening-audited here the way PicoClaw's hand-written `systemd` unit was
-in §9. Separately: PicoClaw's two Linux-specific gotchas (the
-inherited-`cwd` `.env` lookup failure, and the `ALLOWED_HOSTS` /
-`SECURE_SSL_REDIRECT` reverse-proxy bypass) are properties of the
-RetailOps Django backend under a multi-user, proxied topology — not of
-PicoClaw specifically — so they plausibly recur for OpenClaw under that
-same topology. That's a hypothesis, not a finding: it hasn't been tested
-against OpenClaw running as a dedicated system account behind a reverse
-proxy.
+Both topologies in this section are now validated end to end: the
+single-account development setup above, and a hardened, dedicated-system-
+account production deployment behind a reverse proxy — the same kind of
+multi-user topology that surfaced PicoClaw's own two gotchas in §9.
+
+Retested directly against OpenClaw, neither of PicoClaw's gotchas
+reproduces:
+
+- The inherited-`cwd` `.env` lookup failure (§9 Gotcha 1) has no
+  OpenClaw-side trigger — `mcp add`'s native `--cwd` (Step 5) sets the
+  working directory explicitly at registration time, and the production
+  unit below also sets `WorkingDirectory=` unconditionally, so there's no
+  inherited, ambient `cwd` for anything to depend on in the first place.
+- The `ALLOWED_HOSTS`/`SECURE_SSL_REDIRECT` reverse-proxy bypass (§9
+  Gotcha 2) has no OpenClaw-side trigger either — `RETAILOPS_BASE_URL` was
+  pointed at the backend's real public domain over `https://`, through the
+  proxy, from the first production step, so the loopback-bypass condition
+  that causes it never existed.
+
+Neither absence means OpenClaw is immune to backend misconfiguration in
+general — it means these two specific failure modes have no precondition
+to trigger under OpenClaw's own architecture and the setup this
+integration uses.
+
+**Gotcha: the built-in service installer fails under a dedicated,
+non-interactive account.**
+
+```
+SERVICE_DEFINITION_UNKNOWN: Service definition cannot be safely inspected.
+```
+
+`openclaw gateway install` (Step 7) produces this against a `nologin`
+system account, even with `systemd` lingering enabled
+(`loginctl enable-linger <agent-user>`) and `XDG_RUNTIME_DIR` exported by
+hand. It expects an active systemd **user** session (`systemctl --user`),
+which a non-interactive service account can't structurally provide
+regardless of those workarounds. Fix: use the hand-written system unit in
+Step 7 instead — the validated production path for this integration, not
+a fallback.
+
+**Gotcha: the gateway needs `~/.cache` writable, not just `~/.openclaw`.**
+
+Under `ProtectSystem=strict` with only `~/.openclaw` in `ReadWritePaths`,
+the unit crash-loops:
+
+```
+[openclaw] Reason: Unsafe fallback OpenClaw temp dir: /home/<agent-user>/.cache/openclaw-<uid>
+```
+
+OpenClaw writes its own temp files under the XDG cache directory,
+independent of the config/workspace root. Fix: add
+`/home/<agent-user>/.cache` to `ReadWritePaths` alongside
+`/home/<agent-user>/.openclaw`, as shown in Step 7.
 
 #### OpenClaw troubleshooting
 
