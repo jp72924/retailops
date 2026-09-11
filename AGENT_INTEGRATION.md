@@ -28,11 +28,11 @@ extends, or debugs this integration.
 
 ### Install PicoClaw
 
-```bash
-sudo useradd --system --create-home --shell /usr/sbin/nologin <agent-user>
-```
+`<agent-user>` throughout this guide is whichever account runs PicoClaw —
+your own account for local development, or a dedicated one for production.
 
-Then, as `<agent-user>`, download the release, verify it, and extract it:
+Download the release, verify it, and extract it — works under your own
+account, nothing else to set up first:
 
 ```bash
 curl -LO https://github.com/sipeed/picoclaw/releases/download/v0.3.1/picoclaw_Linux_x86_64.tar.gz
@@ -41,6 +41,13 @@ sha256sum -c --ignore-missing picoclaw_0.3.1_checksums.txt
 mkdir -p ~/picoclaw/bin
 tar xzf picoclaw_Linux_x86_64.tar.gz -C ~/picoclaw/bin
 ~/picoclaw/bin/picoclaw version
+```
+
+In production, isolate the agent under its own account instead, then run
+the same commands as that user:
+
+```bash
+sudo useradd --system --create-home --shell /usr/sbin/nologin <agent-user>
 ```
 
 On Windows:
@@ -181,6 +188,28 @@ fails with a missing-module error.
 
 ### Run it
 
+Two long-running processes, in separate terminals:
+
+```bash
+cd /path/to/retailops && .venv/bin/python manage.py runserver
+```
+
+```bash
+picoclaw gateway
+```
+
+On Windows, the same two commands, in separate terminals:
+
+```bash
+cd /d "C:\path\to\retailops" && .venv\Scripts\python.exe manage.py runserver
+```
+
+```bash
+picoclaw gateway
+```
+
+In production, run PicoClaw under a supervisor instead of a bare terminal:
+
 ```ini
 [Unit]
 Description=PicoClaw agent runtime (RetailOps integration)
@@ -220,27 +249,8 @@ sudo systemctl enable --now picoclaw.service
 sudo systemctl status picoclaw.service
 ```
 
-RetailOps itself keeps running however you already run it (see `INSTALL.md`).
-
-Without a service, for a quick check:
-
-```bash
-cd /path/to/retailops && .venv/bin/python manage.py runserver
-```
-
-```bash
-picoclaw gateway
-```
-
-On Windows, the same two commands, in separate terminals:
-
-```bash
-cd /d "C:\path\to\retailops" && .venv\Scripts\python.exe manage.py runserver
-```
-
-```bash
-picoclaw gateway
-```
+RetailOps itself keeps running however you already run it in production too
+(see `INSTALL.md`).
 
 ### Confirm it works
 
@@ -605,7 +615,7 @@ scheduler, and includes a native MCP client.
 |---|---|
 | PicoClaw version | v0.3.1 |
 | Platform | Linux x86_64, systemd-based distribution (binaries also published for Windows, macOS, FreeBSD, Android, and ARM/RISC-V/MIPS/LoongArch) |
-| Deployment | `systemd` service, dedicated system user, no group overlap with the RetailOps application user |
+| Deployment | `systemd` service, dedicated system user (production); also validated running directly under the invoking user's own account, no service, no dedicated user (development) |
 | Transport | stdio |
 | Result | 59 tools, MCP protocol `2025-11-25`, server `RetailOps 1.28.1` |
 | Validated | 2026-09-10 |
@@ -637,16 +647,9 @@ platform tarball substituted — the configuration itself is identical.
 
 #### Step 1: Install PicoClaw
 
-PicoClaw runs as a dedicated system account, not the account you log in as —
-this is what exposed the findings in "Linux-specific gotchas" below, which a
-single-account setup cannot surface. Create it first:
-
-```bash
-sudo useradd --system --create-home --shell /usr/sbin/nologin <agent-user>
-```
-
-Then, as `<agent-user>`, download the release asset for your platform along
-with the checksums file, and verify before extracting:
+Download the release asset for your platform along with the checksums file,
+and verify before extracting — this works under your own account, nothing
+else to set up first:
 
 ```bash
 curl -LO https://github.com/sipeed/picoclaw/releases/download/v0.3.1/picoclaw_Linux_x86_64.tar.gz
@@ -664,6 +667,16 @@ tar xzf picoclaw_Linux_x86_64.tar.gz -C ~/picoclaw/bin
 
 The archive contains `picoclaw` (CLI and gateway) and `picoclaw-launcher`
 (optional web dashboard).
+
+In production, isolate PicoClaw under a dedicated account instead of
+running it as yourself — this is what exposed the findings in
+"Linux-specific gotchas" below, which a single-account setup never
+exercises. Create the account, then run the same commands above as that
+user:
+
+```bash
+sudo useradd --system --create-home --shell /usr/sbin/nologin <agent-user>
+```
 
 **On Windows:**
 
@@ -944,11 +957,35 @@ assumes going forward.
 
 #### Step 7: Run
 
-Running PicoClaw under a supervisor is what the Linux run used, and it is
-also what prevents Gotcha 1 below (the inherited-`cwd` `.env` failure) from
-ever occurring, because `systemd` always sets an explicit `WorkingDirectory`
-instead of passing through whatever `cwd` the invoking process happened to
-have.
+Two long-running processes, in separate terminals:
+
+```bash
+cd /path/to/retailops && .venv/bin/python manage.py runserver
+```
+
+```bash
+picoclaw gateway
+```
+
+**On Windows** — the same two processes, in separate terminals:
+
+```bash
+cd /d "C:\path\to\retailops" && .venv\Scripts\python.exe manage.py runserver
+```
+
+```bash
+picoclaw gateway
+```
+
+The gateway starts the chat channels and the MCP connections. Without the Django
+server, every RetailOps tool *call* fails with a connection error even though
+registration succeeded.
+
+**In production**, run PicoClaw under a supervisor instead of a bare
+terminal — this is also what prevents Gotcha 1 below (the inherited-`cwd`
+`.env` failure) from ever occurring, because `systemd` always sets an
+explicit `WorkingDirectory` instead of passing through whatever `cwd` the
+invoking process happened to have.
 
 Create `/etc/systemd/system/picoclaw.service`:
 
@@ -998,45 +1035,20 @@ journalctl -u picoclaw.service -f
 ```
 
 The RetailOps backend is still a separate long-running process, supervised
-however you already run it:
+however you already run it in production too:
 
 ```bash
 cd /path/to/retailops
 .venv/bin/python manage.py runserver
 ```
 
-**Ad hoc, without a service** (fine for a quick first check, not how the
-validated run was operated day to day):
-
-```bash
-cd /path/to/retailops && .venv/bin/python manage.py runserver
-```
-
-```bash
-picoclaw gateway
-```
-
-**On Windows** — two long-running processes, in separate terminals:
-
-```bash
-cd /d "C:\path\to\retailops" && .venv\Scripts\python.exe manage.py runserver
-```
-
-```bash
-picoclaw gateway
-```
-
-The gateway starts the chat channels and the MCP connections. Without the Django
-server, every RetailOps tool *call* fails with a connection error even though
-registration succeeded.
-
 #### Linux-specific gotchas
 
 Two findings surfaced only when running PicoClaw as a dedicated system user
 (`useradd --system --create-home --shell /usr/sbin/nologin`) with no group
-overlap with the RetailOps application user. A single-account setup — Windows
-included — never exercises the multi-user boundary that triggers either of
-them.
+overlap with the RetailOps application user. A single-account setup — the
+development path above, and Windows — never exercises the multi-user
+boundary that triggers either of them.
 
 **Gotcha 1: an inherited `cwd` breaks the `mcp` library's own `.env` lookup,
 not just the `mcp_server` import.**
@@ -1087,8 +1099,10 @@ on loopback (e.g. `http://127.0.0.1:8000/api/v1`) while real client traffic to
 that same backend goes through a reverse proxy (Caddy, nginx) that terminates
 TLS and sets `Host` and `X-Forwarded-Proto` — this is the proxy in front of
 the RetailOps REST API itself, not the proxy `MCP_GUIDE.md` §16 describes for
-a *remote MCP transport*; the two are unrelated. Bypassing that proxy
-produces one of two symptoms, both from the same cause:
+a *remote MCP transport*; the two are unrelated. The development setup
+above does not exhibit this — `manage.py runserver` on its own has no proxy
+to bypass. Bypassing that proxy in production produces one of two symptoms,
+both from the same cause:
 
 - A generic HTML `400` page, no server-side traceback — Django's
   `DisallowedHost` check rejects the loopback request's `Host` header and logs
