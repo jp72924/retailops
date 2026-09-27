@@ -192,6 +192,25 @@ converted to primary currency using the configured secondary exchange rate and
 compared to the order total. A wrong rate therefore fails every receipt
 checkout with an `amount_usd` mismatch.
 
+The rate is read once, when checkout begins, and the payment is recorded with
+that same rate — so a rate refresh that lands while the receipt is being read
+changes neither the validation nor what is stored. The checkout response's
+`receipt`, and `GET /api/v1/kiosk/receipt/<order_id>/`, report it:
+
+```json
+"currency": {
+  "code": "USD", "symbol": "$", "decimal_places": 2,
+  "secondary": {"code": "VES", "symbol": "Bs.", "decimal_places": 2,
+                "rate": "50.00000000", "rate_as_of": "2026-05-03T12:00:00Z",
+                "rate_source": "fetched"}
+},
+"amount_secondary": "500.00"
+```
+
+Both are fixed for the life of the payment; later rate changes do not affect
+them. `secondary` and `amount_secondary` are `null` when no secondary currency
+was in effect.
+
 ### Recipient profile validation (optional)
 
 With OCR enabled, RetailOps can additionally verify that a receipt's OCR-detected

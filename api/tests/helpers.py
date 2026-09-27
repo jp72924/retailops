@@ -18,8 +18,34 @@ from core.models import (
     Role,
     SalesOrder,
     SalesOrderItem,
+    SystemSettings,
     User,
 )
+
+
+def set_currency(**overrides):
+    """
+    Set the live currency configuration and return the settings row.
+
+    Defaults to USD with bolívares as the secondary currency at 50 Bs per
+    dollar, so a 10.00 payment is Bs 500.00.
+    """
+    settings = SystemSettings.get()
+    values = {
+        'currency_code': 'USD',
+        'currency_symbol': '$',
+        'decimal_places': 2,
+        'secondary_currency_enabled': True,
+        'secondary_currency_code': 'VES',
+        'secondary_currency_symbol': 'Bs.',
+        'secondary_decimal_places': 2,
+        'secondary_exchange_rate': Decimal('50'),
+    }
+    values.update(overrides)
+    for name, value in values.items():
+        setattr(settings, name, value)
+    settings.save()
+    return settings
 
 
 def make_role(name):

@@ -3,7 +3,12 @@ from decimal import Decimal
 from django.utils import timezone
 from rest_framework import serializers
 
+from drf_spectacular.utils import extend_schema_field
+
 from core.models import Payment, SalesOrder, SystemSettings
+from api.serializers.currency import (
+    RecordedCurrencySerializer, recorded_currency_payload, secondary_amount_payload,
+)
 
 
 RECEIPT_PAYMENT_METHODS = {Payment.MOBILE_PAYMENT, Payment.BANK_TRANSFER}
@@ -78,6 +83,8 @@ class PaymentSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     recorded_by_name = serializers.SerializerMethodField()
+    currency = serializers.SerializerMethodField()
+    amount_secondary = serializers.SerializerMethodField()
     receipt_image = serializers.ImageField(
         required=False,
         allow_null=True,
@@ -91,7 +98,7 @@ class PaymentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'payment_number',
             'sales_order', 'sales_order_number',
-            'amount',
+            'amount', 'amount_secondary', 'currency',
             'payment_method', 'payment_method_display',
             'status', 'status_display',
             'reference_number',
@@ -111,6 +118,16 @@ class PaymentSerializer(serializers.ModelSerializer):
 
     def get_recorded_by_name(self, obj) -> str:
         return obj.recorded_by.get_full_name() or obj.recorded_by.email
+
+    @extend_schema_field(RecordedCurrencySerializer)
+    def get_currency(self, obj):
+        """The currency and exchange rate the payment was recorded with. Never changes."""
+        return recorded_currency_payload(obj.currency_snapshot)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_amount_secondary(self, obj):
+        """`amount` in the secondary currency at the recorded rate; null if none was in effect."""
+        return secondary_amount_payload(obj.amount, obj.currency_snapshot)
 
     def validate_sales_order(self, order):
         if order.status != SalesOrder.CONFIRMED:

@@ -84,7 +84,7 @@
             <td>{{ order.created_at|date:"M j, Y" }}</td>
             <td><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
             <td>{{ order.items.count }}</td>
-            <td><strong>{{ order.total_amount|currency }}</strong></td>
+            <td><strong>{{ order|order_money:"total" }}</strong></td>
             <td><a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a></td>
           </tr>
           {% endfor %}

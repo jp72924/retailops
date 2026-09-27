@@ -54,6 +54,13 @@ def _domain_error_response(exc):
     return Response(_domain_error_payload(exc), status=status.HTTP_409_CONFLICT)
 
 
+def _payments_with_currency():
+    return Prefetch(
+        'payments',
+        queryset=Payment.objects.select_related('currency_snapshot'),
+    )
+
+
 def _annotated_orders():
     """
     Base queryset for orders with the _amount_paid annotation baked in.
@@ -71,6 +78,11 @@ def _annotated_orders():
     Product.current_stock -- a plain @property that fires one aggregate per
     call, and which the serializer calls three times per product
     (current_stock, is_low_stock, is_out_of_stock).
+
+    The payments prefetch carries each payment's currency snapshot: the
+    order's secondary-currency figures are summed from its payments at their
+    recorded rates. It is one query per page, not per row, and a prefetch
+    never touches the pagination COUNT.
     """
     money = DecimalField(max_digits=12, decimal_places=2)
     confirmed_payment_total = (
@@ -84,7 +96,8 @@ def _annotated_orders():
         SalesOrder.objects
         .select_related('customer', 'created_by', 'confirmed_by')
         .prefetch_related(
-            Prefetch('items__product', queryset=_annotated_products().order_by())
+            Prefetch('items__product', queryset=_annotated_products().order_by()),
+            _payments_with_currency(),
         )
         .annotate(
             _amount_paid=Coalesce(
@@ -417,7 +430,7 @@ class OrderViewSet(
                 order = (
                     SalesOrder.objects
                     .select_related('customer', 'created_by', 'confirmed_by')
-                    .prefetch_related('items__product')
+                    .prefetch_related('items__product', _payments_with_currency())
                     .get(pk=oid)
                 )
             except SalesOrder.DoesNotExist:

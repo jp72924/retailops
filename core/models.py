@@ -9,6 +9,16 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.exceptions import EmptyOrderError, OrderStateError
+from core.services.currency import (
+    CONVERSION_RULE_V1,
+    RATE_SOURCE_BACKFILLED,
+    RATE_SOURCE_FETCHED,
+    RATE_SOURCE_MANUAL,
+    RATE_SOURCE_UNKNOWN,
+    CurrencyContext,
+    current_context,
+    normalize_rate,
+)
 
 
 # ─── SequenceCounter ─────────────────────────────────────────────────────────
@@ -469,6 +479,95 @@ class SalesOrderItem(models.Model):
         return f'{self.sales_order.order_number} — {self.product.sku} × {self.quantity}'
 
 
+# ─── CurrencySnapshot ─────────────────────────────────────────────────────────
+
+class CurrencySnapshotManager(models.Manager):
+    def intern(self, ctx):
+        """Return the snapshot row for `ctx`, creating it on first use."""
+        snapshot, _ = self.get_or_create(
+            fingerprint=ctx.fingerprint(),
+            defaults=ctx.model_fields(),
+        )
+        return snapshot
+
+
+class CurrencySnapshot(models.Model):
+    """
+    The currency and exchange rate a payment was recorded under.
+
+    Immutable and interned: payments recorded under an identical configuration
+    share one row, found by `fingerprint`, so the table grows with rate
+    updates rather than with payments. See core/services/currency.py.
+
+    `fingerprint` is a hash rather than a composite unique constraint because
+    `rate_as_of` is nullable, and NULLs are distinct in unique constraints on
+    both SQLite and PostgreSQL. A duplicate row would be harmless — identical
+    meaning, one wasted row — so the hash is a deduplication key, not an
+    integrity mechanism.
+    """
+    RATE_SOURCE_CHOICES = [
+        (RATE_SOURCE_FETCHED, _('Fetched from the rate source')),
+        (RATE_SOURCE_MANUAL, _('Entered manually')),
+        (RATE_SOURCE_UNKNOWN, _('Unknown')),
+        (RATE_SOURCE_BACKFILLED, _('Approximate, assigned when rate tracking began')),
+    ]
+
+    currency_code = models.CharField(max_length=3)
+    currency_symbol = models.CharField(max_length=4)
+    decimal_places = models.PositiveSmallIntegerField()
+    secondary_currency_enabled = models.BooleanField()
+    secondary_currency_code = models.CharField(max_length=3, blank=True)
+    secondary_currency_symbol = models.CharField(max_length=4, blank=True)
+    secondary_decimal_places = models.PositiveSmallIntegerField()
+    secondary_exchange_rate = models.DecimalField(max_digits=20, decimal_places=8)
+    rate_as_of = models.DateTimeField(null=True, blank=True)
+    rate_source = models.CharField(max_length=20, choices=RATE_SOURCE_CHOICES)
+    conversion_rule = models.CharField(max_length=20, default=CONVERSION_RULE_V1)
+    fingerprint = models.CharField(max_length=64, unique=True, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = CurrencySnapshotManager()
+
+    class Meta:
+        verbose_name = 'Currency Snapshot'
+
+    def as_context(self):
+        return CurrencyContext.build(
+            currency_code=self.currency_code,
+            currency_symbol=self.currency_symbol,
+            decimal_places=self.decimal_places,
+            secondary_currency_enabled=self.secondary_currency_enabled,
+            secondary_currency_code=self.secondary_currency_code,
+            secondary_currency_symbol=self.secondary_currency_symbol,
+            secondary_decimal_places=self.secondary_decimal_places,
+            secondary_exchange_rate=self.secondary_exchange_rate,
+            rate_as_of=self.rate_as_of,
+            rate_source=self.rate_source,
+            conversion_rule=self.conversion_rule,
+        )
+
+    def save(self, *args, **kwargs):
+        # Guards the ORM instance path only; QuerySet.update() and loaddata
+        # bypass it. The real protection is PROTECT on every referencing FK
+        # plus a read-only admin.
+        if not self._state.adding:
+            raise ValueError('Currency snapshots are immutable.')
+        if not self.fingerprint:
+            self.fingerprint = self.as_context().fingerprint()
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValueError('Currency snapshots are immutable.')
+
+    def __str__(self):
+        if not self.secondary_currency_enabled:
+            return self.currency_code
+        return (
+            f'{self.currency_code} → {self.secondary_currency_code} '
+            f'@ {self.secondary_exchange_rate}'
+        )
+
+
 # ─── Payment ──────────────────────────────────────────────────────────────────
 
 def receipt_image_upload_path(instance, filename):
@@ -528,6 +627,17 @@ class Payment(models.Model):
         related_name='recorded_payments',
     )
     notes = models.TextField(blank=True)
+    # The currency and rate in effect when the payment was recorded. Set once
+    # in save() and never changed: that is what keeps a payment's value in the
+    # secondary currency fixed while the live rate moves. Not indexed — nothing
+    # queries payments by snapshot; joins run payment -> snapshot primary key.
+    currency_snapshot = models.ForeignKey(
+        CurrencySnapshot,
+        on_delete=models.PROTECT,
+        related_name='+',
+        db_index=False,
+        editable=False,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -544,6 +654,13 @@ class Payment(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        # Freeze before the payment number: generating it takes the sequence
+        # row lock for the rest of the enclosing transaction, and there is no
+        # reason to hold it across the snapshot lookup. A caller that already
+        # validated against a specific configuration (kiosk checkout) assigns
+        # the snapshot itself and is respected.
+        if self._state.adding and self.currency_snapshot_id is None:
+            self.currency_snapshot = CurrencySnapshot.objects.intern(current_context())
         if not self.payment_number:
             self.payment_number = self._generate_payment_number()
         super().save(*args, **kwargs)
@@ -614,6 +731,13 @@ class InventoryMovement(models.Model):
 
 # ─── SystemSettings ───────────────────────────────────────────────────────────
 
+PRIMARY_CURRENCY_LOCKED_MESSAGE = _(
+    'The primary currency cannot be changed once orders or payments exist. '
+    'Prices and recorded amounts are stored as numbers in this currency, so '
+    'changing it would re-label all of them without converting any.'
+)
+
+
 class SystemSettings(models.Model):
     """
     Singleton model for system-wide configuration.
@@ -643,6 +767,18 @@ class SystemSettings(models.Model):
         help_text='Dotted path to the numeric rate in the source JSON, e.g. "promedio" or "data.rate".',
     )
     secondary_rate_updated_at = models.DateTimeField(null=True, blank=True)
+    # Whether the current rate came from the rate source or was typed in.
+    # Copied into every CurrencySnapshot so a recorded payment says where its
+    # rate came from, not just when it was set.
+    secondary_rate_source = models.CharField(
+        max_length=20,
+        choices=[
+            (RATE_SOURCE_FETCHED, _('Fetched from the rate source')),
+            (RATE_SOURCE_MANUAL, _('Entered manually')),
+            (RATE_SOURCE_UNKNOWN, _('Unknown')),
+        ],
+        default=RATE_SOURCE_UNKNOWN,
+    )
 
     ocr_enabled = models.BooleanField(default=False)
     ocr_provider = models.CharField(
@@ -666,7 +802,39 @@ class SystemSettings(models.Model):
         verbose_name = 'System Settings'
         verbose_name_plural = 'System Settings'
 
+    @staticmethod
+    def currency_code_locked():
+        """
+        True once any order or payment exists.
+
+        Every stored amount — product prices, order totals, payments — is a bare
+        number in the primary currency. Changing the code (USD to EUR) would not
+        convert any of them; it would re-label all of them. Symbol and decimal
+        changes stay allowed: recorded payments keep their own snapshot.
+        """
+        return SalesOrder.objects.exists() or Payment.objects.exists()
+
+    def primary_currency_change_error(self):
+        """The error to raise if this save would change a locked currency code."""
+        if self.pk is None:
+            return None
+        stored = (
+            type(self).objects.filter(pk=self.pk)
+            .values_list('currency_code', flat=True)
+            .first()
+        )
+        if stored is None:
+            return None
+        if (stored or '').upper() == (self.currency_code or '').upper():
+            return None
+        if not self.currency_code_locked():
+            return None
+        return PRIMARY_CURRENCY_LOCKED_MESSAGE
+
     def clean(self):
+        currency_error = self.primary_currency_change_error()
+        if currency_error:
+            raise ValidationError({'currency_code': currency_error})
         if self.secondary_currency_enabled:
             if not self.secondary_currency_symbol.strip():
                 raise ValidationError({
@@ -698,9 +866,52 @@ class SystemSettings(models.Model):
                 'delete_receipt_image_after_days': 'Must be greater than zero.'
             })
 
-    def save(self, *args, **kwargs):
+    def save(self, force_insert=False, force_update=False, using=None, update_fields=None):
         self.pk = 1
-        super().save(*args, **kwargs)
+        update_fields = self._stamp_manual_rate_change(update_fields)
+        super().save(
+            force_insert=force_insert,
+            force_update=force_update,
+            using=using,
+            update_fields=update_fields,
+        )
+
+    def _stamp_manual_rate_change(self, update_fields):
+        """
+        Record when and how the rate changed if the caller did not say.
+
+        Only the rate fetcher (core/services/bcv.py) sets
+        `secondary_rate_updated_at`; the settings form, the API, the admin and
+        `manage.py init` change the rate without touching it. Left alone, a
+        hand-typed rate would carry the timestamp of the last automatic fetch,
+        and every payment recorded under it would inherit that false
+        provenance. Any rate change that arrives without a new timestamp is
+        therefore stamped now and marked manual.
+        """
+        if update_fields is not None:
+            update_fields = set(update_fields)
+            if 'secondary_exchange_rate' not in update_fields:
+                return update_fields
+
+        stored = (
+            type(self).objects.filter(pk=self.pk)
+            .values('secondary_exchange_rate', 'secondary_rate_updated_at')
+            .first()
+        )
+        if stored is None or self.secondary_exchange_rate is None:
+            return update_fields
+
+        rate_changed = (
+            normalize_rate(self.secondary_exchange_rate)
+            != normalize_rate(stored['secondary_exchange_rate'])
+        )
+        caller_stamped = self.secondary_rate_updated_at != stored['secondary_rate_updated_at']
+        if rate_changed and not caller_stamped:
+            self.secondary_rate_updated_at = timezone.now()
+            self.secondary_rate_source = RATE_SOURCE_MANUAL
+            if update_fields is not None:
+                update_fields |= {'secondary_rate_updated_at', 'secondary_rate_source'}
+        return update_fields
 
     def __str__(self):
         return f'System Settings ({self.currency_code})'

@@ -18,7 +18,63 @@
   `transaction_key` (or manual override `notes`). A request missing both now
   reports both in a single response instead of surfacing them one at a time.
 
+- **The primary `currency_code` can no longer change once any order or payment
+  exists.** `PATCH /api/v1/settings/`, the Settings page and the admin reject it
+  with a `currency_code` error. Every stored amount — product prices, order
+  totals, payments — is a bare number in the primary currency, so the change
+  never converted anything: it silently re-labelled all of it, turning a $10
+  product into €10. The symbol, the decimals and the whole secondary currency
+  remain editable.
+
+### Added
+
+- **Payments record the currency and exchange rate they were made at.** Until
+  now the currency identity and the BCV rate lived only in `SystemSettings`, so
+  editing the symbol or refreshing the rate restated every historical payment —
+  a sale paid in bolívares last month was shown at today's rate. Each payment
+  now references a `CurrencySnapshot` holding the primary and secondary currency
+  and the rate in effect when it was recorded, and keeps it.
+
+  Snapshots are immutable and shared: every payment recorded under the same
+  configuration points at the same row. The cost is one 8-byte reference per
+  payment and roughly one small row per rate update that a payment actually
+  used, instead of copying the configuration onto every payment.
+
+  Orders store nothing new. An order's value in the secondary currency is
+  derived: its confirmed payments at their own recorded rates, plus the
+  outstanding balance at the live rate — the rate it will be settled at. A fully
+  paid order therefore no longer moves, while an unpaid one follows the rate.
+  The back-office shows payments and paid totals at their recorded rates and
+  outstanding balances at the live rate; a payment's page also shows the rate
+  it was recorded at, where that rate came from, and, for an OCR'd receipt, the
+  amount the receipt itself states.
+
+  API: payments gain `currency` and `amount_secondary`; orders gain `currency`
+  (with a `basis` of `live` or `recorded`) and `secondary`; kiosk checkout
+  receipts and `GET /api/v1/kiosk/receipt/<id>/` gain `currency` and
+  `amount_secondary`; settings gain a read-only `secondary_rate_source`. All
+  additive.
+
+  Payments recorded before this release get the configuration in effect when
+  the migration runs, marked `rate_source: "backfilled"`; their secondary
+  amounts are approximate, because the rate they were made at was never stored.
+  **Run the migrations with the application stopped** — `0023` makes the
+  reference mandatory and fails if a payment was created without one mid-deploy.
+
 ### Fixed
+
+- **Kiosk checkout records the exchange rate its receipt was validated at.** The
+  receipt was converted at the rate read before the OCR call, but nothing tied
+  the stored payment to that rate. Checkout now reads the rate once and records
+  that same rate on the payment, even if the BCV rate is refreshed while the
+  receipt is being read.
+- **A manually entered exchange rate is timestamped.** Only the automatic rate
+  refresh set `secondary_rate_updated_at`; a rate typed into the Settings page,
+  the admin, `PATCH /api/v1/settings/` or `manage.py init` kept the timestamp of
+  the last fetch. Any rate change now stamps the time, and the new
+  `secondary_rate_source` says whether it was `fetched` or `manual`.
+- **The dashboard revenue card no longer converts a month of sales at today's
+  rate.** It shows the primary currency only.
 
 - **Kiosk checkout no longer holds a global order-number lock across the VEPay
   OCR call.** `POST /api/v1/kiosk/checkout/` ran receipt parsing inside its

@@ -59,15 +59,20 @@ BANK_CODE_PREFIXES = {
 }
 
 
-def compare_receipt_fields(receipt_data, expected_fields, settings, field_keys=None):
+def compare_receipt_fields(receipt_data, expected_fields, currency, field_keys=None):
     """
     Compare normalized VEPay receipt fields against expected kiosk form values.
 
     Only keys present in ``field_keys`` are compared. Missing OCR data is a
     mismatch because the system cannot prove the uploaded receipt matches.
+
+    ``currency`` supplies the exchange rate for a receipt paid in the
+    secondary currency: a CurrencyContext, a CurrencySnapshot, or the
+    SystemSettings row. Kiosk checkout passes the context it goes on to record
+    on the payment, so the rate that validated the receipt is the rate stored.
     """
     field_keys = tuple(field_keys or expected_fields.keys())
-    receipt_fields = extract_receipt_fields(receipt_data, settings)
+    receipt_fields = extract_receipt_fields(receipt_data, currency)
     expected = normalize_expected_fields(expected_fields)
 
     field_matches = {}
@@ -156,8 +161,8 @@ def match_recipient_profile(receipt_data, payment_method, profiles):
     }
 
 
-def extract_receipt_fields(receipt_data, settings):
-    amount = receipt_amount_usd(receipt_data, settings)
+def extract_receipt_fields(receipt_data, currency):
+    amount = receipt_amount_usd(receipt_data, currency)
     reference = get_receipt_value(receipt_data, PAYMENT_REFERENCE_PATH, '') or ''
     paid_on = receipt_paid_on(receipt_data)
     origin_bank = receipt_issuing_bank(receipt_data)
@@ -199,7 +204,7 @@ def normalize_expected_fields(fields):
     }
 
 
-def receipt_amount_usd(receipt_data, settings):
+def receipt_amount_usd(receipt_data, currency):
     raw_value = get_receipt_value(receipt_data, PAYMENT_AMOUNT_VALUE_PATH)
     if raw_value in (None, ''):
         return None
@@ -208,17 +213,17 @@ def receipt_amount_usd(receipt_data, settings):
     except (InvalidOperation, ValueError, TypeError):
         return None
 
-    currency = receipt_currency(receipt_data)
-    primary_code = (settings.currency_code or '').upper()
-    secondary_code = (settings.secondary_currency_code or '').upper()
+    receipt_code = receipt_currency(receipt_data)
+    primary_code = (currency.currency_code or '').upper()
+    secondary_code = (currency.secondary_currency_code or '').upper()
     if (
-        settings.secondary_currency_enabled
-        and settings.secondary_exchange_rate
-        and settings.secondary_exchange_rate > 0
+        currency.secondary_currency_enabled
+        and currency.secondary_exchange_rate
+        and currency.secondary_exchange_rate > 0
     ):
-        if not currency or currency == secondary_code:
-            return amount / Decimal(str(settings.secondary_exchange_rate))
-        if currency == primary_code:
+        if not receipt_code or receipt_code == secondary_code:
+            return amount / Decimal(str(currency.secondary_exchange_rate))
+        if receipt_code == primary_code:
             return amount
 
     return amount

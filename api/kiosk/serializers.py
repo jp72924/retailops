@@ -3,6 +3,7 @@ from rest_framework import serializers
 from core.models import Customer, Payment, Product, RecipientProfile
 from core.services.customers import check_national_id
 from core.services.receipt_matching import normalize_document_id
+from api.serializers.currency import RecordedCurrencySerializer
 from api.serializers.product import product_image_url
 
 
@@ -179,3 +180,11 @@ class KioskReceiptSerializer(serializers.Serializer):
     station_number = serializers.IntegerField()
     store_identifier = serializers.CharField()
     created_at = serializers.DateTimeField()
+    currency = RecordedCurrencySerializer(
+        allow_null=True,
+        help_text='Currency and exchange rate the payment was recorded with.',
+    )
+    amount_secondary = serializers.CharField(
+        allow_null=True,
+        help_text='The payment in the secondary currency, at its recorded rate.',
+    )
