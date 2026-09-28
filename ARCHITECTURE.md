@@ -1029,9 +1029,11 @@ sequenceDiagram
     C->>K: confirm
     K->>A: POST /kiosk/checkout/ (JSON, receipt_image_base64)
     A->>A: read the currency configuration once
-    A->>V: forward image, before any lock
-    V-->>A: OCR fields
-    A->>A: validate receipt at that rate, intern CurrencySnapshot
+    opt mobile payment or bank transfer, with an image required or sent
+        A->>V: forward image, before any lock
+        V-->>A: OCR fields
+    end
+    A->>A: validate any receipt at that rate, intern CurrencySnapshot
     A->>A: transaction.atomic()
     A-->>K: 201 {order_id, order_number, payment_number, ...}
 ```
@@ -1074,9 +1076,13 @@ is what makes concurrent checkouts on the last unit of a product safe. The order
 created already `CONFIRMED` with the station's service user as both `created_by` and
 `confirmed_by`, and notes carrying the station identifier.
 
-Receipt validation, including the VEPay OCR round-trip, runs **before** the block
-opens, because the order number's `SequenceCounter` row stays locked until the outer
-transaction commits, and an OCR call inside would hold it behind third-party HTTP.
+Receipt validation runs **before** the block opens. For a receipt method - mobile
+payment or bank transfer - with an image required by settings or sent anyway, that
+includes the VEPay OCR round-trip, and OCR must be enabled for the method: otherwise
+checkout is refused (`ocr_disabled`, `ocr_method_disabled`) rather than skipping the
+check. Other methods make no OCR call. Validation runs first because the order
+number's `SequenceCounter` row stays locked until the outer transaction commits, and
+an OCR call inside would hold it behind third-party HTTP.
 Nothing read before the block is trusted inside it: the block re-resolves the
 products, re-checks stock and the total, and re-checks the transaction key.
 
@@ -1084,9 +1090,12 @@ The one thing carried across is the **currency context**. Checkout reads the
 configuration once, converts the receipt at that rate, and records the payment with
 the same context, so the rate that validated the receipt is the rate stored even if
 the BCV rate is refreshed while the OCR call is in flight. The `CurrencySnapshot` is
-interned only after the receipt passes, so a rejected checkout leaves no row behind,
-and in autocommit outside the block, so its unique-index entry is never held under
-product locks.
+interned only after the receipt passes, so a checkout rejected at receipt validation
+leaves no row behind. One rejected later, inside the block - stock gone since
+validation, the total changed, or a race on the transaction key - does leave the
+interned row. That is harmless: the next payment recorded under the same
+configuration reuses it. Interning happens in autocommit outside the block so the
+snapshot's unique-index entry is never held under product locks.
 
 Konteo Express's `CLAUDE.md` records the constraint from the client side: the whole
 cart posts to a single call that validates stock, records payment, and marks delivered
