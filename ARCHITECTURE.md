@@ -988,9 +988,11 @@ received is the recorded one, never a primary amount multiplied by today's rate.
 Core states it to agents in the `currency_history` entry of `GET /mcp-skill/`.
 
 Neither client reads these fields today. Konteo Express converts every amount it
-displays at the `secondary_exchange_rate` it read from `GET /settings/` at bootstrap
-(`app/currency.js`), and its success screen renders from cart state (section 10), so
-its ticket shows that rate rather than the recorded one. The CLI's `payments list`
+displays at the `secondary_exchange_rate` it last read from `GET /settings/`
+(`app/currency.js`) - at bootstrap, and again through `refreshSettings()` when each
+sale starts, so a sale is priced at the rate current when it began. Its success
+screen renders from cart state (section 10), so its ticket shows that rate rather than
+the recorded one. The CLI's `payments list`
 table and CSV select a fixed column set without `amount_secondary`; `--format json`
 passes everything through.
 
@@ -1175,7 +1177,7 @@ Recorded as observation, not as a work list.
   `KIOSK_INTEGRATION.md:132-134`, a file in *this* repository. Line-anchored references
   across a repository boundary cannot survive edits on either side.
 - **Kiosk version drift.** `CHANGELOG.md` stops at 2.1.0, `package.json` says 2.2.0,
-  and `APP_VERSION` / `CACHE_VERSION` say 2.3.7.
+  and `APP_VERSION` / `CACHE_VERSION` say 2.3.9.
 - **The Konteo Express rebrand did not reach the Capacitor config.**
   `capacitor.config.json` still carries `"appName": "RetailOps Kiosk"` while the
   Android strings resource says `Konteo Express`, so regenerating the native project
@@ -1187,13 +1189,6 @@ Recorded as observation, not as a work list.
 - **Dead code in the kiosk.** `app/services/payments.js` posts to `POST /payments/` and
   is never imported - a remnant of the pre-atomic-checkout flow that the current
   `IsNotKioskStation` permission would now reject anyway.
-- **Konteo Express reads the exchange rate once, at bootstrap.** `applySettings()` runs
-  a single time in `main.js`, so a terminal left running across a rate refresh
-  displays secondary-currency amounts at the old rate, while Core converts the
-  receipt at the rate current when checkout begins.
-- **CLI `settings update --currency-code` is offered unconditionally.** Core rejects
-  a changed code with `400` once any order or payment exists; the option's help text
-  does not say so.
 - **In this repository**, `responses` ships in production requirements, no `CACHES`
   backend is configured despite throttling depending on one, and
   `STATICFILES_DIRS`/`TEMPLATES.DIRS` point at `static/` and `templates/` directories
