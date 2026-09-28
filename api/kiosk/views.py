@@ -325,9 +325,9 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             currency=currency,
         )
 
-        # Interned only once the receipt has passed, so a rejected checkout
-        # leaves no row behind; and outside the write block, in autocommit, so
-        # the snapshot's unique-index entry is never held under product locks.
+        # Interned after the receipt passes, so a receipt rejection leaves no
+        # row (one rejected inside the write block does; it is reused later),
+        # and in autocommit, so its unique-index entry is never held under locks.
         currency_snapshot = CurrencySnapshot.objects.intern(currency)
 
         now = timezone.now()
