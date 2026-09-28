@@ -6,13 +6,19 @@ projects interact and depend on one another.
 This document is descriptive. It records how the system is built today, not how it
 should change.
 
+> **Verified 2026-09-28** against RetailOps Core `bd394d5`, Konteo Express `6242108`,
+> and RetailOps CLI `23e89bc`. Every claim, count, and `file:line` reference holds at
+> those commits; section 17 records how each was checked, so the next refresh can
+> repeat it.
+
 **Part I** covers RetailOps Core - the Django/DRF backend in this repository.
 **Part II** covers the relationship between Core, RetailOps Kiosk (Konteo Express),
 and RetailOps CLI.
 
 Related reading: `API_GUIDE.md` (endpoint reference), `KIOSK_INTEGRATION.md` (kiosk
-contract), `MCP_GUIDE.md` (agent integration), `DATABASE_CONFIGURATION.md` and
-`MEDIA_STORAGE_CONFIGURATION.md` (deployment profiles).
+contract), `MCP_GUIDE.md` and `AGENT_INTEGRATION.md` (agent integration),
+`DATABASE_CONFIGURATION.md` and `MEDIA_STORAGE_CONFIGURATION.md` (deployment
+profiles), and `MULTI_TENANCY.md` (a feasibility study built on this document).
 
 ---
 
@@ -41,7 +47,7 @@ Dependencies are declared in a single `requirements.txt`. There is no
 | `requests` | `>=2.32,<3.0` | Synchronous HTTP for the two outbound integrations: VEPay OCR and the BCV exchange rate. |
 | `responses` | `>=0.25,<0.26` | Mocks `requests` in the test suite. |
 | `psycopg[binary]` | `>=3.2,<4.0` | PostgreSQL driver. |
-| `mcp` | `>=1.27.0` | FastMCP server under `mcp_server/`. |
+| `mcp` | `>=1.27.0,<2` | FastMCP server under `mcp_server/`. Capped below 2 because the server is written against the v1 API. |
 | `httpx` | `>=0.28.1` | Async client the MCP layer uses to call this same REST API. |
 | `python-dotenv` | `>=1.2.2` | Loads `.env` for the MCP server only. Django itself does not auto-load `.env`. |
 
@@ -68,29 +74,36 @@ retailops/
 │   ├── storage.py          RoutedGoogleCloudStorage / RoutedS3Storage
 │   ├── email_backend.py    DecodedConsoleEmailBackend (development default)
 │   ├── test_runner.py      MediaIsolatedTestRunner
+│   ├── wsgi.py  asgi.py
 │   └── tests/              Settings-as-code tests
 ├── core/                   Domain app: all models + back-office HTML
 │   ├── models.py           15 models - the single domain module
+│   ├── exceptions.py       DomainError and the order/stock errors it roots
 │   ├── views.py            Function-based HTML views
 │   ├── middleware.py       KioskCORSMiddleware, RegionalMiddleware
+│   ├── context_processors.py  system_settings on every template
 │   ├── decorators.py       @role_required
-│   ├── services/           bcv.py, vepay.py, receipt_matching.py, currency.py
-│   ├── management/commands/  init, bootstrap_local, seed, provision_kiosk,
-│   │                         purge_receipts, update_bcv_rate, initialize_site
+│   ├── services/           bcv.py, vepay.py, receipt_matching.py, currency.py,
+│   │                       inventory.py, customers.py
+│   ├── management/         site_initialization.py (shared by init commands)
+│   │   └── commands/       init, bootstrap_local, seed, provision_kiosk,
+│   │                       purge_receipts, update_bcv_rate, initialize_site
 │   ├── templates/core/     Back-office templates
 │   ├── templatetags/       regional.py
 │   └── tests/
 ├── api/                    REST layer - defines no models of its own
 │   ├── urls.py             DefaultRouter + explicit paths, app_name='api'
-│   ├── views/              One module per resource
-│   ├── serializers/        One module per resource
+│   ├── views/              One module per resource, plus auth, dashboard,
+│   │                       settings, and mcp_skill
+│   ├── serializers/        One module per resource, plus the shared currency.py
 │   ├── kiosk/              Self-contained kiosk sub-package
 │   ├── permissions.py      role_permission() factory
 │   ├── filters.py  pagination.py  throttling.py  exceptions.py
 │   └── tests/
 ├── mcp_server/             MCP server - an out-of-process API client
 │   ├── server.py  client.py  config.py  errors.py  runtime_auth.py
-│   └── tools/  resources/  prompts/
+│   ├── tools/  resources/  prompts/
+│   └── tests/
 ├── locale/es/LC_MESSAGES/  Spanish translations
 ├── scripts/                Setup and provisioning helpers
 └── .github/workflows/ci.yml
@@ -126,8 +139,8 @@ URLconf  ->  Middleware  ->  Authentication  ->  Permission  ->  Throttle
 
 `retailops/urls.py` mounts three trees: `admin/`, `api/v1/` (namespace `api`), and
 `''` for the back-office. `api/urls.py` combines a `DefaultRouter` covering nine
-resources with roughly eleven explicit paths, and includes `api.kiosk.urls` under
-`kiosk/` with its own `app_name`.
+resources with twelve explicit paths, and includes `api.kiosk.urls` under `kiosk/`
+with its own `app_name`.
 
 ### Middleware
 
@@ -152,6 +165,15 @@ than in services, where it enforces an invariant that must hold for every writer
 
 - `SequenceCounter.next_value()` uses `SELECT FOR UPDATE` to generate order and
   payment numbers without races.
+- `SalesOrder.confirm(user)` (`core/models.py:395`) is the only supported
+  Pending -> Confirmed transition. It rejects the wrong status and an empty order,
+  then deducts stock and flips the status in one transaction with the product rows
+  locked, so an order can never reach Confirmed while leaving a product negative.
+  The REST action, its bulk sibling, and the back-office view all delegate to it.
+- `SalesOrderItem.save()` recomputes `line_total`, and a `UniqueConstraint`
+  (`salesorderitem_unique_product_per_order`) keeps a product on one line per order.
+- `Customer.save()` stores `national_id` normalised, so the column's `unique=True`
+  means normalised uniqueness: `V-12.345.678` and `V12345678` are one person.
 - `RecipientProfile.save()` and `.delete()` maintain the "sole profile is primary"
   rule.
 - `SystemSettings.save()` pins `pk=1`, making the model a singleton. It also stamps a
@@ -164,15 +186,21 @@ than in services, where it enforces an invariant that must hold for every writer
   the caller has already assigned one.
 - `CurrencySnapshot.save()` and `.delete()` refuse to touch an existing row.
 
+The rules that can fail raise subclasses of `DomainError` from `core/exceptions.py` -
+`OrderStateError`, `EmptyOrderError`, `InsufficientStockError` - and each surface
+translates them into its own error format.
+
 ### Services
 
 `core/services/` holds the logic that is neither persistence nor HTTP:
 
 - **`vepay.py`** - `VEPayClient`, a `requests` client wrapped with
-  `asyncio.to_thread`, calling the external OCR provider. Retries once on 5xx or
-  timeout, and normalises both the legacy single-receipt response and the newer
-  `{"receipts": [...]}` envelope. The OCR JSON field paths are module constants
-  (`PAYMENT_REFERENCE_PATH`, `RECIPIENT_PHONE_PATH`, and so on).
+  `asyncio.to_thread`, calling the external OCR provider. `ocr_timeout_seconds`
+  budgets the whole call, retry included: a retryable failure (a 5xx, a timeout, a
+  network error) is retried once, after a 1-second backoff, only if the budget still
+  leaves room for a real attempt. It normalises both the legacy single-receipt
+  response and the newer `{"receipts": [...]}` envelope. The OCR JSON field paths are
+  module constants (`PAYMENT_REFERENCE_PATH`, `RECIPIENT_PHONE_PATH`, and so on).
 - **`receipt_matching.py`** - pure normalisation and comparison, with no database
   access at all. `compare_receipt_fields()` and `match_recipient_profile()` accept an
   iterable of profile-like objects specifically so they unit-test without the ORM.
@@ -195,6 +223,15 @@ than in services, where it enforces an invariant that must hold for every writer
   currencies, and `attach_order_amounts()` does so for a whole page from one settings
   read. The module imports nothing from `core.models` at load time, because
   `core.models` imports it.
+- **`inventory.py`** - the stock rule every surface shares. `available_stock()`,
+  `assert_stock_available()`, `lock_products()` (which takes `SELECT FOR UPDATE` in
+  ascending primary-key order, so two confirmations cannot deadlock), and
+  `deduct_stock_for_order()`, which `SalesOrder.confirm()` calls. The kiosk's own
+  checker defers to it, so a checkout and a back-office confirmation cannot disagree.
+- **`customers.py`** - national-ID resolution for every surface that registers or
+  finds a customer: the API, both back-office forms, quick-create, and kiosk
+  identify/register. It matches through any punctuation of the same ID and still
+  reaches rows written before normalisation.
 
 ### Serializers
 
@@ -212,6 +249,14 @@ if payment_method in REFERENCE_REQUIRED_PAYMENT_METHODS and not reference_number
     errors['reference_number'] = 'A reference number is required for bank transfer, card, and check payments.'
 ```
 
+`SalesOrderWriteSerializer` enforces the order rules for the API and MCP alike. It
+names `unit_price`, `line_total`, and `tax_rate` as server-derived
+(`api/serializers/order.py:135`) and rejects an item carrying any of them with a 400
+rather than dropping it silently, so line prices only ever come from the catalogue.
+`validate_items()` (`:137`) rejects a product on more than one line, and
+`discount_amount` and `tax_amount` are floored at zero, with the total clamped at
+zero.
+
 `api/serializers/currency.py` builds the `currency` and secondary-amount blocks that
 the payment, order, and kiosk endpoints share (section 12), rendering money as
 strings as DRF does for every `DecimalField` - a bolívar amount can carry more
@@ -221,17 +266,21 @@ once rather than 25 times.
 
 ### Views
 
-REST views in `api/views/` use `GenericViewSet` composed with **explicit mixins**
-rather than `ModelViewSet`, so the absent operations are visible in the class
-definition. `PaymentViewSet` (`api/views/payment.py:62`) declares only
-`CreateModelMixin`, `RetrieveModelMixin`, and `ListModelMixin` - payments are
-immutable financial records, and the missing update and destroy mixins are how that
-is enforced.
+REST viewsets in `api/views/` that restrict their operations compose `GenericViewSet`
+with **explicit mixins**, so the absent operations are visible in the class
+definition: inventory, orders, payments, products, and users. `PaymentViewSet`
+(`api/views/payment.py:62`) declares only `CreateModelMixin`, `RetrieveModelMixin`,
+and `ListModelMixin` - payments are immutable financial records, and the missing
+update and destroy mixins are how that is enforced. Categories, customers, and
+recipient profiles are full `ModelViewSet`s, and roles a `ReadOnlyModelViewSet`.
+Non-resource endpoints - auth, dashboard, settings, the MCP skill descriptor - are
+plain `APIView`s.
 
-Back-office HTML views in `core/views.py` are function-based and gated with
-`@role_required(...)` from `core/decorators.py`. Views that list orders price the
-page through `attach_order_amounts()` and render it with the `order_money` and
-`money` filters in `core/templatetags/regional.py`.
+Back-office HTML views in `core/views.py` are function-based: 45 views, of which 28
+are gated with `@role_required(...)` from `core/decorators.py`, 15 with
+`@login_required` alone, and 2 are public (`login_view` and `set_language`). Views
+that list orders price the page through `attach_order_amounts()` and render it with
+the `order_money` and `money` filters in `core/templatetags/regional.py`.
 
 ### Permissions
 
@@ -276,9 +325,10 @@ schedule: `update_bcv_rate` refreshes the secondary exchange rate, and
   contract; see section 12.
 - **`api/pagination.py`** - `CappedPageNumberPagination` honours a `page_size` query
   parameter with `max_page_size = 100` and a default of 25.
-- **`api/throttling.py`** - six scoped throttle classes. `OcrVerifyRateThrottle`
-  overrides `get_cache_key()` to key on the kiosk station first, then the user, then
-  the IP, so one busy terminal cannot consume another station's allowance.
+- **`api/throttling.py`** - six scoped throttle classes, plus four per-station kiosk
+  throttles in `api/kiosk/throttling.py`. `OcrVerifyRateThrottle` overrides
+  `get_cache_key()` to key on the kiosk station first, then the user, then the IP,
+  so one busy terminal cannot consume another station's allowance.
 
 ## 4. Domain model
 
@@ -292,6 +342,8 @@ erDiagram
     Product           ||--o{ SalesOrderItem : "product (PROTECT)"
     Product           ||--o{ InventoryMovement : "product (PROTECT)"
     Customer          ||--o{ SalesOrder : "customer (PROTECT)"
+    User              ||--o{ SalesOrder : "created_by (PROTECT)"
+    User              ||--o{ SalesOrder : "confirmed_by (PROTECT)"
     SalesOrder        ||--o{ SalesOrderItem : "items (CASCADE)"
     SalesOrder        ||--o{ Payment : "payments (PROTECT)"
     SalesOrder        ||--o{ OcrCallLog : "sales_order (SET_NULL)"
@@ -299,7 +351,8 @@ erDiagram
     User              ||--o{ Payment : "recorded_by (PROTECT)"
     CurrencySnapshot  ||--o{ Payment : "currency_snapshot (PROTECT)"
     User              ||--o{ InventoryMovement : "created_by (PROTECT)"
-    User              ||--o{ RecipientProfile : "created_by"
+    User              ||--o{ RecipientProfile : "created_by (PROTECT)"
+    User              ||--o{ KioskStation : "created_by (PROTECT)"
 ```
 
 `SequenceCounter` and `SystemSettings` stand outside the graph: the first is a
@@ -317,7 +370,8 @@ reverse accessor on `Payment` (`related_name='+'`).
 
 **Customers.** `Customer` optionally links to a `User`. `email` is unique;
 `national_id` is unique, nullable, and indexed - it is the key the kiosk identifies
-walk-in shoppers by.
+walk-in shoppers by, and the back-office order form finds customers by it too. It is
+stored normalised, so uniqueness ignores punctuation and case.
 
 **Catalog.** `ProductCategory` self-references through `parent_category`, giving one
 level of nesting plus deeper if desired. `Product` has a unique `sku` and requires
@@ -328,10 +382,12 @@ at 5 MB, jpg/jpeg/png/webp) or an `external_image_url` when active. `current_sto
 
 **Sales.** `SalesOrder` numbers itself `SO-YYYYMMDD-NNNN` through `SequenceCounter` and
 moves through `draft -> pending -> confirmed -> paid -> shipped -> delivered`, with
-`cancelled` and `refunded` as terminal branches. `SalesOrderItem` snapshots
-`unit_price` at write time and recomputes `line_total` in `save()`, so later price
-changes never rewrite historical orders. An order stores no figure in the secondary
-currency; one is derived when it is read (see **Currency** below).
+`cancelled` and `refunded` as terminal branches; the confirm step deducts stock
+through `SalesOrder.confirm()`. `SalesOrderItem` snapshots `unit_price` from the
+catalogue at write time and recomputes `line_total` in `save()`, so later price
+changes never rewrite historical orders, and a product appears on at most one line
+per order - quantity is how you order more than one. An order stores no figure in
+the secondary currency; one is derived when it is read (see **Currency** below).
 
 **Payments.** `Payment` supports cash, mobile payment, bank transfer, card, check, and
 other, with statuses `pending_review` and `confirmed`. Every payment references the
@@ -419,13 +475,13 @@ Registered in `api/urls.py:27`.
 | Route | Methods | Read | Write |
 |---|---|---|---|
 | `roles/` | GET | Admin | - (read-only viewset) |
-| `users/` | GET, POST, PUT, PATCH | Admin | Admin |
+| `users/` | GET, POST, PUT, PATCH | Admin; any user for their own record | Admin |
 | `customers/` | full CRUD | any authenticated | any authenticated |
 | `categories/` | full CRUD | any authenticated | Manager+ |
 | `products/` | full CRUD | any authenticated | Manager+ |
 | `inventory/` | GET | any authenticated | - (append-only) |
 | `orders/` | CRUD | any authenticated | Staff+ / Manager+ per action |
-| `payments/` | GET, POST | any authenticated | any authenticated |
+| `payments/` | GET, POST | any authenticated, except a kiosk station | any authenticated, except a kiosk station |
 | `payment-recipient-profiles/` | full CRUD | Manager+ | Manager+ |
 
 `users/` has no DELETE - accounts are deactivated, not removed. `payments/` has no
@@ -484,7 +540,10 @@ distinct components.
 **DRF `TokenAuthentication`.** Not JWT, not OAuth. `SessionAuthentication` and
 `BrowsableAPIRenderer` are appended to the DRF configuration **only when `DEBUG` is
 true** (`retailops/settings.py:519-528`), so production serves pure JSON with no HTML
-renderer exposed.
+renderer exposed. Three views name their own authentication list instead of the
+default, and each includes `SessionAuthentication` whatever `DEBUG` says:
+`PaymentViewSet` and `SystemSettingsView` (token, session, and `KioskKey`) and
+`SecondaryRateRefreshView` (token and session).
 
 Because `USERNAME_FIELD` is `email`, `TokenObtainSerializer` (`api/views/auth.py:21`)
 passes the submitted email as the `username=` argument to `authenticate()`, which
@@ -559,8 +618,8 @@ return [IsAuthenticated(), IsNotKioskStation()]
 
 The practical consequence: **a stolen station key can verify a receipt image but
 cannot enumerate the payment history.** `SystemSettingsView` similarly adds
-`KioskTokenAuthentication` so a station can read the exchange rate, while `PATCH`
-still requires Manager or above.
+`KioskTokenAuthentication` so a station can read the exchange rate and the other
+settings it runs on, while `PATCH` still requires Manager or above.
 
 ### Password reset
 
@@ -595,9 +654,10 @@ which carries `LoginRateThrottle` directly.
 
 There is one settings module, `retailops/settings.py`. There is no `settings/`
 package and no dev/prod split - the environment shapes behaviour instead, through the
-helpers `_env_bool`, `_env_int`, `_csv_env`, and `_first_env`. These **raise
-`RuntimeError` on malformed values** rather than silently falling back, so a typo in a
-deployment variable fails at boot instead of at request time.
+helpers `_env_bool`, `_env_int`, `_csv_env`, and `_first_env`. The typed ones,
+`_env_bool` and `_env_int`, **raise `RuntimeError` on malformed values** rather than
+silently falling back, as do the database and storage profile builders, so a typo in
+a deployment variable fails at boot instead of at request time.
 
 `DJANGO_SECRET_KEY` is mandatory once `DEBUG` is false:
 
@@ -624,9 +684,11 @@ prefix:
 | Prefix | Bucket | Cache-Control | Access |
 |---|---|---|---|
 | `products/` | public | `public, max-age=31536000, immutable` | direct URL |
-| `receipts/` | private | `private, no-store` | signed URL |
+| `receipts/` | private | `private, max-age=0, no-store` | signed URL |
 
-That split is what allows product images to be served from a CDN indefinitely while
+The Cache-Control values are defaults; each profile can override them through
+`MEDIA_GCS_PRODUCT_CACHE_CONTROL` / `MEDIA_GCS_RECEIPT_CACHE_CONTROL` or their
+`MEDIA_S3_*` equivalents. That split is what allows product images to be served from a CDN indefinitely while
 receipt images - which contain customer financial data - remain private and expire.
 `retailops/urls.py:12` serves media from Django only when `DEBUG` is true *and* the
 backend is local. See `MEDIA_STORAGE_CONFIGURATION.md`.
@@ -643,15 +705,18 @@ prints reset links to the terminal. SMTP is configured through `DJANGO_EMAIL_*`.
 docker-compose, and no Procfile in this repository. `gunicorn` is a dependency but
 ships no configuration.
 
-**CI** - `.github/workflows/ci.yml` runs a Python 3.10/3.11/3.12 matrix with
-`fail-fast: false` and three steps: `manage.py check`, then
+**CI** - `.github/workflows/ci.yml` runs a Python 3.10/3.11/3.12 matrix on
+`actions/checkout@v5` and `actions/setup-python@v6`, with `fail-fast: false` and three
+steps: `manage.py check`, then
 `makemigrations --check --dry-run` as a migration-drift guard, then `manage.py test`.
 There is no linting, coverage, or type checking in CI.
 
 ## 8. Testing
 
 The suite uses Django's built-in runner with DRF's `APITestCase` - no pytest, no
-factory_boy, no fixture files. Roughly 385 test methods span 34 modules.
+factory_boy, no fixture files. 385 test methods span 34 modules: 192 in `api/tests`
+(16 modules), 169 in `core/tests` (14), 21 in `retailops/tests` (3), and 3 in
+`mcp_server/tests` (1).
 
 **Custom runner.** `TEST_RUNNER` points at
 `retailops/test_runner.py:MediaIsolatedTestRunner`, which redirects `MEDIA_ROOT` to a
@@ -661,10 +726,9 @@ and `FileSystemStorage.base_location` is a `cached_property`, so without the res
 test uploads would land in the real media directory.
 
 **Builders.** `api/tests/helpers.py` provides plain functions rather than a factory
-library - `make_user`, `make_customer`, `make_product(stock=...)`,
-`make_order(status=...)`, `make_payment`, `make_kiosk_station`, `auth_client`,
-`set_currency(...)` - plus
-the image fixtures `png_upload()` and `png_data_url()` and `vepay_payload(...)`, which
+library - `make_role`, `make_user`, `make_customer`, `make_category`,
+`make_product(stock=...)`, `make_order(status=...)`, `make_payment`,
+`make_kiosk_station`, `auth_client`, `set_currency(...)` - plus the image fixtures `png_upload()` and `png_data_url()` and `vepay_payload(...)`, which
 synthesises a realistic OCR response.
 
 **Suites worth knowing:**
@@ -674,7 +738,10 @@ synthesises a realistic OCR response.
 | `api/tests/test_kiosk_checkout_receipts.py` | The fullest end-to-end coverage: image requirements, `paid_at` to `paid_on` normalisation, amount/reference/date/bank mismatch rejection, recipient matching per method. |
 | `api/tests/test_api_errors_contract.py` | Pins the `{error, code, details}` envelope across 401, 403, 400, 404, 405, 409, and 429. |
 | `api/tests/test_parity_fixes.py` | Regression pins: the bulk-versus-single role gap, `?search=` on users, `ProtectedError` mapping to 409. |
-| `core/tests/test_receipt_matching.py` | The largest unit suite - normalisation and comparison, no database. |
+| `api/tests/test_client_rule_parity.py` | Pins each order and customer rule on the surfaces that once lacked it - the API, MCP, and the kiosk - so a rule cannot again hold only in the browser. |
+| `api/tests/test_orders_performance.py` | Pins the orders list's query shape - a plain pagination `COUNT`, and a query count that does not grow with page size - and that the annotated amount paid matches the model's. |
+| `core/tests/test_order_customer_lookup.py` | The order form's ID-number customer lookup, and how forgiving it is about how the ID was written down. |
+| `core/tests/test_receipt_matching.py` | Normalisation and comparison; the functions under test touch no database. |
 | `core/tests/test_currency_snapshots.py` | The currency model: fingerprint normalisation, interning and immutability, a payment keeping its configuration across settings changes, order amounts, rate provenance, the `currency_code` lock, and the backfill migration - including that `0022`'s inlined fingerprint still hashes like the service's. |
 | `api/tests/test_currency_history.py` | Recorded figures hold across the API, the back-office, and kiosk receipts when settings change. Also pins the query count of every list that reads payments, so pricing a page cannot turn into a query per row. |
 | `retailops/tests/test_production_settings.py` and siblings | Settings-as-code: assert the environment parsers and the production hardening defaults. |
@@ -733,7 +800,10 @@ fast-fails offline rather than queueing (section 12).
 
 ## 10. Endpoint contract matrix
 
-Who calls what. Verified against `api/urls.py` and `api/kiosk/urls.py`.
+Who calls what. The rows come from `api/urls.py` and `api/kiosk/urls.py`; each cell
+from the client's own source - the kiosk's `api.*` calls under `app/`, the CLI's
+client calls under `retailops_cli/commands/`, and the MCP server's under
+`mcp_server/tools/`.
 
 | Endpoint | Kiosk | CLI | MCP |
 |---|:---:|:---:|:---:|
@@ -754,9 +824,10 @@ Who calls what. Verified against `api/urls.py` and `api/kiosk/urls.py`.
 | `GET payments/receipts/healthz/` | - | yes | yes |
 | `payment-recipient-profiles/` | - | yes | yes |
 | **`GET settings/`** | **yes** | **yes** | yes |
-| `PATCH settings/`, `settings/secondary-rate/refresh/` | - | yes | yes |
+| `PATCH settings/` | - | yes | yes |
+| `POST settings/secondary-rate/refresh/` | - | yes | - |
 | `GET schema/` | - | yes | - |
-| `GET mcp-skill/` | - | yes | yes |
+| `GET mcp-skill/` | - | yes | - |
 | **`POST kiosk/identify/`** | **yes** | **yes** | - |
 | **`POST kiosk/register/`** | **yes** | **yes** | - |
 | **`GET kiosk/products/`, `kiosk/products/{id}/`** | **yes** | **yes** | - |
@@ -789,7 +860,7 @@ Three credential types authenticate against one backend.
 
 | Client | Header | Where the credential lives | Renewal |
 |---|---|---|---|
-| RetailOps CLI | `Authorization: Token <t>` | Plaintext TOML at `%APPDATA%\retailops\config.toml` on Windows, `$XDG_CONFIG_HOME/retailops/config.toml` otherwise | None. A 401 means re-run `auth login`. |
+| RetailOps CLI | `Authorization: Token <t>` | Plaintext TOML at `%APPDATA%\retailops\config.toml` on Windows, `~/.config/retailops/config.toml` (respecting `$XDG_CONFIG_HOME`) otherwise | None. A 401 means re-run `auth login`. |
 | Konteo Express | `Authorization: KioskKey <k>` | `config.local.js` (never committed), or `localStorage` under `kiosk_native_config` on Capacitor builds | None. A 401 is terminal. |
 | MCP server | `Authorization: Bearer <t>`, or local stdio | Process-local after `retailops_login`, or `RETAILOPS_API_TOKEN` | Verified against `GET /auth/me/`. |
 
@@ -867,7 +938,7 @@ status:
   guards against a valid-JSON non-object body, which proxies sometimes return on 415
   or 502.
 - **Kiosk** - `konteo-express/app/api.js` carries a `_codeToSpanish()` switch covering
-  roughly 25 codes, translating each to customer-facing Spanish. It also harvests four
+  27 codes, translating each to customer-facing Spanish. It also harvests four
   non-envelope fields the backend attaches to specific failures - `insufficient`,
   `checks`, `warnings`, and `vepay` - into `ApiError.details`.
 
@@ -878,6 +949,14 @@ endpoints the kiosk calls: `insufficient_stock`, `invalid_product`,
 `unsupported_receipt_type`, `invalid_receipt_image`, `ocr_disabled`, and
 `ocr_method_disabled` come from `api/kiosk/views.py`, while `incomplete_receipt` comes
 from `api/views/payment.py` - the verify endpoint.
+
+The switch does not cover every code those endpoints can return. Both endpoints pass
+`VEPayError` codes through unchanged, and four of them - `no_receipt`,
+`multiple_receipts`, `receipt_parse_error`, and `network_error` - have no entry. A
+VEPay 5xx arrives as `http_<status>`, built at runtime: the switch maps `http_502`,
+`http_503`, and `http_504`, but no other status. The verify endpoint's
+`unsupported_heif` has no entry either. The customer sees the generic message for
+each (section 16).
 
 One entry is worth quoting because it encodes a design judgement rather than a
 translation:
@@ -913,8 +992,8 @@ non-empty. Before 0.2.0 it exited 0, which made bulk operations unusable in scri
 
 ### `reference_number` on receipt-bearing payment methods
 
-The most recent change to cross all three surfaces at once. `reference_number` is
-required for `bank_transfer`, `card`, and `check`:
+A change that crossed all three surfaces at once. `reference_number` is required for
+`bank_transfer`, `card`, and `check`:
 
 - Enforced in `api/serializers/payment.py`, alongside a comment naming the constraint.
 - Mirrored client-side in `retailops-cli/retailops_cli/commands/payments.py` as
@@ -954,7 +1033,9 @@ return Boolean(recipientMatch) && recipientMatch.matched === false;
 `receipt_image_required_for_receipt_methods`, `recipient_validation_enabled`, and the
 secondary-currency block, then stores them and adjusts its own screens - greying out
 payment methods with no configured recipient profile, enforcing the upload size cap
-before the request, showing an exchange-rate warning banner.
+before the request, showing an exchange-rate warning banner. It reads them at startup
+and again when each sale starts, so a change in Core reaches every terminal at its
+next sale.
 
 `konteo-express/app/services/settings.js` is the one place in that client where errors
 are swallowed: its `catch` sets conservative defaults (OCR off, image required, rate
@@ -1009,6 +1090,12 @@ the sole source of truth for stock and money, and the kiosk refuses to guess.**
 Checkout is where the three-way coupling is densest, and it is worth tracing end to
 end. `KIOSK_INTEGRATION.md` is the normative reference; this is the shape.
 
+Before any receipt exists, the kiosk shows the customer where to pay. `PaymentScreen`
+fetches the primary `RecipientProfile` for each receipt method once, and
+`PaymentAccountScreen` displays it with copy buttons. It is the same allowlist the
+checkout's recipient match validates against, so the destination shown cannot drift
+from the one accepted.
+
 ```mermaid
 sequenceDiagram
     participant C as Customer
@@ -1016,7 +1103,10 @@ sequenceDiagram
     participant A as RetailOps Core
     participant V as VEPay OCR
 
-    C->>K: photograph payment receipt
+    K->>A: GET /kiosk/recipient-profiles/ (once per payment screen)
+    A-->>K: primary receiving account per method
+    K->>C: show where to pay, with copy buttons
+    C->>K: pay in the bank app, photograph the receipt
     K->>K: client-side size check (ocr_max_file_mb)
     K->>A: POST /payments/receipts/verify/ (multipart)
     A->>A: downscale to 1600px, re-encode
@@ -1127,6 +1217,7 @@ reintroduced.
 | `receipt_too_large` | 413 | Exceeds `ocr_max_file_mb`. |
 | `invalid_receipt_image` | 400 | Image could not be decoded. |
 | `ocr_disabled` / `ocr_method_disabled` | 409 / 422 | OCR is off globally or for this method. |
+| VEPay's own codes (`timeout`, `network_error`, `http_<status>`, `no_receipt`, ...) | 503 if retryable, else 422 | Passed through from `VEPayError`, with `details.retryable`. |
 
 ## 14. Deployment topology and CORS
 
@@ -1165,7 +1256,8 @@ When Core changes, these are the places to check.
 | New or renamed endpoint | CLI `PARITY.md` and the relevant `commands/` module; `mcp_server/tools/`; the kiosk only if it is a `/kiosk/` path or one of the two shared paths. |
 | New error `code` | The kiosk's `_codeToSpanish()` table in `app/api.js` - an unmapped code falls through to a generic message. CLI `errors.py:user_message()` if it needs specific handling. |
 | Serializer field added or made required | Both clients. The CLI mirrors required-field rules only where they are static (see `reference_number`); the kiosk sends what its screens collect. |
-| New `SystemSettings` flag | The kiosk's `services/settings.js`, including its conservative-default `catch`; CLI `settings update`. |
+| New `SystemSettings` flag | The kiosk's `services/settings.js`, both its boot-time conservative defaults and its per-sale refresh, which keeps the last applied values on failure; CLI `settings update`. |
+| An order, stock, or customer-ID rule | The model or `core/services/` (`inventory.py`, `customers.py`), where every surface already delegates, with a pin in `api/tests/test_client_rule_parity.py`. The CLI mirrors a rule only when it is static. |
 | Permission or role gate changed | CLI `PARITY.md` role columns; whether a kiosk-reachable path still admits `IsManagerOrAdminOrKiosk`. |
 | Pagination or envelope shape | CLI `pager.py` and `output.py`; the kiosk's `data.results` reads. |
 | Receipt matching rules | `core/services/receipt_matching.py` first, then the mirrored normalisation in the kiosk's `PagoMovilFormScreen.js` - the client copy is UX-only, but a divergence produces a confusing "looks fine, server rejected it" experience. |
@@ -1183,18 +1275,25 @@ Recorded as observation, not as a work list.
   `GET /kiosk/recipient-profiles/`, `GET /settings/`, and
   `POST /payments/receipts/verify/` are all live and all undocumented there.
 - **Cross-repository documentation references carry line numbers.** Kiosk source cites
-  `KIOSK_INTEGRATION.md:132-134`, a file in *this* repository. Line-anchored references
-  across a repository boundary cannot survive edits on either side.
+  `KIOSK_INTEGRATION.md:132-134`, a file in *this* repository. It still lands on the
+  intended passage at this baseline, but only because later edits went below it; a
+  line-anchored reference across a repository boundary cannot survive edits on either
+  side.
 - **Kiosk version drift.** `CHANGELOG.md` stops at 2.1.0, `package.json` says 2.2.0,
-  and `APP_VERSION` / `CACHE_VERSION` say 2.3.9.
+  and `APP_VERSION` / `CACHE_VERSION` say 2.3.10.
+- **The kiosk translates 27 codes, not every code it can receive.** VEPay's
+  `no_receipt`, `multiple_receipts`, `receipt_parse_error`, and `network_error`, any
+  VEPay 5xx other than 502-504, and the verify endpoint's `unsupported_heif` reach
+  the customer as the generic message (section 12).
 - **The Konteo Express rebrand did not reach the Capacitor config.**
   `capacitor.config.json` still carries `"appName": "RetailOps Kiosk"` while the
   Android strings resource says `Konteo Express`, so regenerating the native project
   would revert the display name. The iOS `CFBundleDisplayName` is in the same state.
 - **CLI `roles list` bypasses the pager**, calling `client.get("roles/")` with no page
   parameters. Latent only because just a few roles are ever seeded.
-- **CLI depends on `rich` transitively.** It is imported in four modules but declared
-  nowhere; it arrives through Typer.
+- **CLI depends on `rich` transitively.** It is imported in four modules (`client.py`,
+  `commands/auth.py`, `errors.py`, and `output.py`) but declared nowhere; it arrives
+  through Typer.
 - **Dead code in the kiosk.** `app/services/payments.js` posts to `POST /payments/` and
   is never imported - a remnant of the pre-atomic-checkout flow that the current
   `IsNotKioskStation` permission would now reject anyway.
@@ -1202,3 +1301,52 @@ Recorded as observation, not as a work list.
   backend is configured despite throttling depending on one, and
   `STATICFILES_DIRS`/`TEMPLATES.DIRS` point at `static/` and `templates/` directories
   that do not exist (templates resolve through `APP_DIRS` instead).
+
+---
+
+## 17. How this document is verified
+
+This document is kept true by re-deriving it, not by re-reading it. A refresh pins
+one commit in each repository, then:
+
+1. **Splits the document into claims** - structural facts, counts, `file:line`
+   references, cross-repository facts, and judgements - and ends each as verified,
+   updated, or removed. Nothing survives unexamined.
+2. **Establishes every fact from source at the pinned commits.** A `file:line`
+   reference must land on the construct it names, not merely on an existing line.
+3. **Reproduces each count at the previous baseline before re-running it.** If a
+   command cannot reproduce the number the last version printed, the counting rule is
+   wrong, and it is fixed before it is trusted.
+4. **Walks each repository's history since the previous baseline**, area by area, so
+   new modules, rules, endpoints, and drift are added rather than only checked.
+
+The counts in this version, and the commands that produce them (run from each
+repository's root):
+
+| Count | Value | Command |
+|---|---:|---|
+| Models | 15 | `grep -cE '^class \w+\((models\.Model\|AbstractBaseUser)' core/models.py` |
+| Model relationships | 19 | `grep -cE 'models\.(ForeignKey\|OneToOneField)\(' core/models.py` |
+| Router resources | 9 | `grep -c 'router.register' api/urls.py` |
+| Explicit API paths | 12 | `grep -cE '^\s*path\(' api/urls.py`, less the `kiosk/` include |
+| Throttle classes | 6 + 4 | `grep -c '^class ' api/throttling.py`; `grep -c '^class Kiosk' api/kiosk/throttling.py` |
+| Back-office views | 45 | `grep -cE '^def [a-z]\w*\(request' core/views.py` |
+| ...gated by `@role_required` | 28 | `grep -c '^@role_required' core/views.py`; the split into login-only and public reads the decorators above each `def` |
+| Test modules / methods | 34 / 385 | `git ls-files '*tests/test_*.py' \| wc -l`; the same list piped to `xargs grep -h '^\s*def test_' \| wc -l` |
+| Kiosk error codes translated | 27 | `sed -n '/function _codeToSpanish/,/^}/p' app/api.js \| grep -c "case '"` (Konteo Express) |
+| Endpoints in the kiosk's `BACKEND_INTEGRATION.md` | 6 | ``grep -cE '^\| `(GET\|POST)` \| `/api/v1/' BACKEND_INTEGRATION.md`` (Konteo Express) |
+| CLI modules importing `rich` | 4 | `grep -rl --include='*.py' -e 'from rich' -e 'import rich' retailops_cli \| wc -l` (RetailOps CLI) |
+
+The endpoint matrix in section 10 is rebuilt the same way: the rows from the two URL
+configurations, and each cell from a search of the client's own calls - `api.get`,
+`api.post`, and `api.postForm` in the kiosk; the client and pager helpers in the CLI's
+commands; and the client calls in `mcp_server/tools/`.
+
+## Revision history
+
+| Date | Baseline | Change |
+|---|---|---|
+| 2026-09-10 | Core `c391385` (2026-07-30) | First version, written from the architecture analysis and landed in #9. |
+| 2026-09-27 | Core `5819e41` | #10: the currency snapshot model - section 4's **Currency**, the recorded-currency contract, and the kiosk checkout's rate handling. Three stale line references fixed. Two client drift entries added, then dropped when their fixes (konteo-express#5, retailops-cli#6) landed alongside. |
+| 2026-09-28 | Core `5819e41` | #11: two overstated kiosk checkout claims tightened. |
+| 2026-09-28 | Core `bd394d5`, Konteo Express `6242108`, RetailOps CLI `23e89bc` | Full re-verification (this version). Added what the first version predated: `SalesOrder.confirm()`, `core/services/inventory.py` and `customers.py`, `core/exceptions.py`, the order write-path rules, national-ID normalisation, the kiosk's where-to-pay screen and per-sale settings refresh, and the VEPay time budget. Corrected: viewsets are not all mixin-composed; `users/` is readable by its owner; the MCP server calls neither the rate refresh nor `mcp-skill/`; twelve explicit API paths, not about eleven; the receipt Cache-Control default; three missing relationships in the diagram. New drift: kiosk codes left untranslated. Section 17 added. Reproduced at the first version's baseline, its model, router, and throttle counts hold; its approximate figures do not - there were already 12 explicit paths (not about eleven), 27 kiosk codes (not about 25), and 223 test methods in 26 modules (not about 237 in 32) - so this version gives exact counts from recorded commands. |
