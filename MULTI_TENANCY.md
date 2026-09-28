@@ -16,14 +16,13 @@ document assumes that context.
 | **Verified** | Checked against source at the cited `file:line` while writing this document. |
 | **Projected** | An estimate or consequence derived from verified facts. Reasoned, not measured. |
 
-Every structural claim in sections 2, 3 and 4 is verified. Effort and cost claims in
-sections 5 onward are projected.
+Every structural claim in sections 1 to 4 is verified. Effort and cost claims in sections
+5 onward are projected.
 
-> **Re-verified 2026-09-28 against `master` at `5819e41`.** The study was first verified
-> against the code of late July 2026 (`c391385`). Every `file:line` reference now points at
-> current code, except in section 3, which records a bug fixed on 2026-08-03 and keeps its
-> original references. Where the code has since changed what a claim describes, the claim
-> carries a dated note. Counts such as the ~150 unscoped query sites were not re-derived.
+> **Verified 2026-09-28** against RetailOps Core `bd394d5`, Konteo Express `6242108`, and
+> RetailOps CLI `23e89bc`. Every claim, count, and `file:line` reference holds at those
+> commits. Section 13 records how each count was produced, so the next refresh can repeat
+> it; the revision history at the end records what changed since the first version.
 
 **Assumptions confirmed with the project owner:**
 
@@ -50,26 +49,37 @@ The one store-shaped concept is `KioskStation.store_identifier` (`core/models.py
 free-text `CharField(max_length=50)` with no uniqueness, no foreign key, and no registry.
 **Verified: it filters exactly one query** - the duplicate-station check in
 `provision_kiosk` (`core/management/commands/provision_kiosk.py:24`), which enforces
-uniqueness rather than scoping data. (The first version of this study said it filtered
-none; that check has existed since June.) It appears in `unique_together`
+uniqueness rather than scoping data. It appears in `unique_together`
 (`core/models.py:1098`), in the derived service-user email
 (`api/kiosk/provisioning.py:44`), and in Django admin `list_display`/`list_filter`. It is a
 naming convention for hardware, not a tenancy axis, and it cannot be promoted in place.
 
 ### The query surface, counted
 
-**Verified** counts of sites that read or write business data without any ownership filter:
+**Verified** counts of sites that read or write business data without any ownership filter.
+A site is one manager access - `Model.objects` followed by a method, whether on the same
+line or the next - or one `get_object_or_404(` call:
 
 | Location | Count | Shape |
 |---|---:|---|
-| `core/views.py` | 52 `.objects.` + 26 `get_object_or_404(` = **78** | 43 function-based views across 47 routes. No shared base class. |
-| `api/views/*.py` | **23** | 9 collection querysets (4 `get_queryset()` overrides + 5 class-level `queryset =`) plus ad-hoc manager calls inside actions. |
-| `api/kiosk/views.py` | **10** | All plain `APIView`. No queryset layer to hook. |
-| `api/serializers/*.py` | **8** write-side `PrimaryKeyRelatedField(queryset=...)` + 13 uniqueness checks | See section 8. |
-| `core/admin.py` | 11 `ModelAdmin`, **0** `get_queryset()` overrides | Plus unfiltered `raw_id_fields` lookups. |
+| `core/views.py` | 63 manager accesses + 26 `get_object_or_404(` = **89** | 45 function-based views across 49 routes. No shared base class. |
+| `api/views/*.py` | **32** | 9 collection querysets (4 `get_queryset()` overrides + 5 class-level `queryset =`) plus ad-hoc manager calls inside actions. |
+| `api/kiosk/views.py` | **13** | All plain `APIView`. No queryset layer to hook. |
+| `api/kiosk/` other modules | **7** | Station authentication, provisioning, and customer registration. |
+| `api/serializers/*.py` | **16** | 8 write-side related fields (`queryset=`), plus 8 other queries - 5 of them uniqueness pre-checks. See section 8. |
+| `core/models.py` | **12** | Model-level rules: sequence numbers, snapshot interning on each new payment, the settings singleton and its currency checks, the primary-recipient rule. |
+| `core/services/*.py` | **5** | Stock (`inventory.py`), national-ID lookup (`customers.py`), and the live currency read (`currency.py`). |
+| `core/admin.py` | 12 `ModelAdmin`, **0** `get_queryset()` overrides | Plus unfiltered `raw_id_fields` lookups (7). |
 
-Call it **roughly 150 sites** in total. The distribution matters more than the sum, and
+Call it **roughly 175 sites** in total. The distribution matters more than the sum, and
 section 6 explains why.
+
+Across every surface there are also **20 uniqueness pre-checks** - code that looks for an
+existing row with the same unique value before writing: 10 in `core/views.py`, 5 in the API
+serializers, 2 in the kiosk, 1 in the receipt-verify endpoint, the national-ID check in
+`core/services/customers.py` that the API, the kiosk, and three back-office paths share,
+and `provision_kiosk`'s station check.
+Each is a global query today.
 
 ---
 
@@ -97,22 +107,16 @@ customer would walk out with goods.
 
 This is not a data-disclosure problem. It is direct inventory loss, available to anyone who
 knows any tenant's published payment details - which are, by design, published to customers
-on the kiosk screen. The same unscoped read appears in `SystemSettings.clean()`
+on the kiosk screen: Konteo Express's payment-account screen shows the store's primary
+receiving account, with copy buttons, before every receipt payment. The same unscoped read
+appears in `SystemSettings.clean()`
 (`core/models.py:860`), so a tenant could enable recipient validation while owning zero
 profiles of its own.
 
 It ranks first because the constraint problems below stop you from launching, and this one
 loses money quietly after you launch.
 
-### 2.2 A global row lock held across third-party HTTP
-
-Verified in full in section 3. Today it serialises all order creation; on a shared schema it
-becomes a cross-tenant denial of service.
-
-> **Resolved 2026-08-03** in `d17f065` (#5): receipt validation, OCR call included, now runs
-> before the checkout transaction opens (`api/kiosk/views.py:335`). See section 3.
-
-### 2.3 `SystemSettings` is a destructive singleton
+### 2.2 `SystemSettings` is a destructive singleton
 
 `core/models.py:869-876`:
 
@@ -135,7 +139,8 @@ provider base URL and **`ocr_api_key`**, receipt retention policy, and
 `recipient_validation_enabled`.
 
 This ranks first *by ordering* - nothing else works until it is resolved - but **not by
-cost**. All ~35 call sites funnel through one classmethod (`core/models.py:919-922`):
+cost**. Non-test code reads the singleton through two chokepoints. Twenty calls go through
+one classmethod (`core/models.py:919-922`):
 
 ```python
 @classmethod
@@ -144,23 +149,23 @@ def get(cls):
     return obj
 ```
 
-> **No longer the only path (2026-09-27, #10).** `current_context()`
-> (`core/services/currency.py:172`) reads the row directly with
-> `SystemSettings.objects.filter(pk=1).first()`, bypassing `get()` on purpose so that
-> rendering a page never inserts the row. A tenancy change to `get()` must cover that read
-> too. A grep of non-test code today finds 20 `SystemSettings.get()` calls; the ~35 above
-> may have been counted differently.
+The second is `current_context()` (`core/services/currency.py:172`), which reads the row with
+`SystemSettings.objects.filter(pk=1).first()` so that rendering a page or recording a payment
+never inserts it; every new payment passes through it to record its currency. Beyond the two,
+only setup and admin code touch the table directly: `OperationalSiteInitializer`'s
+`get_or_create(pk=1)`, `SystemSettingsAdmin.has_add_permission`, and two re-reads of the
+stored row inside `SystemSettings` itself.
 
-Keeping that zero-argument signature and backing it with ambient context means the context
-processor, the `regional.py` template tag on every rendered money value, `VEPayClient`, and
-`Model.clean()` need no changes at all. The apparent size of this blocker is an artifact of
-counting call sites instead of chokepoints.
+Keeping both signatures zero-argument and backing them with ambient context means the context
+processor, the `regional.py` template tags on every rendered money value, `VEPayClient`,
+`Payment.save()`, and `Model.clean()` need no changes at all. The apparent size of this
+blocker is an artifact of counting call sites instead of chokepoints.
 
 Worth noting separately: `get()` performs a `get_or_create` on a **read** path executed on
 every template render. That is an INSERT attempt on read, which will break under a
 read-replica router and can race. Creation belongs in provisioning.
 
-### 2.4 Identity: `User.email` and the single `Role` foreign key
+### 2.3 Identity: `User.email` and the single `Role` foreign key
 
 `core/models.py:101` declares `email = models.EmailField(unique=True)` and it is the
 `USERNAME_FIELD`. `role` is a single-valued FK (`core/models.py:104-110`) to a `Role` whose
@@ -173,14 +178,28 @@ One human therefore cannot work for two tenants, and cannot hold different roles
 authenticates successfully against tenant B's subdomain. A mistake here logs someone into
 the wrong company. This deserves its own deployment and its own tests.
 
-### 2.5 Global uniqueness that collides in normal use
+### 2.4 Global uniqueness that collides in normal use
 
-**Verified**, all in `core/models.py`: `Product.sku` (`:261`), `Customer.email` (`:149`),
-`Customer.national_id` (`:150`), `ProductCategory.name` (`:199`), `SequenceCounter.prefix`
-(`:36`), and `Payment.transaction_key` as a partial unique (`:645-649`).
+**Verified**, all in `core/models.py`. Beyond the identity constraints in section 2.3, twelve
+uniques are global today and would each need a tenant component under a shared schema:
+
+| Unique | Where | What happens across tenants |
+|---|---|---|
+| `Product.sku` | `:261` | Collides: generic SKUs, shared EAN codes. |
+| `Customer.email` | `:149` | Collides: one shopper at two stores. |
+| `Customer.national_id` | `:150` | Collides, and more readily now that it is stored normalised. |
+| `ProductCategory.name` | `:199` | Collides: every store has "Beverages". |
+| `SequenceCounter.prefix` | `:36` | One counter row per day shared by every tenant - order numbers would leak each tenant's volume to the others. |
+| `SalesOrder.order_number`, `Payment.payment_number` | `:345`, `:606` | Unique only while the counter is shared; give tenants their own counters and both collide on the first order of the day. |
+| `Payment.transaction_key` (partial) | `:645-649` | Collides only on a genuinely reused receipt, but see the oracle below. |
+| `RecipientProfile` one primary per method (partial) | `:973-976` | Worse than a collision: the API and the back-office both call `demote_other_primaries()` (`:1002`) before setting a primary, which clears the flag on *every* other profile of that method - so one tenant choosing its receiving account silently strips another tenant's. `ensure_sole_profile_is_primary()` (`:1020`) likewise counts every tenant's profiles. |
+| `RecipientProfile` unique combination | `:969-972` | Collides when two tenants receive into the same account. |
+| `KioskStation` `(store_identifier, station_number)` | `:1098` | Collides when two tenants name a store alike. |
+| `CurrencySnapshot.fingerprint` | `:526` | Does not error: two tenants with identical settings silently share one snapshot row, so the fingerprint needs a tenant component or the table a tenant FK. |
 
 Generic SKUs, shared EAN codes, a category named "Beverages", the same shopper's national ID
-at two stores - all collide immediately.
+at two stores - most of these collide immediately. `SalesOrderItem`'s one-line-per-product
+constraint is the only unique that is already safe: it is scoped to its order.
 
 `Payment.transaction_key` carries an extra hazard. `api/kiosk/views.py:531`:
 
@@ -192,7 +211,7 @@ if transaction_key and Payment.objects.filter(transaction_key=transaction_key).e
 Unscoped, this is a **cross-tenant existence oracle**: one tenant can probe for another
 tenant's payment references by trial submission and read the answer from the error code.
 
-### 2.6 The dashboard leaks revenue and customer names
+### 2.5 The dashboard leaks revenue and customer names
 
 `api/views/dashboard.py:83-124` contains **five unscoped queries in one method**: order
 count for the month (`:87`), revenue `Sum` (`:91-98`), pending-payment count (`:102`),
@@ -202,7 +221,7 @@ low-stock count via a `Product` annotation (`:109-118`), and the five most recen
 On a shared schema, `GET /api/v1/dashboard/` would hand every tenant the whole installation's
 revenue and a sample of competitors' customer names.
 
-### 2.7 Media path routing
+### 2.6 Media path routing
 
 Upload paths carry no tenant segment: `products/{YYYY}/{MM}/...` (`core/models.py:234`) and
 `receipts/{YYYY}/{MM}/...` (`core/models.py:581`). Beyond the absence of isolation, the
@@ -213,67 +232,22 @@ The fix has a trap, described precisely in section 4.
 
 ---
 
-## 3. A pre-existing bug, independent of tenancy
+## 3. A prerequisite already met: no lock held across third-party HTTP
 
-This section documents a defect in the current single-tenant system. It is worth fixing on
-its own merits and it must be fixed before any shared-schema tenancy work.
+Shared-schema tenancy has one precondition in the current single-tenant system: kiosk
+checkout must not hold a global row lock while it waits on a third-party service. If it did,
+one tenant's degraded OCR provider would stall checkout for every other tenant on the box.
 
-> **Fixed 2026-08-03** in `d17f065` (#5), as the *Fix* below prescribes. `_execute_checkout`
-> validates the receipt, OCR call included, before opening the transaction
-> (`api/kiosk/views.py:335`), then re-checks stock, the total and the transaction key inside
-> it. `408bfa0` also budgets the whole VEPay call, retry included, at
-> `ocr_timeout_seconds`, so the worst case is 30 seconds by default rather than 61 - and no
-> lock is held during it. The chain below is kept as it was verified at `c391385`; its line
-> references describe that version, not current code.
+**Verified: it does not.** `_execute_checkout` validates the receipt - the VEPay OCR call
+included - before it opens the transaction (`api/kiosk/views.py:335`). Inside it, the write
+block re-resolves the products under row locks, re-checks stock and the total the receipt was
+validated against, and re-checks the transaction key; nothing read before the block is
+trusted. The `SO-{today}` counter row that `SequenceCounter.next_value()` locks is therefore
+held only for database work. `VEPayClient` also budgets the whole call, retry included, at
+`ocr_timeout_seconds` - 30 seconds by default.
 
-**Verified chain:**
-
-```mermaid
-sequenceDiagram
-    participant V as View
-    participant DB as PostgreSQL
-    participant OCR as VEPay
-
-    V->>DB: BEGIN  (api/kiosk/views.py:279)
-    V->>DB: SELECT FOR UPDATE products  (:287)
-    V->>DB: order.save()  (:323)
-    Note over V,DB: SequenceCounter.next_value('SO-YYYYMMDD')<br/>core/models.py:35 opens transaction.atomic()<br/>→ degrades to SAVEPOINT (outer block open)<br/>→ SELECT FOR UPDATE holds until OUTER commit
-    V->>OCR: _payment_receipt_fields (:363) → parse_receipt (:502)
-    Note over OCR: requests.post timeout=30s<br/>2 attempts, sleep(1) between<br/>worst case 61s
-    OCR-->>V: response (or timeout)
-    V->>DB: COMMIT — lock finally released
-```
-
-Each link, verified:
-
-- `api/kiosk/views.py:279` opens `with transaction.atomic():` around the entire checkout.
-- `:323` calls `order.save()`, which triggers `SalesOrder._generate_order_number()` and thus
-  `SequenceCounter.next_value('SO-YYYYMMDD')`.
-- `core/models.py:34-40` - `next_value` opens its own `transaction.atomic()`. **Because an
-  outer atomic block is already open, this degrades to a savepoint**, so the
-  `SELECT FOR UPDATE` row lock at `:37` is held until the *outer* transaction commits, not
-  until `next_value` returns.
-- `:363` then calls `_payment_receipt_fields(...)`, still inside the outer block.
-- `:502` calls `async_to_sync(VEPayClient().parse_receipt)(...)`.
-- `core/services/vepay.py:95` issues `requests.post(..., timeout=self.timeout)` where
-  `self.timeout = settings.ocr_timeout_seconds`, **default 30** (`core/models.py:565`).
-- `core/services/vepay.py:93` wraps this in `for attempt in range(2)` with
-  `time.sleep(1)` between attempts (`:123`).
-
-**Worst case: 30 + 1 + 30 = 61 seconds of third-party HTTP with a global row lock held.**
-
-Because the `SO-{today}` counter row is shared by every order created that day, this
-serialises *all* order creation behind whichever checkout is currently waiting on VEPay.
-Single-tenant, that is a self-inflicted throughput ceiling and a latency cliff whenever the
-OCR provider degrades. On a shared-schema multi-tenant deployment it becomes a cross-tenant
-denial of service: one tenant's OCR provider having a bad afternoon stalls checkout for every
-other tenant on the box.
-
-**Fix:** move OCR and receipt validation *before* the transaction. Parse and validate the
-receipt, then open `transaction.atomic()`, re-acquire the product locks, re-validate stock,
-and write. This preserves the atomicity guarantee that
-`konteo-express/CLAUDE.md` depends on - checkout remains a single call that either fully
-succeeds or fully fails - while removing network I/O from the critical section.
+The first version of this study found it as a live bug; it was fixed on 2026-08-03 (see the
+revision history).
 
 ---
 
@@ -304,7 +278,8 @@ object falls through to `default_storage`.
 to the default profile. That means a **different bucket** when three are configured
 (`MEDIA_GCS_RECEIPT_BUCKET_NAME` vs `MEDIA_GCS_DEFAULT_BUCKET_NAME`), with whatever
 lifecycle and retention policy was tuned for general media rather than for payment evidence,
-and **without** the `private, no-store` cache-control that the receipt profile applies.
+and **without** the `private, max-age=0, no-store` cache-control that the receipt profile
+applies by default.
 
 It is **not** unconditionally public. `default_querystring_auth` defaults to `True`
 (`retailops/settings.py:349`), so such objects would still be signed under default
@@ -341,13 +316,13 @@ credential-derived scheme.
 
 ### (a) Shared database, shared schema, tenant foreign key
 
-Add a `tenant` FK to all 14 models, convert every global unique to a composite, and filter
+Add a `tenant` FK to all 15 models, convert every global unique to a composite, and filter
 every query.
 
-**What it costs here.** The ~150 sites, and it is not a one-time cost. Every future pull
-request that adds a query is a potential cross-tenant breach. Nine unique constraints need
-concurrent index swaps with `SeparateDatabaseAndState` reconciliation to keep
-`makemigrations --check` green in CI.
+**What it costs here.** The ~175 sites, and it is not a one-time cost. Every future pull
+request that adds a query is a potential cross-tenant breach. The twelve uniques in section
+2.4, plus `User.email` and `Role.name`, need concurrent index swaps with
+`SeparateDatabaseAndState` reconciliation to keep `makemigrations --check` green in CI.
 
 **What it solves.** One database, one `migrate`, one connection pool, one backup. Crucially,
 **cross-tenant reporting stays a single query** - "orders across all customers this month",
@@ -356,7 +331,7 @@ that becomes a rollup job. This advantage is real and routinely underpriced.
 
 **What it does not solve.** Blast radius is total: one missing `.filter(tenant=)` exposes
 everything. Per-tenant restore means restoring the whole database to a scratch instance and
-copying rows back in foreign-key order across 14 tables - a bespoke script you will write
+copying rows back in foreign-key order across 15 tables - a bespoke script you will write
 once and exercise for the first time during an incident.
 
 ### (b) Shared database, schema per tenant
@@ -368,11 +343,11 @@ One PostgreSQL schema per tenant, selected by `search_path`.
 | Blocker | Fate |
 |---|---|
 | 2.1 Unscoped recipient matching | **Gone.** The query sees only its own schema. |
-| 2.3 `SystemSettings` `pk=1` | **Gone - becomes correct by construction.** One row per schema. `self.pk = 1` is now right. Zero of the ~35 call sites change. |
-| 2.4 `User.email` / `Role.name` uniques | **Gone** as constraints. The design question - can one human serve two tenants - remains a product decision. |
-| 2.5 All global uniques | **Gone.** Zero migrations. |
-| 2.5 `transaction_key` existence oracle | **Gone.** |
-| ~150 unscoped query sites | **All correct, untouched.** |
+| 2.2 `SystemSettings` `pk=1` | **Gone - becomes correct by construction.** One row per schema. `self.pk = 1` is now right. Neither chokepoint, nor any of the 20 `get()` calls, changes. |
+| 2.3 `User.email` / `Role.name` uniques | **Gone** as constraints. The design question - can one human serve two tenants - remains a product decision. |
+| 2.4 All twelve global uniques | **Gone.** Zero migrations - and `CurrencySnapshot` rows can no longer be shared between tenants. |
+| 2.4 `transaction_key` existence oracle | **Gone.** |
+| ~175 unscoped query sites | **All correct, untouched.** |
 
 Three consequences deserve emphasis because they are not obvious:
 
@@ -444,7 +419,7 @@ Reasonable later as a premium tier for a regulated customer. Wrong as the primar
 ### (d) Instance per tenant (silo)
 
 **Zero code changes.** Ship the current codebase N times with N environment files. Every
-blocker in section 2 evaporates: `pk=1` is correct, all 150 sites are correct, kiosk auth is
+blocker in section 2 evaporates: `pk=1` is correct, all ~175 sites are correct, kiosk auth is
 unchanged.
 
 The honest framing, which usually gets skipped: silo does not eliminate engineering, it
@@ -463,13 +438,12 @@ Its correct role is a **bridge, not a destination**.
 | Blocker | (a) discriminator | (b) schema | (c) database | (d) silo |
 |---|---|---|---|---|
 | Unscoped recipient match (fraud) | Scope the query | **Gone** | Gone | Gone |
-| Sequence lock across HTTP | Fixed (#5) | Fixed (#5) | Fixed (#5) | Fixed (#5) |
-| `SystemSettings` `pk=1` | Fix `get()` (hours) | **Gone - correct** | Gone | Gone |
+| `SystemSettings` `pk=1` | Fix `get()` and `current_context()` (hours) | **Gone - correct** | Gone | Gone |
 | `User.email` + auth backend | Composite + **custom backend** | Gone as constraint | Gone | Gone |
-| Global uniques (5) | 5 concurrent index swaps | **Gone** | Gone | Gone |
+| Global uniques (12) | 12 concurrent index swaps | **Gone** | Gone | Gone |
 | Dashboard aggregates | Scope 5 queries | **Gone** | Gone | Gone |
 | Media path routing | Type-prefix-first | Same fix | Same fix | Per-tenant buckets |
-| ~150 unscoped sites | **The entire project** | **Zero edits** | Zero edits | Zero edits |
+| ~175 unscoped sites | **The entire project** | **Zero edits** | Zero edits | Zero edits |
 | 8 import-time related fields | `get_fields()` on all 8 | **Gone - lazy binding** | Gone | Gone |
 | `_stock` JOIN aggregate | Needs RLS to be safe | **Gone** | Gone | Gone |
 | Kiosk late binding | **Easiest here** | Public key index (~40 lines) | Registry + router | N/A |
@@ -488,26 +462,37 @@ shared-schema discriminator model as the documented fallback.**
 The argument is one asymmetry, and it is worth stating plainly rather than burying it in the
 matrix above:
 
-> **78 of the ~150 unscoped query sites are in `core/views.py`**, spread across 43
+> **89 of the ~175 unscoped query sites are in `core/views.py`**, spread across 45
 > function-based views with no shared base class, no `get_queryset()`, and no permission
-> hook. Under the discriminator model those are 78 individually-reviewed edits *and* a
+> hook. Under the discriminator model those are 89 individually-reviewed edits *and* a
 > permanent per-pull-request security obligation. Under schema-per-tenant they are correct
 > without being touched.
 
 That converts an unbounded recurring cost into a bounded one-time cost, which is the single
 most valuable property for a small team.
 
+**Re-evaluated against `bd394d5`, the recommendation holds.** The asymmetry is unchanged in
+proportion: `core/views.py` holds 51% of the sites today against 52% when the study was
+first written, and it grew by six sites and two views in two months - the recurring cost
+the argument is about, observed. The rest of the new evidence only strengthens the case: a
+shared schema would need twelve composite uniques, not the five or nine the first version
+counted; the primary-recipient rule would let one tenant silently demote another's
+receiving account; and the currency snapshot table added in #10 would silently share rows
+across tenants. Nothing new weighs against schema-per-tenant.
+
 Supporting reasons, in order of weight:
 
 1. **The highest-ranked structural blocker becomes free.** `SystemSettings`'s
    `self.pk = 1` - the line that would silently overwrite one tenant's OCR API key and
    exchange rate with another's - is not *fixed* under schema-per-tenant, it is *correct*.
-   So are the context processor on every template render, the `regional.py` template tag on
-   every money value, `VEPayClient.__init__`, and `SystemSettings.clean()`.
+   So are the context processor on every template render, the `regional.py` template tags on
+   every money value, `current_context()` on every new payment, `VEPayClient.__init__`, and
+   `SystemSettings.clean()`.
 
-2. **Blockers 2.4 through 2.6 are constraint-shaped, and constraints are per-schema.** Nine
-   composite-index migrations, each needing a concurrent-create/drop sequence and migration
-   state reconciliation, simply do not happen.
+2. **Blockers 2.3 and 2.4 are constraint-shaped, and constraints are per-schema.** Fourteen
+   composite-index migrations - the twelve uniques of section 2.4 plus `User.email` and
+   `Role.name` - each needing a concurrent-create/drop sequence and migration state
+   reconciliation, simply do not happen.
 
 3. **Scale fits.** Tens to low hundreds puts `migrate_schemas` in the minutes range. The
    regime where schema-per-tenant degrades - thousands of tiny tenants - is not the target
@@ -550,6 +535,9 @@ no request in scope:
   `api/kiosk/views.py:599`.
 - `Model.clean()` is called by Django **with no arguments**. `SystemSettings.clean()`
   (`core/models.py:860`) reads `RecipientProfile`. You cannot pass a tenant into it.
+- `Payment.save()` records the live currency configuration on every new payment through
+  `current_context()` (`core/models.py:663`) - a model method, called from the API, the
+  back-office, the kiosk, and the seed command alike.
 - `core/templatetags/regional.py` runs during template rendering on every money value.
 - `purge_receipts` and `update_bcv_rate` are management commands with no request at all.
 
@@ -656,7 +644,7 @@ Two consequences change the effort estimate:
 
 - **The 26 `get_object_or_404` sites in `core/views.py` are among the cheapest to fix, not
   the hardest** - a default manager catches all of them. That reduces the effective
-  `core/views.py` burden under (a) from 78 to 52.
+  `core/views.py` burden under (a) from 89 to 63.
 - **The "scope the root, trust the FK" strategy silently depends on tenant-consistent
   foreign keys, and nothing in the codebase enforces that.** This is a bigger finding than
   the `_stock` aggregate itself. A `Product` scoped correctly does constrain
@@ -672,9 +660,9 @@ function.
 
 | Layer | Catches | Misses | Verdict |
 |---|---|---|---|
-| **0. `search_path`** (option b) | Every row in the table above except schema-qualified raw SQL; all 78 `core/views.py` sites, all kiosk `APIView` queries, all 8 related fields, all 13 uniqueness checks, all 11 `ModelAdmin`s | Explicit `schema_context('public')`; schema-qualified raw SQL | **The primary control under (b)** |
+| **0. `search_path`** (option b) | Every row in the table above except schema-qualified raw SQL; all 89 `core/views.py` sites, all kiosk `APIView` queries, all 8 related fields, all 20 uniqueness pre-checks, all 12 `ModelAdmin`s | Explicit `schema_context('public')`; schema-qualified raw SQL | **The primary control under (b)** |
 | **1. Tenant-aware default managers** (option a) | Rows 1-3 | Rows 4-8 - where the residual risk lives | Necessary but insufficient under (a) |
-| **2. Base ViewSet mixin** | The 9 collection querysets | The ad-hoc action queries (`order.py` `bulk_transition`, `inventory.py` `bulk_adjust`), all kiosk `APIView`s, all 78 `core/views.py` sites, all write-side related fields | **~6% of the surface. Never cite it as a control.** |
+| **2. Base ViewSet mixin** | The 9 collection querysets | The ad-hoc action queries (`order.py` `bulk_transition`, `inventory.py` `bulk_adjust`), all kiosk `APIView`s, all 89 `core/views.py` sites, all write-side related fields | **~5% of the surface. Never cite it as a control.** |
 | **3. `has_object_permission`** | IDOR on detail routes after someone forgets to scope `get_queryset()` | All list routes, all `core/views.py` FBVs, the kiosk `APIView`s, every write through a related field | Narrow, but that is the *most likely* mistake, and it is ~20 lines. **Do it regardless of model.** |
 | **4. PostgreSQL Row-Level Security** | Everything, including JOIN aggregates, `_base_manager` traversal, `select_related`, and raw SQL | Nothing at the data layer | Under (a) this is not defence-in-depth, it is **the** control |
 | **5. Test-suite guard** | See section 9 | Nothing it is pointed at | **Cheapest high-value layer. Mandatory under every model.** |
@@ -721,7 +709,7 @@ against the single-tenant application with a stub tenant - so it is ready before
 needed.
 
 **The two-tenant sweep.** Create tenants A and B with structurally identical data. Enumerate
-every route from `get_resolver().reverse_dict` - 47 back-office routes plus the API router -
+every route from `get_resolver().reverse_dict` - 49 back-office routes plus the API router -
 and drive each one as a tenant-A user. Then assert:
 
 1. No tenant-B primary key, SKU, email, national ID, order number, or customer name appears
@@ -737,7 +725,9 @@ Three cheap companions:
 - **Model census.** Iterate `apps.get_models()` and assert every `core` model either carries
   a tenant FK (under (a)) or appears in an explicit exemption set. Under (b), assert the
   shared and tenant app sets partition `INSTALLED_APPS`. This fails the day someone adds a
-  fifteenth model - the regression that *will* happen.
+  model without deciding its tenancy - the regression that *will* happen, and already has
+  once: `CurrencySnapshot` (#10) became the fifteenth model two months after this study
+  counted fourteen.
 - **Cross-tenant FK integrity.** For every foreign key between tenant-scoped models, assert
   `source.tenant_id == target.tenant_id`. This protects the assumption the whole strategy
   rests on and that nothing currently enforces.
@@ -748,7 +738,8 @@ Three cheap companions:
 If (a) is ever chosen, the rigorous version of the FK check is structural rather than
 tested: `UNIQUE(id, tenant_id)` on each parent plus a composite
 `FOREIGN KEY (parent_id, tenant_id)` on each child. Django cannot express composite foreign
-keys but `RunSQL` can. That is ~14 extra unique indexes and ~20 composite FKs, and it makes
+keys but `RunSQL` can. That is up to 8 extra unique indexes - one per referenced parent
+table - and up to 19 composite FKs, one per relationship between the models, and it makes
 cross-tenant corruption *impossible* rather than *detected later* - the correct answer for a
 payments-adjacent system on a shared schema.
 
@@ -760,17 +751,15 @@ Every phase ships. Nothing sits on a long-lived branch.
 
 ### Phase 0 - Hygiene (valuable single-tenant, ship independently)
 
-1. **Fix the lock-across-network-I/O bug** (section 3). Move OCR and receipt validation
-   outside the checkout transaction. This removes a 61-second worst-case global lock hold
-   from the hottest path *today*, and removes the cross-tenant DoS from the future before
-   tenants exist. **Done 2026-08-03 in `d17f065` (#5).**
-2. **Configure `CACHES`.** Currently absent, so throttling uses per-process `LocMemCache`:
+The checkout lock that once headed this list is already fixed (section 3).
+
+1. **Configure `CACHES`.** Currently absent, so throttling uses per-process `LocMemCache`:
    the `600/min` global ceiling is really `600 x worker_count` and resets on every deploy.
    Per-tenant throttling is impossible until a shared cache exists, and the VEPay circuit
    breaker in section 11 needs it too.
-3. **Add PostgreSQL to CI** as a matrix leg.
-4. **Write the two-tenant sweep harness** against the single-tenant app.
-5. **Add `has_object_permission` backstops** - no-ops today, live later.
+2. **Add PostgreSQL to CI** as a matrix leg.
+3. **Write the two-tenant sweep harness** against the single-tenant app.
+4. **Add `has_object_permission` backstops** - no-ops today, live later.
 
 ### Phase 1 - Tenant model and resolution, no enforcement
 
@@ -803,13 +792,13 @@ on the global unique → `DROP INDEX CONCURRENTLY` → **reconcile migration sta
 `makemigrations --check`.
 
 **`User.email` deserves its own sub-phase**, because of the authentication-backend issue in
-section 2.4. Isolate it, test it specifically, deploy it alone.
+section 2.3. Isolate it, test it specifically, deploy it alone.
 
 **Shippable.**
 
 ### Phase 3 - Enforcement
 
-**Under (b):** flip the middleware to actually issue `SET search_path`. All ~150 sites become
+**Under (b):** flip the middleware to actually issue `SET search_path`. All ~175 sites become
 correct simultaneously. Run the sweep. This is the payoff, and it is one commit.
 
 **Under (a):** add managers model by model, highest blast radius first - `SalesOrder`,
@@ -827,7 +816,7 @@ correct simultaneously. Run the sweep. This is the payoff, and it is one commit.
 - **Admin:** `SystemSettingsAdmin.has_add_permission` (`core/admin.py:171`) currently returns
   `not SystemSettings.objects.exists()`, so under (a) once one tenant has settings no other
   can create theirs. Under (a) also add `get_queryset()` **and `formfield_for_foreignkey`**
-  to all 11 `ModelAdmin`s - the latter is the admin's exact analogue of the related-field
+  to all 12 `ModelAdmin`s - the latter is the admin's exact analogue of the related-field
   leak, and without it every FK dropdown lists other tenants' objects.
 - **Kiosk provisioning email** (`api/kiosk/provisioning.py:44`): add the tenant slug, or the
   derived `kiosk-{store}-{n}@station.internal` collides on `User.email`.
@@ -874,7 +863,7 @@ before someone promises otherwise.
 
 **Backup, restore, and deletion.** Under (b), `pg_dump -n acme` and `DROP SCHEMA acme
 CASCADE`. Under (a), per-tenant restore means restoring the full database to a scratch
-instance and copying rows back in FK order across 14 tables. This is where (a) is weakest and
+instance and copying rows back in FK order across 15 tables. This is where (a) is weakest and
 it is almost never priced.
 
 Media is a separate axis under every model: buckets are not tenant-partitioned unless the
@@ -927,10 +916,12 @@ Two provisioning-level items, not code:
   loopback exempted. Correct behaviour for real tenant subdomains.
 
 One opportunity: branding (`STORE_NAME`, `BRAND_LOGO_URL`, `KIOSK_THEME`) is client-side
-configuration today, but `app/services/settings.js` already fetches `GET /settings/` on boot
-and applies it with a conservative-fallback `catch`. Serving branding from the tenant's
-settings row would reduce per-station configuration to the two irreducible secrets -
-`BASE_URL` and `KIOSK_API_KEY` - which is exactly what SaaS onboarding wants.
+configuration today, but `app/services/settings.js` already fetches `GET /settings/` at boot,
+with a conservative-fallback `catch`, and again whenever a sale starts, keeping the last
+applied values if that refresh fails. Serving branding from the tenant's settings row would
+therefore reach every terminal at its next sale, and would reduce per-station configuration
+to the two irreducible secrets - `BASE_URL` and `KIOSK_API_KEY` - which is exactly what
+SaaS onboarding wants.
 
 ### RetailOps CLI - works unchanged under subdomain tenancy
 
@@ -953,3 +944,70 @@ Two latent issues worth fixing regardless:
 `mcp_server/` performs no ORM access; it is an HTTP client of `/api/v1/`. Whatever scoping the
 API gains, the MCP layer gets automatically. Its `retailops://` resource URIs may want a
 tenant segment for clarity, but nothing is required for correctness.
+
+---
+
+## 13. How this document is verified
+
+The verified claims are re-derived at each refresh, never re-read. A refresh pins one commit
+in each repository, then splits the document into claims - structural facts, counts,
+`file:line` references, judgements - and ends each as verified, updated, or removed. A
+`file:line` reference must land on the construct it names. Every count is first re-run at
+the previous baseline: a rule that cannot reproduce the number the last version printed is
+fixed before it is trusted. Judgements - the blocker ranking, the recommendation, the
+phases - are re-evaluated only after every fact is settled.
+
+The counts in this version, run from the repository root at `bd394d5`:
+
+| Count | Value | Command or rule |
+|---|---:|---|
+| Manager accesses, per location | 63 / 32 / 13 / 7 / 16 / 12 / 5 | `git grep -ohE '\.objects(\.\|\s*$)' -- <path> \| wc -l` for `core/views.py`, `api/views/*.py`, `api/kiosk/views.py`, the other `api/kiosk/` modules, `api/serializers/*.py`, `core/models.py`, `core/services/*.py` |
+| `get_object_or_404(` in `core/views.py` | 26 | `git grep -o 'get_object_or_404(' -- core/views.py \| wc -l` |
+| Back-office views / routes | 45 / 49 | `grep -cE '^def [a-z]\w*\(request' core/views.py`; `grep -c 'path(' core/urls.py` |
+| Collection querysets | 4 + 5 | `grep -c 'def get_queryset' api/views/*.py`; `grep -cE '^\s{4}queryset\s*=' api/views/*.py` |
+| Write-side related fields | 8 | `grep -c 'queryset=' api/serializers/*.py` |
+| `ModelAdmin`s / `get_queryset()` overrides / `raw_id_fields` | 12 / 0 / 7 | `grep -cE '^class \w+\((admin\.ModelAdmin\|BaseUserAdmin)\)' core/admin.py`, then `def get_queryset` and `raw_id_fields` |
+| `SystemSettings.get()` calls outside tests | 20 | `git grep -c 'SystemSettings.get()' -- '*.py' ':!*tests/*' ':!*migrations/*'` |
+| Uniqueness pre-checks | 20 | A query for an existing row with the same unique value before a write; listed by surface in section 1 |
+| Global uniques needing a tenant component | 12 | `grep -nE 'unique=True\|UniqueConstraint\(\|unique_together' core/models.py`, less the identity pair of section 2.3 and the order-scoped `SalesOrderItem` constraint |
+| Models / relationships | 15 / 19 | As in `ARCHITECTURE.md` section 17 |
+
+The manager-access rule counts `Model.objects` followed by a method on the same line *or* at
+the end of a line, where the chain continues below. The first version counted only the
+same-line form; section 1 uses the complete rule, and the revision history gives both.
+
+## Revision history
+
+| Date | Baseline | Change |
+|---|---|---|
+| 2026-09-10 | Core `c391385` (2026-07-30) | First version, landed in #9. |
+| 2026-09-28 | Core `5819e41` | #11: every `file:line` reference re-verified after the code had moved under it, with dated notes where a claim no longer held. |
+| 2026-09-28 | Core `bd394d5`, Konteo Express `6242108`, RetailOps CLI `23e89bc` | Full re-verification (this version). See below. |
+
+**What the full re-verification changed.**
+
+- **The checkout lock is gone from the blocker list.** The first version's section 2.2 and
+  section 3 documented a live bug: kiosk checkout held the day's `SequenceCounter` row lock
+  - taken by `order.save()` inside an outer `transaction.atomic()` - across the VEPay call,
+  up to 61 seconds with a retry, serialising all order creation behind a third-party
+  service. `d17f065` (#5, 2026-08-03) applied exactly the fix section 3 prescribed, and
+  `408bfa0` capped the whole VEPay call at `ocr_timeout_seconds`. Section 3 now records the
+  prerequisite as met; the fate table and Phase 0 no longer carry it. Blockers 2.3-2.7
+  became 2.2-2.6.
+- **Counts re-derived.** With the first version's same-line rule, `core/views.py` went from
+  78 sites (reproduced at `c391385`) to 81; with the complete rule, from 83 to 89, and the
+  total from about 159 to about 175. Views 43 to 45, routes 47 to 49, API views 23 to 22
+  (32 at both baselines under the complete rule), kiosk views 10 to 11 (12 to 13 complete),
+  `ModelAdmin`s 11 to 12, models 14 to 15. New rows: `core/models.py`, `core/services/`, and
+  the kiosk's other modules.
+- **Figures that could not be reproduced by any rule** - "13 uniqueness checks" and "~35"
+  `SystemSettings.get()` call sites, and "nine" composite constraints against the fate
+  table's "five" - are replaced by explicit rules and lists: 20 uniqueness pre-checks, 20
+  `get()` calls plus `current_context()`, and twelve global uniques.
+- **New findings.** `CurrencySnapshot.fingerprint` would share rows across tenants;
+  `SalesOrder.order_number` and `Payment.payment_number` collide once counters are
+  per-tenant; the primary-recipient rule would let one tenant demote another's receiving
+  account; `current_context()` is a second settings chokepoint.
+- **Corrected.** "`store_identifier` never filters a query" was already untrue when first
+  written: `provision_kiosk` has filtered on it since June.
+- **The recommendation was re-evaluated and holds** - section 6 gives the reasoning.
