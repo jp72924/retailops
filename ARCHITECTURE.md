@@ -70,11 +70,11 @@ retailops/
 │   ├── test_runner.py      MediaIsolatedTestRunner
 │   └── tests/              Settings-as-code tests
 ├── core/                   Domain app: all models + back-office HTML
-│   ├── models.py           14 models - the single domain module
+│   ├── models.py           15 models - the single domain module
 │   ├── views.py            Function-based HTML views
 │   ├── middleware.py       KioskCORSMiddleware, RegionalMiddleware
 │   ├── decorators.py       @role_required
-│   ├── services/           bcv.py, vepay.py, receipt_matching.py
+│   ├── services/           bcv.py, vepay.py, receipt_matching.py, currency.py
 │   ├── management/commands/  init, bootstrap_local, seed, provision_kiosk,
 │   │                         purge_receipts, update_bcv_rate, initialize_site
 │   ├── templates/core/     Back-office templates
@@ -147,14 +147,22 @@ requests.
 
 ### Domain models
 
-All 14 models live in `core/models.py`. Some behaviour lives on the models rather
+All 15 models live in `core/models.py`. Some behaviour lives on the models rather
 than in services, where it enforces an invariant that must hold for every writer:
 
 - `SequenceCounter.next_value()` uses `SELECT FOR UPDATE` to generate order and
   payment numbers without races.
 - `RecipientProfile.save()` and `.delete()` maintain the "sole profile is primary"
   rule.
-- `SystemSettings.save()` pins `pk=1`, making the model a singleton.
+- `SystemSettings.save()` pins `pk=1`, making the model a singleton. It also stamps a
+  rate change that arrives without a new `secondary_rate_updated_at` as `manual` at
+  the time of the save, so a hand-typed rate never inherits the timestamp of the last
+  automatic fetch.
+- `SystemSettings.clean()` refuses to change `currency_code` once any order or
+  payment exists (section 4).
+- `Payment.save()` records the live currency configuration on a new payment, unless
+  the caller has already assigned one.
+- `CurrencySnapshot.save()` and `.delete()` refuse to touch an existing row.
 
 ### Services
 
@@ -170,10 +178,23 @@ than in services, where it enforces an invariant that must hold for every writer
   iterable of profile-like objects specifically so they unit-test without the ORM.
   Contains the Venezuelan bank aliases, the account-prefix to bank mapping
   (`'0102' -> 'BDV'`), and phone normalisation that strips the `58` country code and
-  the trunk `0`.
+  the trunk `0`. A receipt paid in the secondary currency is converted at the rate
+  of whatever currency context the caller passes in, never a settings read of its
+  own, which is what lets kiosk checkout validate with exactly the rate it records.
 - **`bcv.py`** - fetches the secondary exchange rate from a configurable JSON endpoint
   (default `https://ve.dolarapi.com/v1/dolares/oficial`), extracting the value by
-  dotted path and raising `BCVRateError` with a `code` and `message`.
+  dotted path and raising `BCVRateError` with a `code` and `message`. A successful
+  fetch saves the rate with `secondary_rate_source='fetched'`.
+- **`currency.py`** - the logic of the currency model (section 4). `CurrencyContext`
+  is a frozen, normalised value of the currency configuration whose attribute names
+  mirror `SystemSettings`, so conversion code accepts a settings row, a context, or a
+  stored `CurrencySnapshot` interchangeably. `current_context()` reads the live
+  configuration without ever inserting the settings row. `secondary_amount()`
+  converts a primary amount, rounding half-up to the secondary decimals under the
+  versioned rule `half_up_v1`. `order_amounts()` derives an order's figures in both
+  currencies, and `attach_order_amounts()` does so for a whole page from one settings
+  read. The module imports nothing from `core.models` at load time, because
+  `core.models` imports it.
 
 ### Serializers
 
@@ -182,7 +203,7 @@ than in services, where it enforces an invariant that must hold for every writer
 against `UserWriteSerializer` - and uses a single serializer where they do not, as
 with `Payment`.
 
-Cross-field rules live in `validate()`. `api/serializers/payment.py:172` collects
+Cross-field rules live in `validate()`. `api/serializers/payment.py:189` collects
 every missing field before raising, so a client sees all problems in one response
 rather than discovering them one round-trip at a time:
 
@@ -190,6 +211,13 @@ rather than discovering them one round-trip at a time:
 if payment_method in REFERENCE_REQUIRED_PAYMENT_METHODS and not reference_number:
     errors['reference_number'] = 'A reference number is required for bank transfer, card, and check payments.'
 ```
+
+`api/serializers/currency.py` builds the `currency` and secondary-amount blocks that
+the payment, order, and kiosk endpoints share (section 12), rendering money as
+strings as DRF does for every `DecimalField` - a bolívar amount can carry more
+significant digits than a float holds exactly. `live_currency()` caches the live
+context in the root serializer's context, so a page of 25 orders reads the settings
+once rather than 25 times.
 
 ### Views
 
@@ -201,7 +229,9 @@ immutable financial records, and the missing update and destroy mixins are how t
 is enforced.
 
 Back-office HTML views in `core/views.py` are function-based and gated with
-`@role_required(...)` from `core/decorators.py`.
+`@role_required(...)` from `core/decorators.py`. Views that list orders price the
+page through `attach_order_amounts()` and render it with the `order_money` and
+`money` filters in `core/templatetags/regional.py`.
 
 ### Permissions
 
@@ -222,7 +252,7 @@ One interaction here has bitten this codebase before and is worth carrying forwa
 **overriding `get_permissions()` replaces any `permission_classes` set on an `@action`
 decorator.** `OrderViewSet.bulk_transition` declared `IsManagerOrAdmin` on the action
 but ran with Staff access because the viewset's `get_permissions()` did not special-case
-it. `api/views/order.py:96` now dispatches on `self.action` explicitly, and
+it. `api/views/order.py:165` now dispatches on `self.action` explicitly, and
 `api/tests/test_parity_fixes.py:60` pins single-versus-bulk role parity so the gap
 cannot silently reopen.
 
@@ -267,12 +297,15 @@ erDiagram
     SalesOrder        ||--o{ OcrCallLog : "sales_order (SET_NULL)"
     KioskStation      ||--o{ OcrCallLog : "kiosk_station (SET_NULL)"
     User              ||--o{ Payment : "recorded_by (PROTECT)"
+    CurrencySnapshot  ||--o{ Payment : "currency_snapshot (PROTECT)"
     User              ||--o{ InventoryMovement : "created_by (PROTECT)"
     User              ||--o{ RecipientProfile : "created_by"
 ```
 
 `SequenceCounter` and `SystemSettings` stand outside the graph: the first is a
-numbering utility keyed by prefix, the second a `pk=1` singleton.
+numbering utility keyed by prefix, the second a `pk=1` singleton. `CurrencySnapshot`
+copies its values out of `SystemSettings` rather than referencing it, and has no
+reverse accessor on `Payment` (`related_name='+'`).
 
 ### By domain
 
@@ -297,10 +330,13 @@ at 5 MB, jpg/jpeg/png/webp) or an `external_image_url` when active. `current_sto
 moves through `draft -> pending -> confirmed -> paid -> shipped -> delivered`, with
 `cancelled` and `refunded` as terminal branches. `SalesOrderItem` snapshots
 `unit_price` at write time and recomputes `line_total` in `save()`, so later price
-changes never rewrite historical orders.
+changes never rewrite historical orders. An order stores no figure in the secondary
+currency; one is derived when it is read (see **Currency** below).
 
 **Payments.** `Payment` supports cash, mobile payment, bank transfer, card, check, and
-other, with statuses `pending_review` and `confirmed`. It carries the OCR fields
+other, with statuses `pending_review` and `confirmed`. Every payment references the
+`CurrencySnapshot` it was recorded under; the column is `NOT NULL`, not editable, and
+not indexed, since nothing queries payments by snapshot. It carries the OCR fields
 `receipt_image`, `ocr_receipt_data`, `transaction_key`, `origin_phone`, `origin_bank`,
 `recipient_bank`, `recipient_account`, and `verified_at`. Duplicate receipts are
 blocked by a partial unique index that only applies once a key is actually set:
@@ -317,6 +353,43 @@ models.UniqueConstraint(
 into. It has a uniqueness constraint on the combination and a partial constraint
 enforcing one primary per payment method, and `clean()` requires a phone or an account
 number depending on the method.
+
+**Currency.** Every stored amount - product prices, order totals, payments - is a
+bare number in the primary currency. `SystemSettings` holds the live configuration:
+the primary and secondary currency, the secondary exchange rate, when that rate was
+set, and whether it was `fetched` or `manual`. Money that has already moved must not
+follow that configuration, so each payment references a `CurrencySnapshot`: the
+currency identity and the rate in effect when it was recorded, assigned once in
+`Payment.save()`. A caller that validated against a specific configuration - kiosk
+checkout - assigns the snapshot itself (section 13).
+
+Snapshots are **interned**. `CurrencySnapshot.objects.intern()` finds a configuration
+by `fingerprint`, a SHA-256 over a versioned canonical form of its normalised values,
+so every payment recorded under one configuration shares one row and the table grows
+with the rate updates that payments actually used, not with payments. The fingerprint
+is a hash rather than a composite unique constraint because `rate_as_of` is nullable,
+and NULLs are distinct in unique constraints on both SQLite and PostgreSQL. A
+duplicate row would mean the same thing as the original, so the hash is a
+deduplication key, not an integrity mechanism.
+
+Immutability is layered: `save()` and `delete()` raise on an existing row, every
+referencing foreign key is `PROTECT`, and the admin is view-only. `QuerySet.update()`
+and `loaddata` bypass the model methods.
+
+**Orders derive their second-currency figures.** `order_amounts()` takes the
+confirmed payments at their own recorded rates, plus the outstanding balance at the
+live rate - the rate it will be settled at. A fully paid order therefore no longer
+moves, and an unpaid one follows the rate. The result has a `basis` of `recorded` once
+any payment is confirmed and `live` before that, and a secondary figure that cannot
+be stated honestly - no secondary currency in effect, or payments recorded in
+different secondary currencies - is `None` rather than a guess.
+
+The primary `currency_code` is locked once any order or payment exists, because
+changing it would re-label every stored amount without converting any. The rule is
+in `SystemSettings.clean()` and repeated in the settings serializer, which saves
+without calling `full_clean()`. Payments older than the snapshot model were given the
+configuration in effect when migration `0022` ran, marked `rate_source='backfilled'`
+so their secondary figures read as approximate.
 
 **Inventory.** `InventoryMovement` is the ledger. Stock is **event-sourced**: quantity
 is signed, current stock is the sum over a product's movements, and there is no
@@ -421,7 +494,7 @@ passes the submitted email as the `username=` argument to `authenticate()`, whic
 
 Authorization is a single foreign key from `User` to `Role`, with the hierarchy
 Admin > Manager > Staff and a reserved `Kiosk` role. Enforcement is per-view through
-`get_permissions()`. `api/views/order.py:96` is representative:
+`get_permissions()`. `api/views/order.py:165` is representative:
 
 ```python
 if self.action in ('list', 'retrieve'):
@@ -578,7 +651,7 @@ There is no linting, coverage, or type checking in CI.
 ## 8. Testing
 
 The suite uses Django's built-in runner with DRF's `APITestCase` - no pytest, no
-factory_boy, no fixture files. Roughly 237 test methods span 32 modules.
+factory_boy, no fixture files. Roughly 385 test methods span 34 modules.
 
 **Custom runner.** `TEST_RUNNER` points at
 `retailops/test_runner.py:MediaIsolatedTestRunner`, which redirects `MEDIA_ROOT` to a
@@ -589,7 +662,8 @@ test uploads would land in the real media directory.
 
 **Builders.** `api/tests/helpers.py` provides plain functions rather than a factory
 library - `make_user`, `make_customer`, `make_product(stock=...)`,
-`make_order(status=...)`, `make_payment`, `make_kiosk_station`, `auth_client` - plus
+`make_order(status=...)`, `make_payment`, `make_kiosk_station`, `auth_client`,
+`set_currency(...)` - plus
 the image fixtures `png_upload()` and `png_data_url()` and `vepay_payload(...)`, which
 synthesises a realistic OCR response.
 
@@ -601,6 +675,8 @@ synthesises a realistic OCR response.
 | `api/tests/test_api_errors_contract.py` | Pins the `{error, code, details}` envelope across 401, 403, 400, 404, 405, 409, and 429. |
 | `api/tests/test_parity_fixes.py` | Regression pins: the bulk-versus-single role gap, `?search=` on users, `ProtectedError` mapping to 409. |
 | `core/tests/test_receipt_matching.py` | The largest unit suite - normalisation and comparison, no database. |
+| `core/tests/test_currency_snapshots.py` | The currency model: fingerprint normalisation, interning and immutability, a payment keeping its configuration across settings changes, order amounts, rate provenance, the `currency_code` lock, and the backfill migration - including that `0022`'s inlined fingerprint still hashes like the service's. |
+| `api/tests/test_currency_history.py` | Recorded figures hold across the API, the back-office, and kiosk receipts when settings change. Also pins the query count of every list that reads payments, so pricing a page cannot turn into a query per row. |
 | `retailops/tests/test_production_settings.py` and siblings | Settings-as-code: assert the environment parsers and the production hardening defaults. |
 
 ---
@@ -886,6 +962,38 @@ unavailable) rather than propagating. The sibling `services/recipients.js` docum
 the opposite choice, because callers there must distinguish "fetch failed" from "fetch
 succeeded, nothing configured."
 
+### Recorded currency on payments
+
+Every payment in the API carries the currency it was recorded under and its value at
+that rate:
+
+```json
+"currency": {
+  "code": "USD", "symbol": "$", "decimal_places": 2,
+  "secondary": {"code": "VES", "symbol": "Bs.", "decimal_places": 2,
+                "rate": "50.00000000", "rate_as_of": "2026-05-03T12:00:00Z",
+                "rate_source": "fetched"}
+},
+"amount_secondary": "500.00"
+```
+
+The kiosk checkout's `receipt` and `GET /kiosk/receipt/{order_id}/` carry the same two
+fields. Orders carry `currency` with a `basis` of `recorded` or `live`, and
+`secondary` with `amount_paid`, `amount_outstanding`, `total_amount`, and the
+`live_rate`. Settings expose a read-only `secondary_rate_source`. `secondary` and
+`amount_secondary` are `null` when no secondary currency was in effect.
+
+The rule these fields encode: **a secondary-currency figure for money already
+received is the recorded one, never a primary amount multiplied by today's rate.**
+Core states it to agents in the `currency_history` entry of `GET /mcp-skill/`.
+
+Neither client reads these fields today. Konteo Express converts every amount it
+displays at the `secondary_exchange_rate` it read from `GET /settings/` at bootstrap
+(`app/currency.js`), and its success screen renders from cart state (section 10), so
+its ticket shows that rate rather than the recorded one. The CLI's `payments list`
+table and CSV select a fixed column set without `amount_secondary`; `--format json`
+passes everything through.
+
 ### No offline queue
 
 Worth stating because it is a system-level property, not just a client detail. The
@@ -918,6 +1026,10 @@ sequenceDiagram
     K->>K: prefill form, re-validate 4 fields locally
     C->>K: confirm
     K->>A: POST /kiosk/checkout/ (JSON, receipt_image_base64)
+    A->>A: read the currency configuration once
+    A->>V: forward image, before any lock
+    V-->>A: OCR fields
+    A->>A: validate receipt at that rate, intern CurrencySnapshot
     A->>A: transaction.atomic()
     A-->>K: 201 {order_id, order_number, payment_number, ...}
 ```
@@ -940,7 +1052,8 @@ checkout remains a single atomic call.
 
 ### The atomic block
 
-`api/kiosk/views.py:279` runs the entire checkout inside one `transaction.atomic()`:
+`api/kiosk/views.py:335` runs every write of the checkout inside one
+`transaction.atomic()`:
 
 ```python
 with transaction.atomic():
@@ -950,7 +1063,7 @@ with transaction.atomic():
     # create SalesOrder (status=CONFIRMED) -> order_number generated
     # bulk_create SalesOrderItem with price snapshots
     # bulk_create InventoryMovement (negative quantities)
-    # record Payment
+    # record Payment with the CurrencySnapshot interned before the block
     # transition to DELIVERED
 ```
 
@@ -958,6 +1071,20 @@ The stock check happens **after** `select_for_update()` has taken the row locks,
 is what makes concurrent checkouts on the last unit of a product safe. The order is
 created already `CONFIRMED` with the station's service user as both `created_by` and
 `confirmed_by`, and notes carrying the station identifier.
+
+Receipt validation, including the VEPay OCR round-trip, runs **before** the block
+opens, because the order number's `SequenceCounter` row stays locked until the outer
+transaction commits, and an OCR call inside would hold it behind third-party HTTP.
+Nothing read before the block is trusted inside it: the block re-resolves the
+products, re-checks stock and the total, and re-checks the transaction key.
+
+The one thing carried across is the **currency context**. Checkout reads the
+configuration once, converts the receipt at that rate, and records the payment with
+the same context, so the rate that validated the receipt is the rate stored even if
+the BCV rate is refreshed while the OCR call is in flight. The `CurrencySnapshot` is
+interned only after the receipt passes, so a rejected checkout leaves no row behind,
+and in autocommit outside the block, so its unique-index entry is never held under
+product locks.
 
 Konteo Express's `CLAUDE.md` records the constraint from the client side: the whole
 cart posts to a single call that validates stock, records payment, and marks delivered
@@ -967,9 +1094,9 @@ reintroduced.
 ### Two invariants clients cannot override
 
 - **`amount_usd` is never taken from the client.** The order total computed from
-  server-side product prices is always authoritative. The OCR amount is converted
-  through the secondary exchange rate and compared; a discrepancy is
-  `amount_mismatch` (422), not a negotiation.
+  server-side product prices is always authoritative. The OCR amount is converted at
+  the rate checkout read when it began - the rate recorded on the payment - and
+  compared; a discrepancy is `amount_mismatch` (422), not a negotiation.
 - **An omitted receipt field counts as a mismatch, not a skipped check.** A client
   cannot weaken validation by sending less. This is stated in `KIOSK_INTEGRATION.md`
   and is the reason the kiosk sends every field it has.
@@ -1031,6 +1158,8 @@ When Core changes, these are the places to check.
 | Permission or role gate changed | CLI `PARITY.md` role columns; whether a kiosk-reachable path still admits `IsManagerOrAdminOrKiosk`. |
 | Pagination or envelope shape | CLI `pager.py` and `output.py`; the kiosk's `data.results` reads. |
 | Receipt matching rules | `core/services/receipt_matching.py` first, then the mirrored normalisation in the kiosk's `PagoMovilFormScreen.js` - the client copy is UX-only, but a divergence produces a confusing "looks fine, server rejected it" experience. |
+| Currency blocks or secondary amounts in a response | `api/serializers/currency.py` builds all of them; the `currency_history` guidance in `api/views/mcp_skill.py`. Neither client reads them yet (section 12). |
+| The snapshot's canonical form (`CurrencyContext.canonical()`) | `FINGERPRINT_VERSION` in `core/services/currency.py`, and migration `0022`'s inlined v1 copy, which `test_backfill_migration_hashes_like_the_service` compares against the service. A divergence produces duplicate snapshot rows, never wrong ones. |
 
 The reverse direction is empty by design: no change in either client requires a change
 in Core.
@@ -1058,6 +1187,13 @@ Recorded as observation, not as a work list.
 - **Dead code in the kiosk.** `app/services/payments.js` posts to `POST /payments/` and
   is never imported - a remnant of the pre-atomic-checkout flow that the current
   `IsNotKioskStation` permission would now reject anyway.
+- **Konteo Express reads the exchange rate once, at bootstrap.** `applySettings()` runs
+  a single time in `main.js`, so a terminal left running across a rate refresh
+  displays secondary-currency amounts at the old rate, while Core converts the
+  receipt at the rate current when checkout begins.
+- **CLI `settings update --currency-code` is offered unconditionally.** Core rejects
+  a changed code with `400` once any order or payment exists; the option's help text
+  does not say so.
 - **In this repository**, `responses` ships in production requirements, no `CACHES`
   backend is configured despite throttling depending on one, and
   `STATICFILES_DIRS`/`TEMPLATES.DIRS` point at `static/` and `templates/` directories
