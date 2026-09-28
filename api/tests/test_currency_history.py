@@ -404,27 +404,48 @@ class BackOfficeQueryShapeTests(TestCase):
         self.client.force_login(self.user)
         self.product = make_product(stock=500)
 
-    def _add_paid_orders(self, count):
+    def _add_paid_orders(self, count, customer=None):
         for _ in range(count):
             order = make_order(
-                status=SalesOrder.CONFIRMED, product=self.product, user=self.user,
-                total=Decimal('10.00'),
+                customer=customer, status=SalesOrder.CONFIRMED, product=self.product,
+                user=self.user, total=Decimal('10.00'),
             )
             make_payment(order=order, user=self.user, amount='10.00')
 
-    def _currency_queries(self):
-        # Scoped to the tables this feature reads. The page has an unrelated,
-        # pre-existing per-row query ({{ order.items.count }}) that a total
-        # count would trip over.
+    def _page_queries(self, url=None):
         with CaptureQueriesContext(connection) as ctx:
-            response = self.client.get(reverse('order-list'))
+            response = self.client.get(url or reverse('order-list'))
         self.assertEqual(response.status_code, 200)
+        return [q['sql'] for q in ctx.captured_queries]
+
+    def _currency_queries(self):
+        # Scoped to the tables this feature reads, so a failure lists only the
+        # pricing queries. The whole page is pinned by the tests below.
         tables = ('core_payment', 'core_currencysnapshot', 'core_systemsettings')
-        return [q['sql'] for q in ctx.captured_queries if any(t in q['sql'] for t in tables)]
+        return [sql for sql in self._page_queries() if any(t in sql for t in tables)]
 
     def test_pricing_the_order_list_does_not_scale_with_rows(self):
         self._add_paid_orders(1)
         one = self._currency_queries()
         self._add_paid_orders(14)
         many = self._currency_queries()
+        self.assertEqual(len(one), len(many), '\n'.join(q[:160] for q in many))
+
+    def test_the_order_list_page_does_not_scale_with_rows(self):
+        # Every query on the page, not only pricing: the Items column once
+        # rendered {{ order.items.count }}, a COUNT(*) per row.
+        self._add_paid_orders(1)
+        one = self._page_queries()
+        self._add_paid_orders(14)
+        many = self._page_queries()
+        self.assertEqual(len(one), len(many), '\n'.join(q[:160] for q in many))
+
+    def test_the_customer_page_does_not_scale_with_orders(self):
+        # Same Items column, same former per-row COUNT(*), in Order History.
+        customer = make_customer()
+        url = reverse('customer-detail', args=[customer.pk])
+        self._add_paid_orders(1, customer=customer)
+        one = self._page_queries(url)
+        self._add_paid_orders(14, customer=customer)
+        many = self._page_queries(url)
         self.assertEqual(len(one), len(many), '\n'.join(q[:160] for q in many))

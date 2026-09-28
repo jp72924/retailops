@@ -400,7 +400,7 @@ def customer_detail(request, pk):
     """GET: read-only customer summary with order history."""
     customer = get_object_or_404(Customer, pk=pk)
     orders = attach_order_amounts(
-        customer.orders.prefetch_related(_payments_with_currency()).order_by('-created_at')
+        customer.orders.prefetch_related('items', _payments_with_currency()).order_by('-created_at')
     )
     return render(request, 'core/customer_detail.html', {
         'customer': customer,
@@ -550,10 +550,13 @@ def order_list(request):
     date_from     = request.GET.get('date_from', '').strip()
     date_to       = request.GET.get('date_to', '').strip()
 
+    # The Items column renders items.all|length off this prefetch. Not
+    # annotate(Count('items')): that sets GROUP BY, and the paginator's count
+    # would then materialise every group (see api.views.order._annotated_orders).
     qs = (
         SalesOrder.objects
         .select_related('customer')
-        .prefetch_related(_payments_with_currency())
+        .prefetch_related('items', _payments_with_currency())
         .order_by('-created_at')
     )
     if query:
