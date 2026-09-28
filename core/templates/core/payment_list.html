@@ -66,7 +66,7 @@
             <a href="{% url 'order-detail' payment.sales_order.pk %}">{{ payment.sales_order.order_number }}</a>
           </td>
           <td>{{ payment.sales_order.customer.get_full_name }}</td>
-          <td><strong>{{ payment.amount|currency }}</strong></td>
+          <td><strong>{{ payment.amount|money:payment.currency_snapshot }}</strong></td>
           <td>{{ payment.get_payment_method_display }}</td>
           <td>
             <span class="badge {% if payment.status == 'confirmed' %}badge-paid{% else %}badge-pending{% endif %}">

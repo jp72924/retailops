@@ -17,9 +17,10 @@ from core.exceptions import InsufficientStockError
 from core.services.customers import find_customer_by_national_id
 from core.services.inventory import assert_stock_available
 from core.models import (
-    Customer, InventoryMovement, KioskStation, Payment, Product,
+    CurrencySnapshot, Customer, InventoryMovement, KioskStation, Payment, Product,
     RecipientProfile, SalesOrder, SalesOrderItem, SystemSettings,
 )
+from core.services.currency import CurrencyContext
 from core.services.receipt_matching import (
     REQUIRED_FIELD_KEYS, compare_receipt_fields, match_recipient_profile,
 )
@@ -27,6 +28,7 @@ from core.services.vepay import (
     RECIPIENT_ACCOUNT_PATH, RECIPIENT_BANK_PATH, TRANSACTION_KEY_PATH,
     VEPayClient, VEPayError, get_receipt_value,
 )
+from api.serializers.currency import recorded_currency_payload, secondary_amount_payload
 
 from .authentication import KioskTokenAuthentication
 from .permissions import IsKioskStation
@@ -297,10 +299,18 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
         write block re-resolves the products under row locks, re-checks stock,
         re-checks the total the receipt was validated against, and re-checks
         the transaction key.
+
+        The one thing that *is* carried across is the currency context. The
+        receipt is converted to the primary currency at that context's rate,
+        and the payment is recorded with that same context — so the rate that
+        validated the receipt is provably the rate stored, even if the BCV rate
+        is refreshed while the OCR call is in flight.
         """
         items = data['items']
         payment_method = data.get('payment_method') or Payment.CARD
         receipt_data = data.get('receipt') or {}
+        settings = SystemSettings.get()
+        currency = CurrencyContext.from_settings(settings)
 
         # ── Validate before taking any lock ──────────────────────────────
         # Same order as the write block below, so which side of the
@@ -311,7 +321,14 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             receipt_data,
             payment_method,
             _order_subtotal(products, items),
+            settings=settings,
+            currency=currency,
         )
+
+        # Interned only once the receipt has passed, so a rejected checkout
+        # leaves no row behind; and outside the write block, in autocommit, so
+        # the snapshot's unique-index entry is never held under product locks.
+        currency_snapshot = CurrencySnapshot.objects.intern(currency)
 
         now = timezone.now()
 
@@ -412,6 +429,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                 ).strip(),
                 ocr_receipt_data=receipt_fields['ocr_receipt_data'],
                 verified_at=verified_at,
+                currency_snapshot=currency_snapshot,
             )
             if receipt_fields['image'] is not None:
                 name, content = receipt_fields['image']
@@ -450,6 +468,8 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             'station_number': station.station_number,
             'store_identifier': station.store_identifier,
             'created_at': order.created_at,
+            'currency': recorded_currency_payload(currency_snapshot),
+            'amount_secondary': secondary_amount_payload(payment.amount, currency_snapshot),
         }
 
         return {
@@ -512,7 +532,7 @@ def _assert_transaction_key_unused(transaction_key):
         raise _DuplicateTransactionError(transaction_key)
 
 
-def _validate_receipt(receipt_data, payment_method, order_total):
+def _validate_receipt(receipt_data, payment_method, order_total, *, settings, currency):
     """
     Validate receipt metadata against an order total and map it onto Payment
     fields.
@@ -522,12 +542,15 @@ def _validate_receipt(receipt_data, payment_method, order_total):
     and must not run while database locks are held (see _execute_checkout).
     The returned `validated_total` records the total the receipt was accepted
     against, so the write block can reject the order if that total moved.
+
+    `settings` supplies the OCR and image rules; `currency` supplies the
+    exchange rate a secondary-currency receipt is converted at, and is the
+    context the caller records on the payment.
     """
     if not isinstance(receipt_data, dict):
         receipt_data = {}
 
     order_total = Decimal(str(order_total)).quantize(MONEY_QUANT)
-    settings = SystemSettings.get()
     is_receipt_method = payment_method in RECEIPT_PAYMENT_METHODS
     image_present = _receipt_image_present(receipt_data)
     if (
@@ -592,7 +615,7 @@ def _validate_receipt(receipt_data, payment_method, order_total):
         comparison = compare_receipt_fields(
             vepay_data,
             _expected_receipt_fields(receipt_data, order_total),
-            settings,
+            currency,
             REQUIRED_FIELD_KEYS,
         )
         if not comparison['matches']:
@@ -854,6 +877,13 @@ class KioskReceiptView(KioskAPIMixin, APIView):
             'station_number': station.station_number,
             'store_identifier': station.store_identifier,
             'created_at': order.created_at,
+            'currency': (
+                recorded_currency_payload(payment.currency_snapshot) if payment else None
+            ),
+            'amount_secondary': (
+                secondary_amount_payload(payment.amount, payment.currency_snapshot)
+                if payment else None
+            ),
         }).data
 
         return Response(receipt)

@@ -56,8 +56,8 @@
           <td><a href="{% url 'customer-detail' order.customer.pk %}">{{ order.customer.get_full_name }}</a></td>
           <td>{{ order.created_at|date:"M j, Y" }}</td>
           <td><span class="badge badge-{{ order.status }}">{{ order.get_status_display }}</span></td>
-          <td>{{ order.items.count }}</td>
-          <td><strong>{{ order.total_amount|currency }}</strong></td>
+          <td>{{ order.items.all|length }}</td>
+          <td><strong>{{ order|order_money:"total" }}</strong></td>
           <td class="td-actions">
             <a href="{% url 'order-detail' order.pk %}" class="btn btn-ghost btn-sm">{% trans "View" %}</a>
             {% if order.status == 'draft' or order.status == 'pending' %}

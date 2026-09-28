@@ -1,9 +1,18 @@
 from decimal import Decimal
 
 from django.db import transaction
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.models import InventoryMovement, Product, SalesOrder, SalesOrderItem
+from core.services.currency import ORDER_AMOUNTS_ATTR, order_amounts
+from api.serializers.currency import (
+    OrderCurrencySerializer,
+    OrderSecondaryAmountsSerializer,
+    live_currency,
+    order_currency_payload,
+    order_secondary_payload,
+)
 from api.serializers.customer import CustomerSerializer
 from api.serializers.product import ProductSerializer
 
@@ -27,13 +36,15 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     amount_paid    = serializers.SerializerMethodField()
     amount_outstanding = serializers.SerializerMethodField()
+    currency       = serializers.SerializerMethodField()
+    secondary      = serializers.SerializerMethodField()
 
     class Meta:
         model  = SalesOrder
         fields = [
             'id', 'order_number', 'customer', 'status', 'status_display',
             'subtotal', 'tax_amount', 'discount_amount', 'total_amount',
-            'amount_paid', 'amount_outstanding',
+            'amount_paid', 'amount_outstanding', 'currency', 'secondary',
             'notes', 'items',
             'created_by', 'confirmed_by',
             'created_at', 'updated_at', 'confirmed_at', 'paid_at',
@@ -49,6 +60,28 @@ class SalesOrderReadSerializer(serializers.ModelSerializer):
     def get_amount_outstanding(self, obj) -> str:
         paid = self.get_amount_paid(obj)
         return obj.total_amount - Decimal(str(paid))
+
+    def _amounts(self, obj):
+        # currency and secondary both need these; compute once per order.
+        cached = getattr(obj, ORDER_AMOUNTS_ATTR, None)
+        if cached is None:
+            cached = order_amounts(obj, live=live_currency(self))
+            setattr(obj, ORDER_AMOUNTS_ATTR, cached)
+        return cached
+
+    @extend_schema_field(OrderCurrencySerializer)
+    def get_currency(self, obj):
+        """The currency the primary figures are expressed in."""
+        return order_currency_payload(self._amounts(obj))
+
+    @extend_schema_field(OrderSecondaryAmountsSerializer(allow_null=True))
+    def get_secondary(self, obj):
+        """
+        The order in the secondary currency: the paid portion at each payment's
+        recorded rate, the outstanding balance at the live rate. Null when no
+        secondary currency applies.
+        """
+        return order_secondary_payload(self._amounts(obj))
 
 
 # ── Write input serializers ───────────────────────────────────────────────────

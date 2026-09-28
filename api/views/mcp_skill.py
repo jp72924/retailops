@@ -779,12 +779,21 @@ def _build_skill_card(request):
                 "create_order_items":        "Must contain at least 1 item. Each product may appear on only one line -- use quantity for more than one. unit_price / line_total / tax_rate are server-derived and rejected if sent.",
                 "bulk_order_ids":            "Must be a non-empty list.",
                 "bulk_adjustments":          "Must be a non-empty list.",
-                "update_system_settings":    "At least one field must be provided.",
+                "update_system_settings":    "At least one field must be provided. currency_code cannot change once any order or payment exists (400 on currency_code); symbol, decimals and the secondary currency stay editable.",
                 "password_minimum_length":   "8 characters.",
                 "product_sku":               "Not a database-enforced immutable field — update_product simply has no sku parameter, so a new product is the only way to get a different SKU through MCP.",
             },
             "soft_deletes": "Users are soft-deleted (is_active=False), not hard-deleted.",
             "singleton": "SystemSettings always has exactly one row (pk=1); use get/update, never create/delete.",
+            "currency_history": (
+                "Each payment records the currency and exchange rate it was made at "
+                "(payment.currency, payment.amount_secondary) and keeps them when settings "
+                "change. To report money received in the secondary currency, sum payments' "
+                "amount_secondary -- never multiply primary amounts by today's rate. An "
+                "order's order.secondary gives its paid portion at recorded rates and its "
+                "outstanding balance at the live rate. rate_source 'backfilled' marks an "
+                "approximate rate on payments older than rate tracking."
+            ),
         },
 
         # ── Error codes ───────────────────────────────────────────────────

@@ -3,7 +3,9 @@ from rest_framework.authentication import SessionAuthentication, TokenAuthentica
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from core.models import Payment, RecipientProfile, SystemSettings
+from core.models import (
+    PRIMARY_CURRENCY_LOCKED_MESSAGE, Payment, RecipientProfile, SystemSettings,
+)
 from core.services.bcv import BCVRateError, update_secondary_exchange_rate
 from api.kiosk.authentication import KioskTokenAuthentication
 from api.permissions import IsManagerOrAdmin
@@ -26,13 +28,25 @@ class SystemSettingsSerializer(serializers.ModelSerializer):
             'secondary_exchange_rate',
             'secondary_rate_auto_update_enabled', 'secondary_rate_source_url',
             'secondary_rate_source_field', 'secondary_rate_updated_at',
+            'secondary_rate_source',
             'ocr_enabled', 'ocr_provider', 'ocr_base_url', 'ocr_api_key',
             'ocr_timeout_seconds', 'ocr_max_file_mb',
             'ocr_strict_amount', 'ocr_require_complete',
             'ocr_enabled_methods', 'receipt_image_required_for_receipt_methods',
             'delete_receipt_image_after_days', 'recipient_validation_enabled',
         ]
-        read_only_fields = ['secondary_rate_updated_at']
+        read_only_fields = ['secondary_rate_updated_at', 'secondary_rate_source']
+
+    def validate_currency_code(self, value):
+        # The model enforces this in clean(), but this serializer saves
+        # without calling full_clean(), so the rule has to be repeated here.
+        if (
+            self.instance is not None
+            and (self.instance.currency_code or '').upper() != (value or '').upper()
+            and SystemSettings.currency_code_locked()
+        ):
+            raise serializers.ValidationError(PRIMARY_CURRENCY_LOCKED_MESSAGE)
+        return value
 
     def validate_secondary_exchange_rate(self, value):
         if value is not None and value <= 0:

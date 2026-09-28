@@ -21,6 +21,7 @@ import requests
 from django.utils import timezone
 
 from core.models import SystemSettings
+from core.services.currency import RATE_SOURCE_FETCHED
 
 
 DEFAULT_TIMEOUT_SECONDS = 15
@@ -115,5 +116,8 @@ def update_secondary_exchange_rate(settings=None, timeout=None):
     rate = fetch_rate(settings, timeout=timeout)
     settings.secondary_exchange_rate = rate
     settings.secondary_rate_updated_at = timezone.now()
-    settings.save(update_fields=['secondary_exchange_rate', 'secondary_rate_updated_at'])
+    settings.secondary_rate_source = RATE_SOURCE_FETCHED
+    settings.save(update_fields=[
+        'secondary_exchange_rate', 'secondary_rate_updated_at', 'secondary_rate_source',
+    ])
     return rate

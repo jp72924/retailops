@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Count, F, Q, Sum, Value
+from django.db.models import Count, F, Prefetch, Q, Sum, Value
 from django.db.models.deletion import ProtectedError
 from django.db.models.functions import Replace, Upper
 from django.http import JsonResponse
@@ -24,7 +24,10 @@ from .services.customers import (
     check_national_id,
     normalized_national_id_expr,
 )
-from .services.receipt_matching import normalize_document_id
+from .services.currency import attach_order_amounts, order_amounts
+from .services.receipt_matching import normalize_document_id, receipt_currency
+from .services.vepay import PAYMENT_AMOUNT_VALUE_PATH, get_receipt_value
+from .templatetags.regional import currency_plain
 from .models import (
     Customer, InventoryMovement, Payment,
     Product, ProductCategory, RecipientProfile, Role,
@@ -99,6 +102,18 @@ def logout_view(request):
     return redirect('login')
 
 
+def _payments_with_currency():
+    """
+    Prefetch an order's payments together with the currency each was recorded
+    in. Anything that renders an order's total through `order_money` reads
+    both; without this a list page costs two queries per row.
+    """
+    return Prefetch(
+        'payments',
+        queryset=Payment.objects.select_related('currency_snapshot', 'recorded_by'),
+    )
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @login_required
@@ -127,9 +142,10 @@ def dashboard(request):
     )
     low_stock_products = [p for p in all_products if p.is_low_stock or p.is_out_of_stock]
 
-    recent_orders = (
+    recent_orders = attach_order_amounts(
         SalesOrder.objects
         .select_related('customer', 'created_by')
+        .prefetch_related(_payments_with_currency())
         .order_by('-created_at')[:5]
     )
 
@@ -383,7 +399,9 @@ def customer_quick_create_ajax(request):
 def customer_detail(request, pk):
     """GET: read-only customer summary with order history."""
     customer = get_object_or_404(Customer, pk=pk)
-    orders = customer.orders.order_by('-created_at')
+    orders = attach_order_amounts(
+        customer.orders.prefetch_related('items', _payments_with_currency()).order_by('-created_at')
+    )
     return render(request, 'core/customer_detail.html', {
         'customer': customer,
         'orders':   orders,
@@ -532,7 +550,15 @@ def order_list(request):
     date_from     = request.GET.get('date_from', '').strip()
     date_to       = request.GET.get('date_to', '').strip()
 
-    qs = SalesOrder.objects.select_related('customer').order_by('-created_at')
+    # The Items column renders items.all|length off this prefetch. Not
+    # annotate(Count('items')): that sets GROUP BY, and the paginator's count
+    # would then materialise every group (see api.views.order._annotated_orders).
+    qs = (
+        SalesOrder.objects
+        .select_related('customer')
+        .prefetch_related('items', _payments_with_currency())
+        .order_by('-created_at')
+    )
     if query:
         qs = qs.filter(
             Q(order_number__icontains=query) |
@@ -547,6 +573,7 @@ def order_list(request):
         qs = qs.filter(created_at__date__lte=date_to)
 
     page_obj = Paginator(qs, 20).get_page(request.GET.get('page'))
+    page_obj.object_list = attach_order_amounts(page_obj.object_list)
     return render(request, 'core/order_list.html', {
         'page_obj':      page_obj,
         'query':         query,
@@ -717,7 +744,10 @@ def order_detail(request, pk):
           is in Draft or Pending status.
     Allowed roles: Staff, Manager, Admin.
     """
-    order = get_object_or_404(SalesOrder, pk=pk)
+    order = get_object_or_404(
+        SalesOrder.objects.prefetch_related(_payments_with_currency()),
+        pk=pk,
+    )
 
     if request.method == 'POST':
         if order.status not in (SalesOrder.DRAFT, SalesOrder.PENDING):
@@ -763,6 +793,7 @@ def order_detail(request, pk):
         return redirect('order-detail', pk=pk)
 
     ctx = _order_form_context(order)
+    ctx['order_amounts'] = order_amounts(order)
     return render(request, 'core/order_detail.html', ctx)
 
 
@@ -935,7 +966,9 @@ def payment_list(request):
 
     qs = (
         Payment.objects
-        .select_related('sales_order', 'sales_order__customer', 'recorded_by')
+        .select_related(
+            'sales_order', 'sales_order__customer', 'recorded_by', 'currency_snapshot',
+        )
         .order_by('-created_at')
     )
     if query:
@@ -1030,17 +1063,57 @@ def payment_create(request):
             messages.success(
                 request,
                 f'Payment {payment.payment_number} recorded. '
-                f'Outstanding balance: ${order.amount_outstanding}.'
+                f'Outstanding balance: {currency_plain(order.amount_outstanding)}.'
             )
 
     return redirect('order-detail', pk=order.pk)
 
 
+def _receipt_amount_display(payment):
+    """
+    The amount printed on an OCR'd receipt, formatted in its own currency.
+
+    This is what the customer actually sent. The recorded secondary figure is
+    the payment converted at the recorded rate, and the two can differ by a
+    fraction of a unit because the primary amount is rounded to cents.
+    """
+    raw = get_receipt_value(payment.ocr_receipt_data, PAYMENT_AMOUNT_VALUE_PATH)
+    if raw in (None, ''):
+        return None
+    try:
+        amount = Decimal(str(raw))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    code = receipt_currency(payment.ocr_receipt_data)
+    snapshot = payment.currency_snapshot
+    # A receipt without a currency is read as the secondary currency, the
+    # same convention receipt_amount_usd() applies when validating it.
+    if snapshot.secondary_currency_enabled and code in ('', snapshot.secondary_currency_code):
+        places = snapshot.secondary_decimal_places
+        return f'{snapshot.secondary_currency_symbol}{amount:,.{places}f}'
+    return f'{amount:,.2f} {code}'.strip()
+
+
 @login_required
 def payment_detail(request, pk):
     """GET: read-only payment receipt."""
-    payment = get_object_or_404(Payment, pk=pk)
-    return render(request, 'core/payment_detail.html', {'payment': payment})
+    payment = get_object_or_404(
+        Payment.objects
+        .select_related('currency_snapshot', 'recorded_by', 'sales_order__customer')
+        .prefetch_related(Prefetch(
+            'sales_order__payments',
+            queryset=Payment.objects.select_related('currency_snapshot'),
+        )),
+        pk=pk,
+    )
+    snapshot = payment.currency_snapshot
+    return render(request, 'core/payment_detail.html', {
+        'payment': payment,
+        'order_amounts': order_amounts(payment.sales_order),
+        # 842.21000000 -> 842.21; normalize() alone would render 100 as 1E+2.
+        'recorded_rate': format(snapshot.secondary_exchange_rate.normalize(), 'f'),
+        'receipt_amount': _receipt_amount_display(payment),
+    })
 
 
 # ── Inventory ─────────────────────────────────────────────────────────────────

@@ -113,7 +113,9 @@ class PaymentViewSet(
     def get_queryset(self):
         return (
             Payment.objects
-            .select_related('sales_order', 'sales_order__customer', 'recorded_by')
+            .select_related(
+                'sales_order', 'sales_order__customer', 'recorded_by', 'currency_snapshot',
+            )
             .order_by('-created_at')
         )
 
@@ -148,7 +150,7 @@ class PaymentViewSet(
         self.perform_create(serializer)
         # Re-read from DB to get the generated payment_number
         instance = Payment.objects.select_related(
-            'sales_order', 'sales_order__customer', 'recorded_by'
+            'sales_order', 'sales_order__customer', 'recorded_by', 'currency_snapshot',
         ).get(pk=serializer.instance.pk)
         return Response(
             PaymentSerializer(instance).data,

@@ -5,7 +5,7 @@ from .models import (
     Role, User, Customer,
     ProductCategory, Product,
     SalesOrder, SalesOrderItem,
-    Payment, InventoryMovement,
+    CurrencySnapshot, Payment, InventoryMovement,
     SystemSettings, OcrCallLog,
     KioskStation,
 )
@@ -105,8 +105,37 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ('payment_number', 'sales_order', 'amount', 'payment_method', 'recorded_by', 'created_at')
     list_filter = ('payment_method',)
     search_fields = ('payment_number', 'sales_order__order_number', 'reference_number')
-    readonly_fields = ('payment_number', 'created_at')
+    # currency_snapshot is editable=False, so it never appears as a form
+    # field: re-pointing a recorded payment at another rate is not an edit
+    # this admin offers. It is shown read-only instead.
+    readonly_fields = ('payment_number', 'recorded_currency', 'created_at')
     raw_id_fields = ('sales_order', 'recorded_by')
+
+    @admin.display(description='Recorded currency')
+    def recorded_currency(self, obj):
+        snapshot = obj.currency_snapshot if obj.pk else None
+        if snapshot is None:
+            return '— (assigned when saved)'
+        return f'{snapshot} · {snapshot.get_rate_source_display()}'
+
+
+@admin.register(CurrencySnapshot)
+class CurrencySnapshotAdmin(admin.ModelAdmin):
+    """View-only: snapshots are immutable facts referenced by payments."""
+    list_display = (
+        'id', 'currency_code', 'secondary_currency_code', 'secondary_exchange_rate',
+        'rate_as_of', 'rate_source', 'created_at',
+    )
+    list_filter = ('rate_source',)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(OcrCallLog)

@@ -208,10 +208,26 @@
                           the running line total can be shown without a round trip.
                           A submitted price -- even a hidden one -- is client-chosen.
                         {% endcomment %}
+                        {% comment %}
+                          While the order is a quote its lines follow the live
+                          rate. Once it is committed a line has no single-rate
+                          secondary value -- the order may be paid in several
+                          payments at several rates -- so only the primary
+                          figure is shown.
+                        {% endcomment %}
+                        {% if order.status == 'draft' or order.status == 'pending' %}
                         <span id="unit-price-{{ forloop.counter }}"
                               data-price="{{ item.unit_price|unlocalize }}">{{ item.unit_price|currency }}</span>
+                        {% else %}
+                        <span id="unit-price-{{ forloop.counter }}"
+                              data-price="{{ item.unit_price|unlocalize }}">{{ item.unit_price|money_primary:order_amounts.currency }}</span>
+                        {% endif %}
                       </td>
+                      {% if order.status == 'draft' or order.status == 'pending' %}
                       <td><span class="currency-pair"><strong id="line-total-{{ forloop.counter }}">{{ item.line_total|currency_plain }}</strong><span class="currency-secondary" id="line-total-{{ forloop.counter }}-sec">{{ item.line_total|currency_secondary }}</span></span></td>
+                      {% else %}
+                      <td><strong>{{ item.line_total|money_primary:order_amounts.currency }}</strong></td>
+                      {% endif %}
                       {% if order.status == 'draft' or order.status == 'pending' %}
                       <td><button type="button" class="btn-icon" onclick="removeLineItem(this)">✕</button></td>
                       {% endif %}
@@ -232,11 +248,19 @@
                 <div class="totals-box">
                   <div class="totals-row">
                     <span>{% trans "Subtotal" %}</span>
+                    {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <span class="currency-pair"><span id="subtotal">{{ order.subtotal|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="subtotal-sec">{{ order.subtotal|default:"0.00"|currency_secondary }}</span></span>
+                    {% else %}
+                    <span>{{ order.subtotal|money_primary:order_amounts.currency }}</span>
+                    {% endif %}
                   </div>
                   <div class="totals-row">
                     <span>{% trans "Tax" %}</span>
+                    {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <span>{{ order.tax_amount|default:"0.00"|currency }}</span>
+                    {% else %}
+                    <span>{{ order.tax_amount|money_primary:order_amounts.currency }}</span>
+                    {% endif %}
                   </div>
                   <div class="totals-row">
                     <span>{% trans "Discount" %}</span>
@@ -246,12 +270,17 @@
                       step="0.01" min="0" style="width:100px;text-align:right;padding:4px 8px;"
                       onchange="recalcTotals()">
                     {% else %}
-                    <span>{{ order.discount_amount|currency }}</span>
+                    <span>{{ order.discount_amount|money_primary:order_amounts.currency }}</span>
                     {% endif %}
                   </div>
                   <div class="totals-row total">
                     <span>{% trans "Grand Total" %}</span>
+                    {% if not order or order.status == 'draft' or order.status == 'pending' %}
                     <span class="currency-pair"><span id="grand-total">{{ order.total_amount|default:"0.00"|currency_plain }}</span><span class="currency-secondary" id="grand-total-sec">{{ order.total_amount|default:"0.00"|currency_secondary }}</span></span>
+                    {% else %}
+                    {# Paid portion at each payment's recorded rate, any balance at today's. #}
+                    <span>{{ order_amounts|order_money:"total" }}</span>
+                    {% endif %}
                   </div>
                 </div>
               </div>
@@ -293,7 +322,7 @@
             <div class="pay-hist-item">
               <div style="display:flex;justify-content:space-between;">
                 <a href="{% url 'payment-detail' payment.pk %}" class="pay-hist-num">{{ payment.payment_number }}</a>
-                <strong>{{ payment.amount|currency }}</strong>
+                <strong>{{ payment.amount|money:payment.currency_snapshot }}</strong>
               </div>
               <div class="pay-hist-meta">
                 {{ payment.get_payment_method_display }} · {{ payment.created_at|date:"M j, Y" }} · {{ payment.recorded_by.get_full_name }}
@@ -305,7 +334,8 @@
             {% endfor %}
             <div style="padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:0.875rem;">
               <span style="color:var(--muted);">{% trans "Outstanding" %}</span>
-              <strong {% if order.amount_outstanding > 0 %}style="color:var(--danger);"{% endif %}>{{ order.amount_outstanding|currency }}</strong>
+              {# Live on purpose: an unpaid balance is settled at today's rate. #}
+              <strong {% if order_amounts.outstanding > 0 %}style="color:var(--danger);"{% endif %}>{{ order_amounts.outstanding|currency }}</strong>
             </div>
             {% else %}
             <p style="color:var(--muted);font-size:0.875rem;font-style:italic;">{% trans "No payments recorded yet." %}</p>

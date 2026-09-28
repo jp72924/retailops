@@ -968,7 +968,7 @@ A `200` is returned even when all orders fail — inspect `failed` for individua
 
 ### 4.10 Payments
 
-Payments are **immutable** financial records. They cannot be updated or deleted.
+Payments are **immutable** financial records. They cannot be updated or deleted. Each one records the currency and exchange rate in effect when it was recorded, and keeps them when the settings later change — see [Currency history](#currency-history).
 
 | Method | Endpoint | Permission | Description |
 |--------|----------|------------|-------------|
@@ -1037,6 +1037,7 @@ System-wide currency display settings. A singleton row — there is always exact
   "secondary_rate_source_url": "https://ve.dolarapi.com/v1/dolares/oficial",
   "secondary_rate_source_field": "promedio",
   "secondary_rate_updated_at": null,
+  "secondary_rate_source": "unknown",
   "ocr_enabled": false,
   "ocr_provider": "vepay",
   "ocr_base_url": "",
@@ -1054,7 +1055,7 @@ System-wide currency display settings. A singleton row — there is always exact
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `currency_code` | string | ISO 4217 code (e.g. `USD`, `EUR`, `GBP`). Max 3 characters. |
+| `currency_code` | string | ISO 4217 code (e.g. `USD`, `EUR`, `GBP`). Max 3 characters. **Locked once any order or payment exists** — see [Currency history](#currency-history). |
 | `currency_symbol` | string | Display symbol prepended to amounts (e.g. `$`, `€`, `Bs`). Max 4 characters. |
 | `decimal_places` | integer | Number of decimal places for monetary display (typical values: 0 for JPY, 2 for USD/EUR, 3 for KWD). |
 | `secondary_currency_enabled` | boolean | Feature flag. When `false`, all secondary fields are stored but not displayed anywhere. |
@@ -1065,7 +1066,8 @@ System-wide currency display settings. A singleton row — there is always exact
 | `secondary_rate_auto_update_enabled` | boolean | When `true`, the rate can be refreshed from `secondary_rate_source_url`. Requires both source fields to be set. |
 | `secondary_rate_source_url` | string (URL) | JSON endpoint to fetch the rate from. Default: DolarApi BCV official rate. |
 | `secondary_rate_source_field` | string | Dotted path to the numeric rate in the source JSON (e.g. `promedio`, `data.rate`). |
-| `secondary_rate_updated_at` | string (datetime) or null | Read-only. Timestamp of the last successful automatic update. |
+| `secondary_rate_updated_at` | string (datetime) or null | Read-only. When the current rate was set — by the rate refresh, or by any manual change to `secondary_exchange_rate` (a `PATCH`, the Settings page, the admin, `manage.py init`). |
+| `secondary_rate_source` | string | Read-only. Where the current rate came from: `fetched` (the rate refresh or `update_bcv_rate`), `manual` (typed in), or `unknown` (set before this was tracked). Recorded with every payment. |
 | `ocr_enabled` | boolean | Feature flag for receipt OCR verification. When `true`, mobile payment / bank transfer receipts uploaded at the kiosk are sent to the configured VEPay proxy for verification. Requires `ocr_base_url` to be set (`400` otherwise). |
 | `ocr_provider` | string | OCR backend to use. Only `"vepay"` is currently supported (enforced by a model `choices` constraint — other values are rejected with `400`). |
 | `ocr_base_url` | string (URL) | Base URL of the VEPay proxy instance (e.g. `https://your-vepay-instance.example.com`). Required when `ocr_enabled` is `true`; the check re-validates against the merged (stored + patched) state, so a `PATCH` that omits it while `ocr_enabled` is already `true` still enforces this. |
@@ -1149,6 +1151,9 @@ Partial update — only the fields you provide are changed. All fields are optio
 
 Response `200 OK`: the updated settings object (same shape as `GET`).
 
+**Validation rule for the primary currency:**
+- `currency_code` cannot change once any order or payment exists: `400 validation_error` with a `currency_code` entry in `details`. Every stored amount — product prices, order totals, payments — is a bare number in the primary currency, so switching `USD` to `EUR` would re-label all of them without converting any. `currency_symbol` and `decimal_places` stay editable, as does everything about the secondary currency (a redenomination such as the 2021 bolívar needs a new secondary code).
+
 **Validation rules for secondary currency:**
 - If `secondary_currency_enabled` is `true`, `secondary_currency_symbol` must be non-empty (even in a PATCH that omits it — the server merges with the stored value before validating).
 - `secondary_exchange_rate` must be `> 0` whenever provided.
@@ -1168,7 +1173,14 @@ Response `200 OK`: the updated settings object (same shape as `GET`).
 - The sentinel `"__no_change__"` is also accepted for the same purpose (used by the Settings page form, which always has to submit a value for the field).
 - To replace the key, send the new cleartext value in `ocr_api_key`. To clear it, send an empty string `""`.
 
-**Note:** Changing these settings takes effect immediately for all new back-office renders and API responses. Existing prices and totals stored in the database are raw decimals — they are not converted, only the display changes. The secondary exchange rate is a static, admin-set value used for back-office display only; it has no effect on the kiosk PWA, which maintains its own live exchange rate pipeline.
+<a id="currency-history"></a>
+**Currency history.** A change to any currency setting applies to payments recorded **from then on**. It never rewrites history:
+
+- **Every payment records the currency and exchange rate in effect when it was recorded**, and keeps them — see the `currency` and `amount_secondary` fields of the [Payment object](#payment-object). Changing the symbol, the decimals or the rate afterwards does not change how an existing payment reads.
+- **An order's paid portion is frozen; its unpaid balance is live.** An order is an obligation in the primary currency. Its value in the secondary currency is the sum of its confirmed payments, each at its own recorded rate, plus the outstanding balance at the current rate — which is the rate it will actually be settled at. A fully paid order therefore no longer moves; see the `secondary` field of the [Order object](#order-object).
+- **The kiosk uses the same rate throughout a checkout.** A mobile-payment or bank-transfer receipt is converted to the primary currency at the rate read when checkout begins, and the payment is recorded with that same rate, even if the rate is refreshed while the receipt is being read.
+- Product prices, and orders with no confirmed payment yet, always use the current settings.
+- Payments recorded before this tracking existed carry the configuration in effect when it was introduced, marked `rate_source: "backfilled"`. Their secondary amounts are approximate: the rate they were actually made at was never stored.
 
 ---
 
@@ -1363,8 +1375,23 @@ The JSON response shape:
   "tax_amount": "3.90",
   "discount_amount": "0.00",
   "total_amount": "42.87",
-  "amount_paid": "0.00",
-  "amount_outstanding": "42.87",
+  "amount_paid": "20.00",
+  "amount_outstanding": "22.87",
+  "currency": {
+    "basis": "recorded",
+    "code": "USD",
+    "symbol": "$",
+    "decimal_places": 2
+  },
+  "secondary": {
+    "code": "VES",
+    "symbol": "Bs.",
+    "decimal_places": 2,
+    "live_rate": "842.21000000",
+    "amount_paid": "16800.00",
+    "amount_outstanding": "19261.34",
+    "total_amount": "36061.34"
+  },
   "notes": "Urgent — please prioritise.",
   "items": [
     {
@@ -1387,6 +1414,16 @@ The JSON response shape:
 
 `amount_paid` and `amount_outstanding` are computed from the order's payments; they are not stored columns. `created_by` and `confirmed_by` are user primary keys.
 
+`currency` names the configuration the primary figures are in: `basis` is `recorded` once any payment is confirmed (the latest confirmed payment's currency) and `live` before that. `secondary` states the order in the secondary currency, and is `null` when none applies — see [Currency history](#currency-history):
+
+| Field | Meaning |
+|-------|---------|
+| `amount_paid` | Confirmed payments, each converted at the rate it was recorded with. Never changes. In the example, 20.00 paid at 840.00. |
+| `amount_outstanding` | The balance at `live_rate`. Changes with the rate. |
+| `total_amount` | `amount_paid` + `amount_outstanding`. Fixed once the order is fully paid. |
+
+Each is `null` when it cannot be stated exactly: a payment recorded while the secondary currency was disabled, or payments in different secondary currencies (across a redenomination).
+
 ### Payment object
 
 ```json
@@ -1395,7 +1432,21 @@ The JSON response shape:
   "payment_number": "PAY-20260415-0017",
   "sales_order": 42,
   "sales_order_number": "SO-20260415-0042",
-  "amount": "42.87",
+  "amount": "20.00",
+  "amount_secondary": "16800.00",
+  "currency": {
+    "code": "USD",
+    "symbol": "$",
+    "decimal_places": 2,
+    "secondary": {
+      "code": "VES",
+      "symbol": "Bs.",
+      "decimal_places": 2,
+      "rate": "840.00000000",
+      "rate_as_of": "2026-04-15T12:05:00Z",
+      "rate_source": "fetched"
+    }
+  },
   "payment_method": "bank_transfer",
   "payment_method_display": "Bank Transfer",
   "reference_number": "TXN-98765",
@@ -1405,6 +1456,10 @@ The JSON response shape:
   "created_at": "2026-04-15T15:00:00Z"
 }
 ```
+
+`currency` is the currency configuration and exchange rate in effect when the payment was recorded. It is set once and **never changes**, whatever later happens to the settings; `amount_secondary` is `amount` converted at that recorded rate (half-up to the secondary decimals), or `null` when no secondary currency was in effect. `currency.secondary` is `null` in that case too.
+
+`rate_source` says where the rate came from: `fetched` (the rate refresh or `update_bcv_rate`), `manual` (typed in), `unknown` (set before provenance was tracked), or `backfilled` — a payment recorded before rates were tracked at all, assigned the rate in effect when tracking began. A `backfilled` payment's `amount_secondary` is an approximation.
 
 ### SystemSettings object
 
@@ -1422,11 +1477,12 @@ The JSON response shape:
   "secondary_rate_source_url": "https://ve.dolarapi.com/v1/dolares/oficial",
   "secondary_rate_source_field": "promedio",
   "secondary_rate_updated_at": null,
+  "secondary_rate_source": "unknown",
   "recipient_validation_enabled": false
 }
 ```
 
-Singleton — there is always exactly one row. Returned by `GET /api/v1/settings/` and accepted by `PATCH /api/v1/settings/`. The `secondary_*` fields are always present in responses; when `secondary_currency_enabled` is `false` their display values are stored but ignored by all display logic. `secondary_rate_updated_at` is read-only and set by the rate-refresh endpoint or the `update_bcv_rate` command. `recipient_validation_enabled` gates the [Recipient Profiles](#412-recipient-profiles) match check at kiosk checkout.
+Singleton — there is always exactly one row. Returned by `GET /api/v1/settings/` and accepted by `PATCH /api/v1/settings/`. The `secondary_*` fields are always present in responses; when `secondary_currency_enabled` is `false` their display values are stored but ignored by all display logic. `secondary_rate_updated_at` and `secondary_rate_source` are read-only: the rate-refresh endpoint and the `update_bcv_rate` command set them to the fetch time and `fetched`, and any other change to the rate sets them to the save time and `manual`. `recipient_validation_enabled` gates the [Recipient Profiles](#412-recipient-profiles) match check at kiosk checkout.
 
 ---
 

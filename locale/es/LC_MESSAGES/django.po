@@ -1433,3 +1433,24 @@ msgstr "Volver al cliente"
 
 msgid "Dotted path to the numeric rate, e.g. <code>promedio</code> or <code>data.rate</code>."
 msgstr "Ruta con puntos hasta el valor numérico de la tasa, p. ej. <code>promedio</code> o <code>data.rate</code>."
+
+msgid "Fetched from the rate source"
+msgstr "Obtenida de la fuente de tasas"
+
+msgid "Entered manually"
+msgstr "Ingresada manualmente"
+
+msgid "Unknown"
+msgstr "Desconocida"
+
+msgid "Approximate, assigned when rate tracking began"
+msgstr "Aproximada, asignada al comenzar el registro de tasas"
+
+msgid "The primary currency cannot be changed once orders or payments exist. Prices and recorded amounts are stored as numbers in this currency, so changing it would re-label all of them without converting any."
+msgstr "La moneda principal no se puede cambiar una vez que existen pedidos o pagos. Los precios y los montos registrados se guardan como números en esta moneda, así que cambiarla los re-etiquetaría todos sin convertir ninguno."
+
+msgid "Receipt Amount"
+msgstr "Monto del comprobante"
+
+msgid "Currency and rate changes apply to payments recorded from now on. Recorded payments keep the currency and rate they were made at; unpaid balances follow the current rate."
+msgstr "Los cambios de moneda y tasa se aplican a los pagos que se registren a partir de ahora. Los pagos ya registrados conservan la moneda y la tasa con que se hicieron; los saldos pendientes siguen la tasa vigente."

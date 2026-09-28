@@ -77,8 +77,11 @@
 
           <div class="form-group">
             <label class="form-label" for="id_currency_code">{% trans "Currency Code" %} <span style="color:var(--muted);font-weight:400;">{% trans "(ISO 4217)" %}</span></label>
-            <input type="text" id="id_currency_code" name="currency_code" class="form-control"
+            <input type="text" id="id_currency_code" name="currency_code" class="form-control {% if errors.currency_code %}is-invalid{% endif %}"
               value="{{ sys_settings.currency_code }}" maxlength="3" placeholder="USD">
+            {% if errors.currency_code %}
+            <div class="invalid-feedback">{{ errors.currency_code }}</div>
+            {% endif %}
           </div>
 
           <div class="form-group">
@@ -149,6 +152,9 @@
               {% trans "Units of secondary per 1 primary." %}
             </div>
           </div>
+        </div>
+        <div style="font-size:0.78rem;color:var(--muted);margin-top:12px;">
+          {% trans "Currency and rate changes apply to payments recorded from now on. Recorded payments keep the currency and rate they were made at; unpaid balances follow the current rate." %}
         </div>
 
         {% if sys_settings.secondary_currency_enabled %}

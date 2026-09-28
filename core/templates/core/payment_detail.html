@@ -28,8 +28,27 @@
             </div>
             <div class="info-row">
               <span class="info-label">{% trans "Amount" %}</span>
-              <strong style="font-size:1.1rem;">{{ payment.amount|currency }}</strong>
+              <strong style="font-size:1.1rem;">{{ payment.amount|money:payment.currency_snapshot }}</strong>
             </div>
+            {% with snapshot=payment.currency_snapshot %}
+            {% if snapshot.secondary_currency_enabled %}
+            <div class="info-row">
+              <span class="info-label">{% trans "Exchange Rate" %}</span>
+              <span>
+                {{ snapshot.currency_symbol }}1 = {{ snapshot.secondary_currency_symbol }}{{ recorded_rate }}
+                <span class="currency-secondary" style="display:block;">
+                  {% if snapshot.rate_as_of %}{{ snapshot.rate_as_of|date:"M j, Y g:i A" }} · {% endif %}{{ snapshot.get_rate_source_display }}
+                </span>
+              </span>
+            </div>
+            {% endif %}
+            {% endwith %}
+            {% if receipt_amount %}
+            <div class="info-row">
+              <span class="info-label">{% trans "Receipt Amount" %}</span>
+              <span class="td-mono">{{ receipt_amount }}</span>
+            </div>
+            {% endif %}
             <div class="info-row">
               <span class="info-label">{% trans "Method" %}</span>
               {{ payment.get_payment_method_display }}
@@ -84,16 +103,17 @@
             </div>
             <div class="info-row">
               <span class="info-label">{% trans "Order Total" %}</span>
-              {{ payment.sales_order.total_amount|currency }}
+              {{ order_amounts|order_money:"total" }}
             </div>
             <div class="info-row">
               <span class="info-label">{% trans "Amount Paid" %}</span>
-              {{ payment.sales_order.amount_paid|currency }}
+              {{ order_amounts|order_money:"paid" }}
             </div>
             <div class="info-row">
               <span class="info-label">{% trans "Outstanding" %}</span>
-              <strong {% if payment.sales_order.amount_outstanding > 0 %}style="color:var(--danger);"{% else %}style="color:var(--success);"{% endif %}>
-                {{ payment.sales_order.amount_outstanding|currency }}
+              {# Live on purpose: an unpaid balance is settled at today's rate. #}
+              <strong {% if order_amounts.outstanding > 0 %}style="color:var(--danger);"{% else %}style="color:var(--success);"{% endif %}>
+                {{ order_amounts.outstanding|currency }}
               </strong>
             </div>
           </div>
