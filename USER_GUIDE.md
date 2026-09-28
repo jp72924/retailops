@@ -84,7 +84,7 @@ The page never reveals whether an email address belongs to a real account, so yo
 
 The Dashboard is your home screen. It gives you a quick snapshot of the business:
 
-- **Summary cards** at the top show orders this month, total revenue, payments outstanding, and how many products are running low on stock.
+- **Summary cards** at the top show orders this month, total revenue, payments outstanding, and how many products are running low on stock. Revenue is shown in the primary currency only, even when a secondary currency is enabled (see Section 11).
 - **Recent Orders** tab lists the five most recent orders with their current status.
 - **Inventory Alerts** tab lists products that have fallen below their low-stock threshold.
 - **Quick Actions** sidebar has shortcut buttons for the most common destinations: **New Order**, **Register Customer**, **View Payments**, and **Inventory**. The last two jump to the Payments and Inventory list pages rather than opening a form directly — to record a payment, open the order it belongs to (Section 6); to add a product, open Inventory and click **Add Product** (Section 9).
@@ -259,6 +259,7 @@ The Payments list shows every payment with its payment number, linked order, amo
 - Payments are **manual** — there is no automatic card processing. You record what was received.
 - An order can have **multiple payments** (partial payments are supported). The order becomes Paid when cumulative payments cover the total.
 - Payments cannot be deleted through the interface. To reverse a payment, the order must be refunded (Admin only — see Section 8).
+- Each payment keeps the currency and exchange rate in effect when it was recorded, so later changes to the currency settings never change it. Its page shows the rate it was recorded at (see Section 11, *The rate each payment records*).
 
 ---
 
@@ -434,21 +435,41 @@ Click **Save Preferences** to apply your changes. The new time-zone and language
 
 *Who can do this: Admin only*
 
-These settings control how monetary amounts are displayed everywhere in RetailOps — the order list, order detail page, dashboard cards, payment records, and so on. They do **not** convert any of the prices already stored in the database; only the **display** changes.
+These settings control the currency RetailOps works in, and the optional second currency shown alongside it. Two rules decide which settings a figure is shown with:
+
+- **Anything not yet paid** — product prices, orders still being prepared, unpaid balances — is shown with **today's** settings.
+- **Money already received** keeps the currency and exchange rate in effect **when the payment was recorded**. Changing these settings never changes a recorded payment.
+
+Neither rule converts anything stored: every price, order total, and payment is kept as a plain number in the primary currency.
 
 #### Primary currency
 
 This is the currency you operate in. All product prices, order totals, and payments are stored as decimal amounts in this currency.
 
-- **Currency Code** — A three-letter ISO 4217 code such as `USD`, `EUR`, `GBP`, `VES`.
+- **Currency Code** — A three-letter ISO 4217 code such as `USD`, `EUR`, `GBP`, `VES`. **It can only be changed before your first order or payment.** After that, saving a different code shows *"The primary currency cannot be changed once orders or payments exist."* Every stored amount is a plain number in this currency, so switching `USD` to `EUR` would turn a $10 product into €10 without converting anything.
 - **Currency Symbol** — The character (or short string) shown next to amounts (e.g. `$`, `€`, `£`, `Bs.`). Up to 4 characters.
 - **Decimal Places** — How many digits to show after the decimal point. Use `0` for currencies like JPY, `2` for USD/EUR, `3` for KWD, etc.
+
+The symbol and decimal places can be changed at any time. The change applies to prices and anything not yet paid; payments already recorded keep the symbol and decimals they were recorded with.
 
 A live preview underneath the form shows what amounts will look like with your settings.
 
 #### Secondary currency (optional)
 
-When enabled, every monetary amount is shown together with an approximate conversion in smaller muted text (e.g. `$3.49  ≈ Bs. 127,39`). This is useful if your business operates in a country where prices are quoted in one currency but customers naturally think in another.
+When enabled, amounts are shown together with a conversion in smaller muted text (e.g. `$3.49  ≈ Bs. 127,39`). This is useful if your business operates in a country where prices are quoted in one currency but customers naturally think in another.
+
+Which exchange rate a converted figure uses depends on what it is:
+
+| Figure | Exchange rate used |
+|---|---|
+| Product prices, and orders still in **Draft** or **Pending** | Today's rate |
+| A payment — on the order page, the Payments list, and the payment's own page | The rate recorded with that payment |
+| An order's **paid** amount | Each payment at its own recorded rate |
+| An order's **outstanding** balance | Today's rate, since it will be paid at the rate of the day it is paid |
+| An order's **total**, once confirmed | The paid part at recorded rates plus any balance at today's rate — so a fully paid order no longer changes when the rate does |
+| **Revenue This Month** on the Dashboard | None — shown in the primary currency only, because converting a month of past sales at today's rate would restate them at a rate none of them were made at |
+
+Once an order is confirmed, its individual lines show only the primary amount: the order may be paid in several payments at several rates, so a line has no single converted value. An order's total also shows only the primary amount when an honest conversion is not possible — for example, when its payments were recorded in different secondary currencies, or while the secondary currency was turned off.
 
 1. Tick **Show a secondary currency alongside the primary** to enable the feature.
 2. Fill in:
@@ -458,7 +479,19 @@ When enabled, every monetary amount is shown together with an approximate conver
    - **Exchange Rate** — How many units of the secondary currency equal **one** unit of the primary currency. Must be greater than zero.
 3. Click **Save Settings**.
 
-To turn the feature off, simply untick the checkbox and save. The other secondary-currency fields are kept on file but are ignored everywhere until the feature is re-enabled.
+To turn the feature off, simply untick the checkbox and save. The other secondary-currency fields are kept on file but are ignored everywhere until the feature is re-enabled. Payments recorded while it is off have no converted figure, and keep none after you turn it back on.
+
+#### The rate each payment records
+
+Every payment remembers the currency settings and exchange rate in effect when it was recorded. Open a payment from the Payments list to see:
+
+- **Exchange Rate** — for example `$1 = Bs.50`, with when that rate was set and where it came from:
+  - **Fetched from the rate source** — set by the automatic update below.
+  - **Entered manually** — typed in on this page, or changed through the admin site, the API, or `manage.py init`.
+  - **Approximate, assigned when rate tracking began** — the payment was recorded before RetailOps stored rates on payments. Its real rate was never kept, so it was given the rate in effect on the day the upgrade was installed. Treat its converted figures as approximate.
+- **Receipt Amount** — for a payment whose receipt was read automatically, the amount printed on the receipt itself.
+
+A note at the bottom of this settings card repeats the rule: currency and rate changes apply to payments recorded from then on.
 
 #### Automatic exchange-rate update (optional)
 
@@ -471,8 +504,9 @@ source — for example the BCV official rate via DolarApi.
      `https://ve.dolarapi.com/v1/dolares/oficial` (BCV official rate).
    - **Rate JSON Field** — the dotted path to the numeric rate in the response.
      Default `promedio`; use e.g. `data.rate` for `{"data": {"rate": 36.42}}`.
-3. Click **Save Settings**, then **Update now** to fetch immediately. The
-   timestamp of the last successful update is shown next to the button.
+3. Click **Save Settings**, then **Update now** to fetch immediately. The time
+   the rate last changed is shown next to the button (**Last updated**). It
+   changes whenever the rate does, whether the rate was fetched or typed in.
 
 To keep the rate current without manual clicks, schedule the management command
 on your server (cron, Task Scheduler, or your platform's scheduler):
@@ -495,8 +529,13 @@ POST /api/v1/settings/secondary-rate/refresh/   (Manager or Admin token)
 > from this page.
 
 > Until you enable auto-update, the exchange rate stays **static** — it keeps the
-> value you set until someone changes it. The kiosk PWA, if your business uses
-> one, has its own live-rate pipeline and is unaffected by this value.
+> value you set until someone changes it.
+
+#### Self-service kiosks
+
+If your business runs self-service kiosks, they use **this** exchange rate — they have no rate source of their own. A kiosk reads the settings on this page when it starts, and again each time a customer taps **Pagar productos** to begin a sale, so a change reaches every kiosk at its next sale without a restart. The same applies to the receipt OCR and recipient-validation settings below.
+
+At checkout, RetailOps checks the customer's receipt against the order total at the rate in effect when checkout begins, to the cent, and records that rate on the payment. A customer who is already partway through a sale when the rate changes still sees the old rate. If they pay that amount, the receipt will not match and the kiosk will reject it, so a staff member will need to help. Schedule automatic updates for a quiet time, such as before opening.
 
 ### Receipt OCR settings (Admin only)
 
