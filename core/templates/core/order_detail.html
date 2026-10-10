@@ -327,6 +327,11 @@
               <div class="pay-hist-meta">
                 {{ payment.get_payment_method_display }} · {{ payment.created_at|date:"M j, Y" }} · {{ payment.recorded_by.get_full_name }}
               </div>
+              {% if payment.status != 'confirmed' %}
+              <div class="pay-hist-meta">
+                <span class="badge {% if payment.status == 'rejected' %}badge-cancelled{% else %}badge-pending{% endif %}">{{ payment.get_status_display }}</span>
+              </div>
+              {% endif %}
               {% if payment.reference_number %}
               <div class="pay-hist-meta">{% blocktrans with ref=payment.reference_number %}Ref: {{ ref }}{% endblocktrans %}</div>
               {% endif %}

@@ -1,33 +1,32 @@
-import base64
-import binascii
-import uuid
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
-from asgiref.sync import async_to_sync
-from django.core.files.base import ContentFile
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.utils import timezone
-from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from core.exceptions import InsufficientStockError
 from core.services.customers import find_customer_by_national_id
-from core.services.inventory import assert_stock_available
+from core.services.inventory import assert_stock_available, lock_products
 from core.models import (
     CurrencySnapshot, Customer, InventoryMovement, KioskStation, Payment, Product,
     RecipientProfile, SalesOrder, SalesOrderItem, SystemSettings,
 )
 from core.services.currency import CurrencyContext
-from core.services.receipt_matching import (
-    REQUIRED_FIELD_KEYS, compare_receipt_fields, match_recipient_profile,
+from core.services.receipt_validation import (
+    KIOSK_POLICY,
+    AmountMismatchError,
+    DuplicateTransactionError,
+    InvalidReceiptImageError,
+    ReceiptValidationError,
+    assert_receipt_total_unchanged,
+    assert_transaction_key_unused,
+    receipt_paid_date,
+    validate_receipt,
 )
-from core.services.vepay import (
-    RECIPIENT_ACCOUNT_PATH, RECIPIENT_BANK_PATH, TRANSACTION_KEY_PATH,
-    VEPayClient, VEPayError, get_receipt_value,
-)
+from core.services.vepay import RECIPIENT_ACCOUNT_PATH, RECIPIENT_BANK_PATH, get_receipt_value
 from api.serializers.currency import recorded_currency_payload, secondary_amount_payload
 
 from .authentication import KioskTokenAuthentication
@@ -48,11 +47,6 @@ from .throttling import (
     KioskPollThrottle,
     KioskScanThrottle,
 )
-
-
-RECEIPT_PAYMENT_METHODS = {Payment.MOBILE_PAYMENT, Payment.BANK_TRANSFER}
-ALLOWED_RECEIPT_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/heic', 'image/heif'}
-MONEY_QUANT = Decimal('0.01')
 
 
 # ── Mixin ────────────────────────────────────────────────────────────────────
@@ -243,7 +237,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                 {'error': str(exc), 'code': 'invalid_product'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        except _DuplicateTransactionError as exc:
+        except DuplicateTransactionError as exc:
             return Response(
                 {
                     'error': 'This receipt transaction has already been recorded.',
@@ -252,7 +246,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                 },
                 status=status.HTTP_409_CONFLICT,
             )
-        except _AmountMismatchError as exc:
+        except AmountMismatchError as exc:
             return Response(
                 {
                     'error': 'Receipt amount does not match the order total.',
@@ -264,7 +258,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
                 },
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
-        except _ReceiptValidationError as exc:
+        except ReceiptValidationError as exc:
             payload = {
                 'error': str(exc),
                 'code': exc.code,
@@ -272,7 +266,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             if exc.details:
                 payload['details'] = exc.details
             return Response(payload, status=exc.http_status)
-        except _InvalidReceiptImageError as exc:
+        except InvalidReceiptImageError as exc:
             return Response(
                 {'error': str(exc), 'code': exc.code},
                 status=exc.http_status,
@@ -317,12 +311,13 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
         # transaction a check runs on never changes the error a client sees.
         products = _resolve_products(items)
         _assert_stock_available(products, items)
-        receipt_fields = _validate_receipt(
+        receipt_fields = validate_receipt(
             receipt_data,
             payment_method,
             _order_subtotal(products, items),
             settings=settings,
             currency=currency,
+            policy=KIOSK_POLICY,
         )
 
         # Interned after the receipt passes, so a receipt rejection leaves no
@@ -343,10 +338,10 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             # A unit price that moved while the receipt was in OCR would leave
             # the order total different from the one the receipt was accepted
             # against, so the receipt no longer proves payment for this order.
-            _assert_receipt_total_unchanged(receipt_fields, subtotal)
+            assert_receipt_total_unchanged(receipt_fields, subtotal)
             # Two checkouts can clear the pre-transaction duplicate check with
             # the same key concurrently; this is where one of them loses.
-            _assert_transaction_key_unused(receipt_fields['transaction_key'])
+            assert_transaction_key_unused(receipt_fields['transaction_key'])
 
             # ── Create SalesOrder ────────────────────────────────────
             order = SalesOrder(
@@ -483,16 +478,40 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
 
 
 def _resolve_products(items, *, lock=False):
-    """Map each requested SKU to its active Product, optionally locking rows."""
-    queryset = Product.objects.select_for_update() if lock else Product.objects
-    products = {}
+    """
+    Map each requested SKU to its active Product, optionally locking rows.
+
+    Locks go through lock_products(), which takes them in primary-key order —
+    the order every other stock writer uses. Locking SKU by SKU in cart order
+    let two concurrent checkouts holding the same lines in a different order
+    deadlock; PostgreSQL then aborted one of them with a 500, after its
+    receipt had already been accepted.
+    """
+    found = {
+        product.sku: product
+        for product in Product.objects.filter(
+            sku__in=[item['sku'] for item in items], is_active=True,
+        )
+    }
+    # Report the first unavailable SKU in cart order, as before.
     for item in items:
-        try:
-            products[item['sku']] = queryset.get(sku=item['sku'], is_active=True)
-        except Product.DoesNotExist:
+        if item['sku'] not in found:
             raise _InvalidProductError(
                 f"Product not found or inactive: {item['sku']}"
             )
+    if not lock:
+        return found
+
+    locked = lock_products(product.pk for product in found.values())
+    products = {}
+    for item in items:
+        product = locked.get(found[item['sku']].pk)
+        # Deactivated between the read above and the lock: no longer for sale.
+        if product is None or not product.is_active:
+            raise _InvalidProductError(
+                f"Product not found or inactive: {item['sku']}"
+            )
+        products[item['sku']] = product
     return products
 
 
@@ -517,319 +536,20 @@ def _order_subtotal(products, items):
     return subtotal
 
 
-def _assert_receipt_total_unchanged(receipt_fields, order_total):
-    """Reject an order whose total drifted away from the validated receipt."""
-    validated_total = receipt_fields['validated_total']
-    if validated_total is None:  # nothing was ever checked against a total
-        return
-    order_total = Decimal(str(order_total)).quantize(MONEY_QUANT)
-    if validated_total != order_total:
-        raise _AmountMismatchError(validated_total, order_total)
-
-
-def _assert_transaction_key_unused(transaction_key):
-    if transaction_key and Payment.objects.filter(transaction_key=transaction_key).exists():
-        raise _DuplicateTransactionError(transaction_key)
-
-
-def _validate_receipt(receipt_data, payment_method, order_total, *, settings, currency):
-    """
-    Validate receipt metadata against an order total and map it onto Payment
-    fields.
-
-    Called before the checkout transaction opens, because the OCR step below
-    is a third-party HTTP call — one retry against a configurable timeout —
-    and must not run while database locks are held (see _execute_checkout).
-    The returned `validated_total` records the total the receipt was accepted
-    against, so the write block can reject the order if that total moved.
-
-    `settings` supplies the OCR and image rules; `currency` supplies the
-    exchange rate a secondary-currency receipt is converted at, and is the
-    context the caller records on the payment.
-    """
-    if not isinstance(receipt_data, dict):
-        receipt_data = {}
-
-    order_total = Decimal(str(order_total)).quantize(MONEY_QUANT)
-    is_receipt_method = payment_method in RECEIPT_PAYMENT_METHODS
-    image_present = _receipt_image_present(receipt_data)
-    if (
-        is_receipt_method and
-        settings.receipt_image_required_for_receipt_methods and
-        not image_present
-    ):
-        raise _InvalidReceiptImageError(
-            'Receipt image is required for this payment method.',
-            'receipt_image_required',
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-    image_data = (
-        _decode_receipt_image_data(receipt_data, settings)
-        if image_present else None
-    )
-    receipt_match_required = (
-        is_receipt_method and
-        (settings.receipt_image_required_for_receipt_methods or image_data is not None)
-    )
-    vepay_data = None
-    transaction_key = (receipt_data.get('transaction_key') or '').strip()
-    if receipt_match_required:
-        if image_data is None:
-            raise _InvalidReceiptImageError(
-                'Receipt image is required for this payment method.',
-                'receipt_image_required',
-                status.HTTP_400_BAD_REQUEST,
-            )
-        if not settings.ocr_enabled:
-            raise _ReceiptValidationError(
-                'Receipt OCR validation is disabled. Ask an associate for assistance.',
-                'ocr_disabled',
-                status.HTTP_409_CONFLICT,
-            )
-        enabled_methods = settings.ocr_enabled_methods or []
-        if payment_method not in enabled_methods:
-            raise _ReceiptValidationError(
-                'OCR receipt verification is not enabled for this payment method.',
-                'ocr_method_disabled',
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
-
-        try:
-            vepay_data = async_to_sync(VEPayClient().parse_receipt)(
-                image_data['raw'],
-                image_data['name'],
-                image_data['content_type'],
-            )
-        except VEPayError as exc:
-            raise _ReceiptValidationError(
-                exc.message,
-                exc.code,
-                (
-                    status.HTTP_503_SERVICE_UNAVAILABLE
-                    if exc.is_retryable else status.HTTP_422_UNPROCESSABLE_ENTITY
-                ),
-                details={'retryable': exc.is_retryable},
-            )
-
-        comparison = compare_receipt_fields(
-            vepay_data,
-            _expected_receipt_fields(receipt_data, order_total),
-            currency,
-            REQUIRED_FIELD_KEYS,
-        )
-        if not comparison['matches']:
-            raise _ReceiptValidationError(
-                'Receipt fields do not match the submitted payment details.',
-                'receipt_field_mismatch',
-                status.HTTP_422_UNPROCESSABLE_ENTITY,
-                details={
-                    'field_matches': comparison['field_matches'],
-                    'receipt_fields': comparison['receipt_fields'],
-                    'expected_fields': comparison['expected_fields'],
-                    'mismatches': comparison['mismatches'],
-                },
-            )
-
-        if settings.recipient_validation_enabled:
-            profiles = RecipientProfile.objects.filter(
-                is_active=True, payment_method=payment_method,
-            )
-            recipient_match = match_recipient_profile(vepay_data, payment_method, profiles)
-            if not recipient_match['matched']:
-                raise _ReceiptValidationError(
-                    'Receipt recipient details do not match any known-good account.',
-                    'recipient_mismatch',
-                    status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    details={
-                        'receipt_fields': recipient_match['receipt_fields'],
-                        'checked_profiles_count': recipient_match['checked_profiles_count'],
-                    },
-                )
-
-        transaction_key = (
-            get_receipt_value(vepay_data, TRANSACTION_KEY_PATH, '') or transaction_key
-        ).strip()
-
-    # Fails fast on a receipt already spent, before the order exists; the write
-    # block repeats the check to settle a race between two live checkouts.
-    _assert_transaction_key_unused(transaction_key)
-
-    # The OCR comparison above checks the receipt amount against order_total,
-    # so a match there validates the total too.
-    validated_total = order_total if receipt_match_required else None
-    receipt_amount = receipt_data.get('amount_usd')
-    if receipt_amount not in (None, ''):
-        try:
-            receipt_total = Decimal(str(receipt_amount)).quantize(MONEY_QUANT)
-        except (InvalidOperation, ValueError, TypeError):
-            raise _AmountMismatchError(receipt_amount, order_total)
-        if receipt_total != order_total:
-            raise _AmountMismatchError(receipt_total, order_total)
-        validated_total = order_total
-
-    ocr_receipt_data = vepay_data or receipt_data.get('ocr_receipt_data') or None
-    status_value = Payment.CONFIRMED
-    if is_receipt_method and not transaction_key:
-        status_value = Payment.PENDING_REVIEW
-
-    return {
-        'status': status_value,
-        'transaction_key': transaction_key,
-        'ocr_receipt_data': ocr_receipt_data,
-        'validated_total': validated_total,
-        'image': _receipt_content_file(image_data),
-    }
-
-
-def _expected_receipt_fields(receipt_data, order_total):
-    return {
-        'amount_usd': order_total,
-        'reference': receipt_data.get('reference'),
-        'paid_on': receipt_data.get('paid_on') or receipt_data.get('paid_at'),
-        'origin_bank': receipt_data.get('origin_bank'),
-    }
-
-
-def _receipt_image_present(receipt_data):
-    data_url = (receipt_data.get('receipt_image_base64') or '').strip()
-    if not data_url:
-        return False
-    if data_url.startswith('data:') and ',' in data_url:
-        return bool(data_url.split(',', 1)[1].strip())
-    return True
-
-
-def _decode_receipt_image_data(receipt_data, settings=None):
-    data_url = receipt_data.get('receipt_image_base64') or ''
-    if not data_url:
-        return None
-
-    content_type = (receipt_data.get('receipt_image_content_type') or '').lower()
-    payload = data_url
-    if data_url.startswith('data:') and ',' in data_url:
-        header, payload = data_url.split(',', 1)
-        content_type = header[5:].split(';', 1)[0].lower()
-    payload = payload.strip()
-
-    if content_type not in ALLOWED_RECEIPT_IMAGE_TYPES:
-        raise _InvalidReceiptImageError(
-            'Receipt image must be a JPEG, PNG, HEIC, or HEIF file.',
-            'unsupported_receipt_type',
-            status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
-        )
-
-    try:
-        raw = base64.b64decode(payload, validate=True)
-    except (binascii.Error, ValueError):
-        raise _InvalidReceiptImageError(
-            'Receipt image could not be decoded.',
-            'invalid_receipt_image',
-            status.HTTP_400_BAD_REQUEST,
-        )
-    if not raw:
-        raise _InvalidReceiptImageError(
-            'Receipt image could not be decoded.',
-            'invalid_receipt_image',
-            status.HTTP_400_BAD_REQUEST,
-        )
-
-    settings = settings or SystemSettings.get()
-    max_bytes = settings.ocr_max_file_mb * 1024 * 1024
-    if len(raw) > max_bytes:
-        raise _InvalidReceiptImageError(
-            f'Receipt image must be {settings.ocr_max_file_mb} MB or smaller.',
-            'receipt_too_large',
-            status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-        )
-
-    ext = {
-        'image/jpeg': 'jpg',
-        'image/png': 'png',
-        'image/heic': 'heic',
-        'image/heif': 'heif',
-    }.get(content_type, 'jpg')
-    # Decoding happens before the order exists, so the name carries no order
-    # number — nor does it need to: the stored path is rebuilt from the order
-    # by Payment.receipt_image's upload_to (core.models.receipt_image_upload_path),
-    # and this name only supplies the extension plus the filename VEPay sees.
-    name = f'kiosk-receipt-{uuid.uuid4().hex}.{ext}'
-    return {
-        'name': name,
-        'raw': raw,
-        'content_type': content_type,
-    }
-
-
-def _receipt_content_file(image_data):
-    if image_data is None:
-        return None
-    return image_data['name'], ContentFile(image_data['raw'])
-
-
 def _payment_notes(station, receipt_data, payment_status):
     notes = [f'Kiosk payment - {station}']
     if payment_status == Payment.PENDING_REVIEW:
         notes.append('Receipt pending manual review.')
     if receipt_data.get('origin_document'):
         notes.append(f"Origin document: {receipt_data['origin_document']}")
-    paid_date = _receipt_paid_date(receipt_data)
+    paid_date = receipt_paid_date(receipt_data)
     if paid_date:
         notes.append(f'Paid date: {paid_date}')
     return '\n'.join(notes)
 
 
-def _receipt_paid_date(receipt_data):
-    raw = (receipt_data.get('paid_on') or receipt_data.get('paid_at') or '').strip()
-    if not raw:
-        return ''
-
-    value = parse_date(raw)
-    if value:
-        return value.isoformat()
-
-    value = parse_datetime(raw)
-    if value:
-        return value.date().isoformat()
-
-    if len(raw) >= 10:
-        value = parse_date(raw[:10])
-        if value:
-            return value.isoformat()
-
-    return ''
-
-
 class _InvalidProductError(Exception):
     pass
-
-
-class _DuplicateTransactionError(Exception):
-    def __init__(self, transaction_key):
-        self.transaction_key = transaction_key
-        super().__init__('Duplicate transaction')
-
-
-class _AmountMismatchError(Exception):
-    def __init__(self, receipt_amount, order_total):
-        self.receipt_amount = receipt_amount
-        self.order_total = order_total
-        super().__init__('Amount mismatch')
-
-
-class _InvalidReceiptImageError(Exception):
-    def __init__(self, message, code, http_status):
-        self.code = code
-        self.http_status = http_status
-        super().__init__(message)
-
-
-class _ReceiptValidationError(Exception):
-    def __init__(self, message, code, http_status, details=None):
-        self.code = code
-        self.http_status = http_status
-        self.details = details or {}
-        super().__init__(message)
 
 
 # ── Receipt retrieval ────────────────────────────────────────────────────────

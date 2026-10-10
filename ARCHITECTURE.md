@@ -390,9 +390,15 @@ per order - quantity is how you order more than one. An order stores no figure i
 the secondary currency; one is derived when it is read (see **Currency** below).
 
 **Payments.** `Payment` supports cash, mobile payment, bank transfer, card, check, and
-other, with statuses `pending_review` and `confirmed`. Every payment references the
-`CurrencySnapshot` it was recorded under; the column is `NOT NULL`, not editable, and
-not indexed, since nothing queries payments by snapshot. It carries the OCR fields
+other, with statuses `pending_review`, `confirmed`, and `rejected`. Only `confirmed`
+payments count towards an order; a Manager or Admin settles a `pending_review` one by
+approving or rejecting it, which records `reviewed_by`, `reviewed_at`, and
+`review_notes`. The staff API, the back-office form, and review apply payments
+through `core/services/payments.py`, which locks the order row before summing; kiosk
+checkout creates its order and payment in one transaction and sets the order's state
+itself. Every payment references the `CurrencySnapshot` it was recorded under; the
+column is `NOT NULL`, not editable, and not indexed, since nothing queries payments by
+snapshot. It carries the OCR fields
 `receipt_image`, `ocr_receipt_data`, `transaction_key`, `origin_phone`, `origin_bank`,
 `recipient_bank`, `recipient_account`, and `verified_at`. Duplicate receipts are
 blocked by a partial unique index that only applies once a key is actually set:

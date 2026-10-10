@@ -25,6 +25,16 @@ from .services.customers import (
     normalized_national_id_expr,
 )
 from .services.currency import attach_order_amounts, order_amounts
+from .services.payments import (
+    OrderNotPayableError,
+    PaymentReviewError,
+    apply_confirmed_payments,
+    approve_payment,
+    lock_payable_order,
+    recordable_statuses,
+    reject_payment,
+)
+from .services.receipt_validation import DuplicateTransactionError
 from .services.receipt_matching import normalize_document_id, receipt_currency
 from .services.vepay import PAYMENT_AMOUNT_VALUE_PATH, get_receipt_value
 from .templatetags.regional import currency_plain
@@ -1034,39 +1044,91 @@ def payment_create(request):
         messages.error(request, 'A reference number is required for bank transfer, card, and check payments.')
         return redirect('order-detail', pk=order.pk)
 
-    with transaction.atomic():
-        payment = Payment.objects.create(
-            sales_order=order,
-            amount=amount,
-            payment_method=payment_method,
-            reference_number=reference_number,
-            notes=notes,
-            recorded_by=request.user,
-        )
-
-        # Auto-transition order to Paid when fully covered
-        total_paid = (
-            order.payments
-            .filter(status=Payment.CONFIRMED)
-            .aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-        )
-
-        if total_paid >= order.total_amount:
-            order.status  = SalesOrder.PAID
-            order.paid_at = timezone.now()
-            order.save()
-            messages.success(
-                request,
-                f'Payment {payment.payment_number} recorded. Order {order.order_number} marked as Paid.'
+    try:
+        with transaction.atomic():
+            # Locked and re-checked: the form is only offered for Confirmed and
+            # Paid orders, but nothing stopped a crafted POST from paying a
+            # cancelled order back to life.
+            order = lock_payable_order(order.pk, allowed=recordable_statuses())
+            payment = Payment.objects.create(
+                sales_order=order,
+                amount=amount,
+                payment_method=payment_method,
+                reference_number=reference_number,
+                notes=notes,
+                recorded_by=request.user,
             )
-        else:
-            messages.success(
-                request,
-                f'Payment {payment.payment_number} recorded. '
-                f'Outstanding balance: {currency_plain(order.amount_outstanding)}.'
-            )
+            application = apply_confirmed_payments(order)
+    except OrderNotPayableError as exc:
+        messages.error(request, str(exc))
+        return redirect('order-detail', pk=order.pk)
 
+    if application.became_paid:
+        messages.success(
+            request,
+            f'Payment {payment.payment_number} recorded. Order {order.order_number} marked as Paid.'
+        )
+    else:
+        messages.success(
+            request,
+            f'Payment {payment.payment_number} recorded. '
+            f'Outstanding balance: {currency_plain(order.amount_outstanding)}.'
+        )
     return redirect('order-detail', pk=order.pk)
+
+
+@require_POST
+@role_required('Manager', 'Admin')
+def payment_approve(request, pk):
+    """POST: confirm a payment pending review and apply it to its order."""
+    payment = get_object_or_404(Payment, pk=pk)
+    try:
+        payment, application = approve_payment(
+            payment,
+            user=request.user,
+            notes=request.POST.get('review_notes', ''),
+            transaction_key=request.POST.get('transaction_key', ''),
+        )
+    except DuplicateTransactionError as exc:
+        messages.error(
+            request,
+            _('Transaction key %(key)s is already recorded on another payment.')
+            % {'key': exc.transaction_key},
+        )
+        return redirect('payment-detail', pk=pk)
+    except (PaymentReviewError, OrderNotPayableError) as exc:
+        messages.error(request, str(exc))
+        return redirect('payment-detail', pk=pk)
+
+    if application.became_paid:
+        messages.success(
+            request,
+            _('Payment %(payment)s approved. Order %(order)s marked as Paid.')
+            % {'payment': payment.payment_number, 'order': payment.sales_order.order_number},
+        )
+    else:
+        messages.success(
+            request, _('Payment %(payment)s approved.') % {'payment': payment.payment_number},
+        )
+    return redirect('payment-detail', pk=pk)
+
+
+@require_POST
+@role_required('Manager', 'Admin')
+def payment_reject(request, pk):
+    """POST: reject a payment pending review. The order is left unchanged."""
+    payment = get_object_or_404(Payment, pk=pk)
+    try:
+        payment = reject_payment(
+            payment, user=request.user, notes=request.POST.get('review_notes', ''),
+        )
+    except PaymentReviewError as exc:
+        messages.error(request, str(exc))
+        return redirect('payment-detail', pk=pk)
+    messages.success(
+        request, _('Payment %(payment)s rejected.') % {'payment': payment.payment_number},
+    )
+    return redirect('payment-detail', pk=pk)
 
 
 def _receipt_amount_display(payment):
