@@ -446,7 +446,7 @@
         {% blocktrans with number=order.order_number %}Cancel order {{ number }}?{% endblocktrans %}
       </p>
       <p style="margin:0;color:var(--muted);font-size:0.85rem;">
-        {% trans "The order moves to Cancelled and every line item's stock is returned to inventory. This cannot be undone." %}
+        {% trans "The order moves to Cancelled and the stock it took is returned to inventory. This cannot be undone." %}
       </p>
     </div>
     <div class="modal-footer">
@@ -469,7 +469,7 @@
         {% blocktrans with number=order.order_number amount=order.total_amount|currency %}Refund {{ amount }} for order {{ number }}?{% endblocktrans %}
       </p>
       <p style="margin:0;color:var(--muted);font-size:0.85rem;">
-        {% trans "The order moves to Refunded and every line item's stock is returned to inventory. This cannot be undone, and no money is transferred — record the actual refund with your payment provider separately." %}
+        {% trans "The order moves to Refunded and the stock it took is returned to inventory. This cannot be undone, and no money is transferred — record the actual refund with your payment provider separately." %}
       </p>
     </div>
     <div class="modal-footer">

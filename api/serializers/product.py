@@ -1,3 +1,5 @@
+from typing import Optional
+
 from rest_framework import serializers
 
 from core.models import Product, ProductCategory
@@ -34,6 +36,9 @@ class ProductSerializer(serializers.ModelSerializer):
     serializer is used outside of the ViewSet (e.g., in tests or the shell).
     This guarantees zero extra queries per object in normal API use.
 
+    A product with track_inventory=False has no stock: current_stock is null
+    and it is never low or out of stock.
+
     FK write pattern
     ----------------
     category     — nested read-only representation (ProductCategoryNestedSerializer)
@@ -58,7 +63,8 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sku', 'name', 'description',
             'category', 'category_id',
-            'unit_of_measure', 'unit_price', 'low_stock_threshold',
+            'unit_of_measure', 'unit_price',
+            'kind', 'track_inventory', 'low_stock_threshold',
             'image', 'external_image_url', 'primary_image_url', 'has_image',
             'clear_image',
             'is_active',
@@ -77,21 +83,25 @@ class ProductSerializer(serializers.ModelSerializer):
     def _stock_value(self, obj):
         """
         Return the annotated stock value when available, otherwise fall back
-        to the @property (which issues a SQL aggregate).
+        to the @property (which issues a SQL aggregate). None when the product
+        does not track inventory.
         """
+        if not obj.track_inventory:
+            return None
         if hasattr(obj, '_stock'):
             return obj._stock
         return obj.current_stock
 
-    def get_current_stock(self, obj) -> int:
+    def get_current_stock(self, obj) -> Optional[int]:
         return self._stock_value(obj)
 
     def get_is_low_stock(self, obj) -> bool:
         stock = self._stock_value(obj)
-        return 0 < stock <= obj.low_stock_threshold
+        return stock is not None and 0 < stock <= obj.low_stock_threshold
 
     def get_is_out_of_stock(self, obj) -> bool:
-        return self._stock_value(obj) <= 0
+        stock = self._stock_value(obj)
+        return stock is not None and stock <= 0
 
     # ── Validation ────────────────────────────────────────────────────────────
 

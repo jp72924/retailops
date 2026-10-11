@@ -228,6 +228,14 @@ translates them into its own error format.
   ascending primary-key order, so two confirmations cannot deadlock), and
   `deduct_stock_for_order()`, which `SalesOrder.confirm()` calls. The kiosk's own
   checker defers to it, so a checkout and a back-office confirmation cannot disagree.
+  Lines for products with `track_inventory=False` are dropped before anything is
+  locked or checked.
+- **`orders.py`** - cancelling and refunding. `restore_stock_for_order()` reverses what
+  the order's own `InventoryMovement` rows still net to per product, rather than adding
+  each line's quantity back, so an order that never deducted gets nothing back and a
+  second reversal gives back nothing. `cancel_order()` and `refund_order()` lock the
+  order row (the lock the payment paths take), re-check its status, and are what the
+  API and the back-office call.
 - **`customers.py`** - national-ID resolution for every surface that registers or
   finds a customer: the API, both back-office forms, quick-create, and kiosk
   identify/register. It matches through any punctuation of the same ID and still
@@ -378,7 +386,11 @@ level of nesting plus deeper if desired. `Product` has a unique `sku` and requir
 either an uploaded `image` (stored under `products/YYYY/MM/<sku>-<uuid>.<ext>`, capped
 at 5 MB, jpg/jpeg/png/webp) or an `external_image_url` when active. `current_stock`,
 `is_low_stock`, and `is_out_of_stock` are derived properties; the API layer annotates
-`_stock` in the queryset to avoid the N+1.
+`_stock` in the queryset to avoid the N+1. `kind` (`physical`, `digital`, `service`)
+classifies a product and `track_inventory` alone decides whether stock exists: when it
+is false, `current_stock` is `None`, the product is never low or out of stock, and the
+stock rule skips it, so an order of only such products takes no row locks. Both
+default to a physical, tracked product, so existing rows are unchanged.
 
 **Sales.** `SalesOrder` numbers itself `SO-YYYYMMDD-NNNN` through `SequenceCounter` and
 moves through `draft -> pending -> confirmed -> paid -> shipped -> delivered`, with

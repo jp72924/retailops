@@ -14,27 +14,36 @@ class ProductFilter(django_filters.FilterSet):
     plain, unannotated queryset.
 
     ?stock values:
-      out   products where _stock <= 0
-      low   products where 0 < _stock <= low_stock_threshold
-      ok    products where _stock > low_stock_threshold
+      out   tracked products where _stock <= 0
+      low   tracked products where 0 < _stock <= low_stock_threshold
+      ok    products that can be sold freely: tracked with
+            _stock > low_stock_threshold, or not tracking inventory at all
       all   no filter (same as omitting the param)
+
+    ?kind=physical|digital|service and ?track_inventory=true|false filter on
+    those fields directly.
     """
     stock = django_filters.CharFilter(method='filter_stock')
 
     class Meta:
         model  = Product
-        fields = ['category', 'is_active', 'unit_of_measure']
+        fields = ['category', 'is_active', 'unit_of_measure', 'kind', 'track_inventory']
 
     def filter_stock(self, queryset, name, value):
         value = value.strip().lower()
         if value == 'out':
-            return queryset.filter(_stock__lte=0)
+            return queryset.filter(track_inventory=True, _stock__lte=0)
         if value == 'low':
             # 0 < stock <= low_stock_threshold
-            return queryset.filter(_stock__gt=0, _stock__lte=F('low_stock_threshold'))
+            return queryset.filter(
+                track_inventory=True, _stock__gt=0, _stock__lte=F('low_stock_threshold'),
+            )
         if value == 'ok':
-            # stock > low_stock_threshold (fully stocked)
-            return queryset.filter(_stock__gt=F('low_stock_threshold'))
+            # Fully stocked, or nothing to run out of. "ok" is what the order
+            # workflows treat as sellable.
+            return queryset.filter(
+                Q(track_inventory=False) | Q(_stock__gt=F('low_stock_threshold'))
+            )
         # 'all' or unrecognised value — return unfiltered
         return queryset
 

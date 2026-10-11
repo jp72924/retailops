@@ -111,6 +111,20 @@
               {% if errors.unit_of_measure %}<div class="invalid-feedback">{{ errors.unit_of_measure }}</div>{% endif %}
             </div>
 
+            <div class="form-group">
+              <label class="form-label" for="id_kind">{% trans "Product Type" %} <span class="req">*</span></label>
+              <select id="id_kind" name="kind"
+                class="form-control{% if errors.kind %} is-invalid{% endif %}" required>
+                {% for value, label in kind_choices %}
+                <option value="{{ value }}"
+                  {% if form_data.kind == value %}selected{% endif %}>
+                  {{ label }}
+                </option>
+                {% endfor %}
+              </select>
+              {% if errors.kind %}<div class="invalid-feedback">{{ errors.kind }}</div>{% endif %}
+            </div>
+
           </div>
 
           <div class="form-group" style="margin-top:16px;">
@@ -188,11 +202,22 @@
               <input type="number" id="id_low_stock_threshold" name="low_stock_threshold"
                 class="form-control{% if errors.low_stock_threshold %} is-invalid{% endif %}"
                 value="{{ form_data.low_stock_threshold }}"
-                min="0" required>
+                min="0" required{% if not form_data.track_inventory %} disabled{% endif %}>
               {% if errors.low_stock_threshold %}<div class="invalid-feedback">{{ errors.low_stock_threshold }}</div>{% endif %}
               <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">{% trans "Alert shown when stock falls at or below this number." %}</div>
             </div>
 
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label class="form-check">
+              <input type="checkbox" id="id_track_inventory" name="track_inventory" value="1"
+                {% if form_data.track_inventory %}checked{% endif %}>
+              {% trans "Track inventory (stock is counted and can run out)" %}
+            </label>
+            <div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">
+              {% trans "Turn off for licences, subscriptions and services: they can always be sold and never show as low or out of stock. Stock already recorded is kept." %}
+            </div>
           </div>
 
           <div class="form-group" style="margin-top:16px;">
@@ -304,6 +329,16 @@
       btnSave.disabled = false;
       btnSave.textContent = '{% trans "Create" %}';
     }
+  });
+})();
+
+// The threshold means nothing without tracking; a disabled field is not
+// submitted, and the server keeps the stored value.
+(function () {
+  const track = document.getElementById('id_track_inventory');
+  const threshold = document.getElementById('id_low_stock_threshold');
+  track.addEventListener('change', function () {
+    threshold.disabled = !track.checked;
   });
 })();
 </script>

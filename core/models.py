@@ -258,6 +258,15 @@ class Product(models.Model):
         (PACK, _('Pack')),
     ]
 
+    PHYSICAL = 'physical'
+    DIGITAL = 'digital'
+    SERVICE = 'service'
+    KIND_CHOICES = [
+        (PHYSICAL, _('Physical')),
+        (DIGITAL, _('Digital')),
+        (SERVICE, _('Service')),
+    ]
+
     sku = models.CharField(max_length=100, unique=True)
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
@@ -268,6 +277,14 @@ class Product(models.Model):
     )
     unit_of_measure = models.CharField(max_length=20, choices=UNIT_CHOICES, default=PIECE)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    # kind only classifies; track_inventory alone decides whether stock is
+    # counted. They vary independently: a digital product sold in a limited
+    # run tracks stock, a physical one made to order does not.
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=PHYSICAL)
+    track_inventory = models.BooleanField(
+        default=True,
+        help_text=_('Untracked products can always be sold; no stock is counted or deducted.'),
+    )
     low_stock_threshold = models.PositiveIntegerField(default=10)
     image = models.ImageField(
         upload_to=product_image_upload_path,
@@ -305,6 +322,9 @@ class Product(models.Model):
 
     @property
     def current_stock(self):
+        """Units on hand, or None for a product whose stock is not tracked."""
+        if not self.track_inventory:
+            return None
         result = self.inventory_movements.aggregate(
             total=models.Sum('quantity')
         )
@@ -313,11 +333,12 @@ class Product(models.Model):
     @property
     def is_low_stock(self):
         stock = self.current_stock
-        return 0 < stock <= self.low_stock_threshold
+        return stock is not None and 0 < stock <= self.low_stock_threshold
 
     @property
     def is_out_of_stock(self):
-        return self.current_stock <= 0
+        stock = self.current_stock
+        return stock is not None and stock <= 0
 
 
 # ─── SalesOrder ───────────────────────────────────────────────────────────────
@@ -394,7 +415,7 @@ class SalesOrder(models.Model):
 
     def confirm(self, user):
         """
-        Pending -> Confirmed, deducting stock for every line item.
+        Pending -> Confirmed, deducting stock for every tracked line item.
 
         This is the only supported way to confirm an order.  Confirmation is
         where stock actually leaves the building, so the availability check and
@@ -737,6 +758,9 @@ class InventoryMovement(models.Model):
         # newest-first.
         indexes = [
             models.Index(fields=['-created_at'], name='invmovement_created_idx'),
+            # Restoring an order's stock reads back exactly the movements that
+            # order wrote.
+            models.Index(fields=['reference_type', 'reference_id'], name='invmovement_reference_idx'),
         ]
 
     def __str__(self):

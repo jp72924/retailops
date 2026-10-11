@@ -16,7 +16,8 @@ from core.exceptions import (
     InsufficientStockError,
     OrderStateError,
 )
-from core.models import InventoryMovement, Payment, SalesOrder
+from core.models import Payment, SalesOrder
+from core.services.orders import cancel_order, refund_order
 from api.filters import SalesOrderFilter
 from api.permissions import IsAdminRole, IsManagerOrAdmin, IsStaffOrAbove
 from api.throttling import OrderTransitionRateThrottle
@@ -264,7 +265,7 @@ class OrderViewSet(
     def confirm(self, request, pk=None):
         """
         POST /api/v1/orders/<id>/confirm/  —  Pending → Confirmed.
-        Side-effect: deducts stock via InventoryMovement per line item.
+        Side-effect: deducts stock via InventoryMovement per tracked line item.
 
         Rejects the transition with 409 insufficient_stock if any line exceeds
         available stock. The rule lives in SalesOrder.confirm(); this method
@@ -306,62 +307,26 @@ class OrderViewSet(
     def cancel(self, request, pk=None):
         """
         POST /api/v1/orders/<id>/cancel/  —  Confirmed → Cancelled.
-        Side-effect: restores stock via InventoryMovement per line item.
+        Side-effect: returns the stock the order took (see core.services.orders).
         """
         order = self.get_object()
-        err = self._require_status(order, SalesOrder.CONFIRMED)
-        if err:
-            return err
-
-        with transaction.atomic():
-            order.status = SalesOrder.CANCELLED
-            order.save(update_fields=['status', 'updated_at'])
-
-            movements = [
-                InventoryMovement(
-                    product=item.product,
-                    movement_type=InventoryMovement.RETURN,
-                    quantity=item.quantity,
-                    reference_type=InventoryMovement.SALES_ORDER,
-                    reference_id=order.pk,
-                    notes=f'Stock restored on cancellation of {order.order_number}',
-                    created_by=request.user,
-                )
-                for item in order.items.select_related('product').all()
-            ]
-            InventoryMovement.objects.bulk_create(movements)
-
+        try:
+            cancel_order(order, request.user)
+        except DomainError as exc:
+            return _domain_error_response(exc)
         return Response(SalesOrderReadSerializer(order).data)
 
     @action(detail=True, methods=['post'])
     def refund(self, request, pk=None):
         """
         POST /api/v1/orders/<id>/refund/  —  Paid → Refunded (Admin only).
-        Side-effect: adds stock back via InventoryMovement per line item.
+        Side-effect: returns the stock the order took (see core.services.orders).
         """
         order = self.get_object()
-        err = self._require_status(order, SalesOrder.PAID)
-        if err:
-            return err
-
-        with transaction.atomic():
-            order.status = SalesOrder.REFUNDED
-            order.save(update_fields=['status', 'updated_at'])
-
-            movements = [
-                InventoryMovement(
-                    product=item.product,
-                    movement_type=InventoryMovement.RETURN,
-                    quantity=item.quantity,
-                    reference_type=InventoryMovement.SALES_ORDER,
-                    reference_id=order.pk,
-                    notes=f'Stock restored on refund of {order.order_number}',
-                    created_by=request.user,
-                )
-                for item in order.items.select_related('product').all()
-            ]
-            InventoryMovement.objects.bulk_create(movements)
-
+        try:
+            refund_order(order, request.user)
+        except DomainError as exc:
+            return _domain_error_response(exc)
         return Response(SalesOrderReadSerializer(order).data)
 
     # ── Bulk transitions ──────────────────────────────────────────────────────
