@@ -69,7 +69,7 @@ Authorization: ChannelKey <secret>
 | Response | Meaning |
 |----------|---------|
 | `401` | No key, a malformed or unknown key, a revoked key, or a channel (or its service user) that is inactive |
-| `429` | The channel exceeded its allowance, counted per channel: 300 catalogue and query requests a minute, 60 order creations, 30 payments (each can cost an OCR call) |
+| `429` | The channel exceeded its allowance, counted per channel: 300 catalogue and query requests a minute, 60 order creations and cancellations, 30 payments (each can cost an OCR call) |
 
 A channel key works **only** under `/api/v1/storefront/`. The staff API and the
 kiosk API answer `401` to it, and the storefront answers `401` to a staff token
@@ -96,6 +96,7 @@ Everything else is edited in the Django admin under **Listings**:
 | `image`, `external_image_url` | Optional; **empty means the first variant's product image** |
 | `sort` | Ascending; the default order of the list |
 | `is_published` | Unpublished listings are invisible to every channel |
+| `channels` | The channels allowed to see it. **Empty means every channel**; naming some restricts the listing to them. A channel can neither list, retrieve nor order a listing that is not its own (it is a `404` / `400 invalid_product`, the same as one that does not exist), so stores with different assortments can share one RetailOps |
 
 Each variant has a product (a product can belong to one variant only), a
 `label` such as "12 months", a `position`, and an optional `compare_at_price`.
@@ -142,7 +143,9 @@ response to another.
           "price": "29.00", "compare_at_price": "49.00", "availability": "unlimited" },
         { "sku": "AV-PRO-24M", "label": "24 months", "kind": "digital",
           "price": "49.00", "compare_at_price": null, "availability": "unlimited" }
-      ]
+      ],
+      "features": ["Real-time protection", "Secure browsing"],
+      "attributes": { "platform": "Windows & macOS", "activation": "License key" }
     }
   ],
   "currency": {
@@ -166,11 +169,14 @@ response to another.
   exact stock is not published. A listing is as available as its most available
   variant.
 - `image_url` is absolute.
+- `features` (a list of short selling points) and `attributes` (free-form details such as
+  platform or activation) come with every listing, so a card needs no second call.
+  `description` is only on the detail.
 
 ### `GET /api/v1/storefront/catalog/listings/{slug}/`
 
-One listing in the same shape, plus `description`, `features`, `attributes` and
-`currency`. `404` if it is unpublished or has no variant on sale.
+One listing in the same shape, plus `description` and `currency`. `404` if it is
+unpublished, has no variant on sale, or is published only to other channels.
 
 ### `GET /api/v1/storefront/catalog/categories/`
 
@@ -296,7 +302,9 @@ and nothing is left behind if it fails. It answers `201`:
   "fulfillment": "digital",
   "contact": { "whatsapp": "0414-5550000" },
   "items": [ { "sku": "AV-PRO-12M", "name": "Antivirus Pro 12 months", "quantity": 1,
-               "unit_price": "29.00", "line_total": "29.00" } ],
+               "unit_price": "29.00", "line_total": "29.00",
+               "listing_slug": "antivirus-pro", "listing_title": "Antivirus Pro",
+               "variant_label": "12 months" } ],
   "total": "29.00",
   "amount_paid": "0.00",
   "amount_outstanding": "29.00",
@@ -320,6 +328,10 @@ and nothing is left behind if it fails. It answers `201`:
 
 Show the customer `quote.secondary_total` and the `payment_instructions`. The
 quote **does not move**: it is the rate at the moment the order was created.
+
+Each line also names the listing and variant it was sold from (`listing_slug`,
+`listing_title`, `variant_label`), so an order page can link back to the product and say
+"12 months". They are `null` for a product that has since left its listing.
 
 If a product has too little stock the order is `409 insufficient_stock`, listing
 the SKUs that fell short and how many were asked for. It never says how many are
@@ -369,6 +381,25 @@ payment (`409 order_not_payable`, with its `customer_status`).
 For an internet channel, switch on **recipient validation** in the settings, so a
 receipt is only accepted when the money went to one of your own accounts.
 
+### Cancel an order
+
+```http
+POST /api/v1/storefront/orders/SO-20261011-0007/cancel/
+```
+
+A store whose customer changes the cart after the order exists would otherwise strand that
+stock until `expires_at`. Cancelling an unpaid order gives its stock back at once and returns
+the order with `customer_status: cancelled`.
+
+- Only an order with **no payment at all** can be cancelled. One with any payment, even a
+  rejected one, or that is no longer confirmed, is `409 order_not_cancellable` (with its
+  `customer_status`): a person settles it, as with an expiring order.
+- Cancelling an order that is already cancelled changes nothing and returns it, so a retry is
+  safe.
+- The `client_reference` stays used: a new attempt needs a new reference. Sending the old one
+  again returns the cancelled order.
+- It counts with order creation (60 a minute), not with reads.
+
 ### Follow an order
 
 | Request | Returns |
@@ -378,6 +409,13 @@ receipt is only accepted when the money went to one of your own accounts.
 
 A channel only ever reaches its own orders: another channel's order number is a
 `404`, the same as one that does not exist. These responses are never cached.
+
+**Hold a call to one customer.** RetailOps knows the channel, not the store's customers, so an
+order number is enough to read any of the channel's orders. A store can add
+`?customer=<external_ref>` to the order, payments, cancel, entitlement, supply and reveal calls:
+an order or entitlement that is not that customer's is then a `404`, so a store that mixes up two
+customers fails closed instead of showing one customer another's order or licence. A parameter
+that is present but empty matches nothing. Without it nothing changes.
 
 `customer_status` is one word for what to show the customer:
 
@@ -513,6 +551,7 @@ deploy, run `python manage.py rotate_entitlement_keys`, and only then drop the o
 | `409` | `customer_email_conflict` | The email belongs to a customer this channel cannot claim |
 | `409` | `client_reference_conflict` | The reference was used for a different order |
 | `409` | `order_not_payable` | The order cannot take a payment; `customer_status` says why |
+| `409` | `order_not_cancellable` | The order has a payment or is no longer confirmed; `customer_status` says why |
 | `409` | `payment_under_review` | A receipt for this order is already waiting |
 | `409` | `duplicate_transaction` | This bank transaction was already recorded |
 | `422` | `receipt_field_mismatch`, `recipient_mismatch`, `amount_mismatch`, `receipt_parse_error`, … | The receipt does not match, or cannot be read |

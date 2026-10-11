@@ -28,6 +28,27 @@
 
 ### Added
 
+- **A sales channel can be given its own assortment, can cancel an order it no
+  longer wants, and can hold a call to one customer.** All additive.
+
+  `Listing.channels` (migration `0030`) names the channels allowed to see a
+  listing. Empty, which every existing listing is, means every channel, so
+  nothing that exists changes. A listing that names channels is hidden from the
+  others in the list, the detail and the category tree, and its SKUs cannot be
+  ordered by them (`400 invalid_product`), so stores with different catalogues
+  can share one RetailOps. The listing admin gains a channel picker.
+
+  `POST /api/v1/storefront/orders/{order_number}/cancel/` cancels an order that
+  has no payment and gives its stock back; without it, every cart change after
+  the order exists stranded stock until the order expired. An order with any
+  payment is `409 order_not_cancellable`; cancelling twice is safe.
+
+  Order, payment, cancel, entitlement and reveal calls accept
+  `?customer=<external_ref>`: an order or entitlement that is not that
+  customer's is a `404`, so a store's mistake fails closed. The listing list
+  now carries `features` and `attributes`, which cards render, and order lines
+  carry `listing_slug`, `listing_title` and `variant_label`.
+
 - **Payments record the currency and exchange rate they were made at.** Until
   now the currency identity and the BCV rate lived only in `SystemSettings`, so
   editing the symbol or refreshing the rate restated every historical payment —

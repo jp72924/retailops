@@ -124,7 +124,8 @@ class CreateOrderTests(OrderFixture):
                          ('10.00', '0.00', '10.00'))
         self.assertEqual(data['items'], [
             {'sku': 'BOX-1', 'name': self.shelf.name, 'quantity': 1,
-             'unit_price': '10.00', 'line_total': '10.00'},
+             'unit_price': '10.00', 'line_total': '10.00',
+             'listing_slug': 'box', 'listing_title': 'Listing 1', 'variant_label': 'BOX-1'},
         ])
         self.assertEqual(data['quote']['total'], '10.00')
         self.assertEqual(data['quote']['secondary_total'], '500.00')  # 10.00 at 50 Bs

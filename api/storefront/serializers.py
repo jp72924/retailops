@@ -105,6 +105,7 @@ class StorefrontListingSerializer(serializers.ModelSerializer):
         fields = [
             'slug', 'title', 'summary', 'badge', 'display_type', 'category',
             'image_url', 'from_price', 'availability', 'variants',
+            'features', 'attributes',
         ]
         read_only_fields = fields
 
@@ -132,9 +133,7 @@ class StorefrontListingDetailSerializer(StorefrontListingSerializer):
     currency = serializers.SerializerMethodField()
 
     class Meta(StorefrontListingSerializer.Meta):
-        fields = StorefrontListingSerializer.Meta.fields + [
-            'description', 'features', 'attributes', 'currency',
-        ]
+        fields = StorefrontListingSerializer.Meta.fields + ['description', 'currency']
         read_only_fields = fields
 
     def get_description(self, obj) -> str:

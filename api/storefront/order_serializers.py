@@ -134,11 +134,43 @@ class StorefrontEntitlementValueSerializer(serializers.Serializer):
 class StorefrontOrderLineOutSerializer(serializers.ModelSerializer):
     sku = serializers.CharField(source='product.sku', read_only=True)
     name = serializers.CharField(source='product.name', read_only=True)
+    listing_slug = serializers.SerializerMethodField()
+    listing_title = serializers.SerializerMethodField()
+    variant_label = serializers.SerializerMethodField()
 
     class Meta:
         model = SalesOrderItem
-        fields = ['sku', 'name', 'quantity', 'unit_price', 'line_total']
+        fields = [
+            'sku', 'name', 'quantity', 'unit_price', 'line_total',
+            'listing_slug', 'listing_title', 'variant_label',
+        ]
         read_only_fields = fields
+
+    def _variant(self, obj):
+        # The channel_orders() query already loaded it; a product that was never
+        # listed (or was unlisted since) has none.
+        return getattr(obj.product, 'listing_variant', None)
+
+    @extend_schema_field({
+        'type': 'string', 'nullable': True,
+        'description': 'The listing this line was sold from, so the store can link back to it. Null if unlisted since.',
+    })
+    def get_listing_slug(self, obj):
+        variant = self._variant(obj)
+        return variant.listing.slug if variant else None
+
+    @extend_schema_field({'type': 'string', 'nullable': True})
+    def get_listing_title(self, obj):
+        variant = self._variant(obj)
+        return variant.listing.title if variant else None
+
+    @extend_schema_field({
+        'type': 'string', 'nullable': True,
+        'description': 'The variant\'s label, such as "12 months". Empty if the variant has none; null if unlisted since.',
+    })
+    def get_variant_label(self, obj):
+        variant = self._variant(obj)
+        return variant.label if variant else None
 
 
 class StorefrontPaymentOutSerializer(serializers.ModelSerializer):

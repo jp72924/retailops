@@ -1324,8 +1324,9 @@ class Listing(models.Model):
     The product stays the unit of price, stock and sale. A listing only adds
     the commercial layer a catalogue needs (a slug, marketing copy, badges,
     free-form attributes) and groups the products customers choose between,
-    such as the same licence for 12 or 24 months, as variants. It belongs to
-    no channel yet: every channel sees every published listing.
+    such as the same licence for 12 or 24 months, as variants. `channels`
+    narrows who may see it: a listing that names none is visible to every
+    channel, one that names some only to those.
 
     Empty `description` and `image` fall back to the first variant's product
     when the catalogue is served.
@@ -1364,6 +1365,12 @@ class Listing(models.Model):
     external_image_url = models.URLField(max_length=500, blank=True)
     sort = models.PositiveIntegerField(default=0)
     is_published = models.BooleanField(default=False)
+    channels = models.ManyToManyField(
+        SalesChannel,
+        blank=True,
+        related_name='listings',
+        help_text=_('Channels that may see this listing. Leave empty to show it to every channel.'),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

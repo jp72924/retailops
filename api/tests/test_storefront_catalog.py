@@ -29,7 +29,7 @@ INSTRUCTIONS = '/api/v1/storefront/payment-instructions/'
 
 LISTING_KEYS = {
     'slug', 'title', 'summary', 'badge', 'display_type', 'category', 'image_url',
-    'from_price', 'availability', 'variants',
+    'from_price', 'availability', 'variants', 'features', 'attributes',
 }
 VARIANT_KEYS = {'sku', 'label', 'kind', 'price', 'compare_at_price', 'availability'}
 
@@ -109,7 +109,7 @@ class ContractTests(CatalogFixture):
         self.assertEqual(set(listed), LISTING_KEYS)
         self.assertEqual(set(listed['variants'][0]), VARIANT_KEYS)
         self.assertEqual(set(listed['category']), {'id', 'name'})
-        self.assertEqual(set(detail), LISTING_KEYS | {'description', 'features', 'attributes', 'currency'})
+        self.assertEqual(set(detail), LISTING_KEYS | {'description', 'currency'})
 
     def test_no_response_carries_a_stock_figure(self):
         product = self.product('A-1', stock=1234, low_stock_threshold=5)

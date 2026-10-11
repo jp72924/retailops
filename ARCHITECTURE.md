@@ -251,7 +251,10 @@ translates them into its own error format.
   prefetched with their stock. `variant_availability()` turns stock into a label and
   never a number. `category_tree()` prunes branches with nothing to show, and
   `publish_product()` is what the back-office button calls, and `orderable_products()`
-  gives a channel the same view of the catalogue when it orders.
+  gives a channel the same view of the catalogue when it orders. All three take the
+  channel and apply `visible_to()`: a listing that names no channel is visible to every
+  channel, one that names some only to those, as two `Exists()` subqueries (a join would
+  repeat a listing once per channel and break counts under pagination).
 - **`customer_links.py`** - ties a store's customer to a `Customer`. An existing link
   decides; without one the only match is a verified email, and only on a channel set to
   trust that claim, otherwise `CustomerEmailConflict`. It never matches a national id and
@@ -262,7 +265,10 @@ translates them into its own error format.
   deadlock. It freezes the currency, is idempotent on `client_reference`, and holds
   `customer_status()` and `review_status()`, the pure functions behind every status a
   store shows. `expire_channel_orders()` cancels lapsed unpaid orders through
-  `cancel_order()`, locking each and skipping any with a payment.
+  `cancel_order()`, locking each and skipping any with a payment; `cancel_channel_order()`
+  is the same rule for a store that no longer wants an order, and is idempotent.
+  `channel_orders()` loads the lines with their product and listing variant in one query,
+  so an order can name the listing it was sold from.
 - **`channel_payments.py`** - records a receipt payment for a channel order. It
   validates through `validate_receipt()` under `CHANNEL_POLICY` against the order's
   frozen currency snapshot, before any lock; then locks the order, re-checks its status,
@@ -408,6 +414,7 @@ erDiagram
     SalesChannel      ||--o{ ChannelKey : "keys (CASCADE)"
     ProductCategory   ||--o{ Listing : "category (PROTECT)"
     Listing           ||--o{ ListingVariant : "variants (CASCADE)"
+    SalesChannel      }o--o{ Listing : "listings (M2M, empty = all)"
     Product           ||--o| ListingVariant : "listing_variant (CASCADE)"
     Product           ||--o| ProductFulfillment : "fulfillment (CASCADE)"
     SalesOrderItem    ||--o{ Entitlement : "entitlements (PROTECT)"
@@ -533,7 +540,8 @@ masked to `***` on read), receipt retention, and `recipient_validation_enabled`.
 `ChannelKey` stores an indexed 8-character `prefix` and a unique SHA-256 `key_hash`, plus
 `revoked_at`; a channel may hold several active keys. Neither table is written on
 authentication. `Listing` carries the commercial layer of a product (slug, copy,
-`features` and `attributes` as JSON, badge, image, `sort`, `is_published`) and
+`features` and `attributes` as JSON, badge, image, `sort`, `is_published`, and an
+optional `channels` set that restricts who sees it) and
 `ListingVariant` groups products into it, one product to at most one variant, with a
 `label`, a `position` and an optional `compare_at_price`. Price and stock stay on the
 product. Nothing about a channel is stored on `SalesOrder` or `Product`.
@@ -635,7 +643,7 @@ read-only; a channel can also create orders and send receipts for its own orders
 GET  catalog/listings/        GET  catalog/listings/<slug>/
 GET  catalog/categories/      GET  payment-instructions/
 POST orders/                  GET  orders/<order_number>/
-POST orders/<order_number>/payments/
+POST orders/<order_number>/payments/       POST orders/<order_number>/cancel/
 GET  customers/<external_ref>/orders/
 GET  PUT entitlements/<id>/   POST entitlements/<id>/reveal/
 ```
@@ -773,7 +781,7 @@ Rates are defined at `retailops/settings.py:552`.
 | `kiosk_checkout` | 30/min | station | Kiosk checkout |
 | `kiosk_poll` | 60/min | station | Kiosk heartbeat and polling |
 | `storefront_read` | 300/min | channel | Storefront catalogue and order reads |
-| `storefront_order` | 60/min | channel | Storefront order creation |
+| `storefront_order` | 60/min | channel | Storefront order creation and cancellation |
 | `storefront_payment` | 30/min | channel | Storefront receipt payments (each can cost an OCR call) |
 | `storefront_entitlement` | 60/min | channel | Supplying and revealing delivered keys |
 
