@@ -1562,3 +1562,27 @@ msgstr "Detalles libres como plataforma, activación o entrega."
 
 msgid "Shown struck through next to the price; ignored unless higher than the price."
 msgstr "Se muestra tachado junto al precio; se ignora si no es mayor que el precio."
+
+msgid "Online Order"
+msgstr "Pedido en línea"
+
+msgid "Fulfillment"
+msgstr "Entrega"
+
+msgid "Expires"
+msgstr "Vence"
+
+msgid "Quoted rate"
+msgstr "Tasa cotizada"
+
+msgid "Digital delivery"
+msgstr "Entrega digital"
+
+msgid "Pickup"
+msgstr "Retiro en tienda"
+
+msgid "When on, a customer the store reports as email-verified is linked to the existing RetailOps customer with that email. Turn it on only for a store that really verifies emails: it lets the store place orders on that customer."
+msgstr "Si está activado, un cliente que la tienda informa como verificado por correo se vincula al cliente de RetailOps que tenga ese correo. Actívelo solo para una tienda que de verdad verifique los correos: le permite hacer pedidos a nombre de ese cliente."
+
+msgid "How long an unpaid order holds its stock before it can be cancelled. An order with a payment, even one under review, never expires."
+msgstr "Cuánto tiempo un pedido sin pagar reserva su stock antes de poder cancelarse. Un pedido con un pago, aunque esté en revisión, nunca vence."

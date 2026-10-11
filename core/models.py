@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models, transaction
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
@@ -1170,6 +1170,15 @@ class OcrCallLog(models.Model):
         null=True,
         blank=True,
     )
+    # The sales channel the call was made for, so what OCR costs can be
+    # attributed to the storefront that spent it.
+    channel = models.ForeignKey(
+        'SalesChannel',
+        on_delete=models.SET_NULL,
+        related_name='ocr_call_logs',
+        null=True,
+        blank=True,
+    )
     sales_order = models.ForeignKey(
         SalesOrder,
         on_delete=models.SET_NULL,
@@ -1213,6 +1222,22 @@ class SalesChannel(models.Model):
         User,
         on_delete=models.PROTECT,
         related_name='sales_channel',
+    )
+    trusts_email_verification = models.BooleanField(
+        default=False,
+        help_text=_(
+            'When on, a customer the store reports as email-verified is linked to the '
+            'existing RetailOps customer with that email. Turn it on only for a store '
+            'that really verifies emails: it lets the store place orders on that customer.'
+        ),
+    )
+    order_expiry_minutes = models.PositiveIntegerField(
+        default=60,
+        validators=[MinValueValidator(5)],
+        help_text=_(
+            'How long an unpaid order holds its stock before it can be cancelled. '
+            'An order with a payment, even one under review, never expires.'
+        ),
     )
     created_by = models.ForeignKey(
         User,
@@ -1397,3 +1422,114 @@ class ListingVariant(models.Model):
     def __str__(self):
         return f'{self.listing} — {self.label or self.product.sku}'
 
+
+# ─── Channel customers and orders ─────────────────────────────────────────────
+
+def validate_channel_contact(value):
+    if not isinstance(value, dict):
+        raise ValidationError('Contact must be a JSON object.')
+    if len(value) > 10:
+        raise ValidationError('Contact can have at most 10 entries.')
+    for key, entry in value.items():
+        if not isinstance(key, str) or not key.strip() or len(key) > 40:
+            raise ValidationError('Contact keys must be short non-empty strings.')
+        if not isinstance(entry, str) or len(entry) > 255:
+            raise ValidationError('Contact values must be strings of at most 255 characters.')
+
+
+class ChannelCustomerLink(models.Model):
+    """
+    A storefront's own customer, tied to a RetailOps customer.
+
+    The store authenticates its customers and identifies each by `external_ref`
+    (its own user id). RetailOps stores no password and trusts only the
+    channel's key. `profile` is a copy of what the channel last sent; it is
+    kept for support and is never written to the Customer and never sent back.
+    Linking never overwrites a Customer.
+    """
+    channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.CASCADE,
+        related_name='customer_links',
+    )
+    external_ref = models.CharField(max_length=128)
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name='channel_links',
+    )
+    profile = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['channel', 'external_ref'],
+                name='channellink_unique_external_ref',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.channel} / {self.external_ref}'
+
+
+class ChannelOrder(models.Model):
+    """
+    What is specific to an order that arrived through a sales channel.
+
+    A side table, one row per order, so SalesOrder (which the kiosk, the CLI
+    and the MCP server all read) gains nothing. `client_reference` is the
+    store's own order id and the idempotency key: the same reference from the
+    same channel is the same order. `currency_snapshot` is the rate the
+    customer was quoted; receipts for this order are validated against it, so
+    a rate change between the purchase and the payment does not break the
+    payment.
+    """
+    DIGITAL = 'digital'
+    PICKUP = 'pickup'
+    FULFILLMENT_CHOICES = [
+        (DIGITAL, _('Digital delivery')),
+        (PICKUP, _('Pickup')),
+    ]
+
+    sales_order = models.OneToOneField(
+        SalesOrder,
+        on_delete=models.CASCADE,
+        related_name='channel_order',
+    )
+    channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.PROTECT,
+        related_name='orders',
+    )
+    customer_link = models.ForeignKey(
+        ChannelCustomerLink,
+        on_delete=models.PROTECT,
+        related_name='orders',
+    )
+    client_reference = models.CharField(max_length=128)
+    currency_snapshot = models.ForeignKey(
+        CurrencySnapshot,
+        on_delete=models.PROTECT,
+        related_name='+',
+    )
+    expires_at = models.DateTimeField()
+    fulfillment = models.CharField(max_length=10, choices=FULFILLMENT_CHOICES)
+    contact = models.JSONField(default=dict, blank=True, validators=[validate_channel_contact])
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['channel', 'client_reference'],
+                name='channelorder_unique_client_reference',
+            ),
+        ]
+        indexes = [
+            # The expiry command scans for what has lapsed.
+            models.Index(fields=['expires_at'], name='channelorder_expires_idx'),
+        ]
+
+    def __str__(self):
+        return f'{self.channel} / {self.client_reference}'

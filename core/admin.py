@@ -9,7 +9,7 @@ from .models import (
     CurrencySnapshot, Payment, InventoryMovement,
     SystemSettings, OcrCallLog,
     KioskStation,
-    ChannelKey, Listing, ListingVariant, SalesChannel,
+    ChannelCustomerLink, ChannelKey, ChannelOrder, Listing, ListingVariant, SalesChannel,
 )
 
 
@@ -142,11 +142,11 @@ class CurrencySnapshotAdmin(admin.ModelAdmin):
 
 @admin.register(OcrCallLog)
 class OcrCallLogAdmin(admin.ModelAdmin):
-    list_display = ('created_at', 'status', 'sales_order', 'kiosk_station', 'latency_ms', 'bytes_sent', 'request_id')
-    list_filter = ('status', 'created_at')
+    list_display = ('created_at', 'status', 'sales_order', 'kiosk_station', 'channel', 'latency_ms', 'bytes_sent', 'request_id')
+    list_filter = ('status', 'channel', 'created_at')
     search_fields = ('request_id', 'sales_order__order_number')
-    readonly_fields = ('kiosk_station', 'sales_order', 'request_id', 'status', 'latency_ms', 'bytes_sent', 'created_at')
-    raw_id_fields = ('kiosk_station', 'sales_order')
+    readonly_fields = ('kiosk_station', 'channel', 'sales_order', 'request_id', 'status', 'latency_ms', 'bytes_sent', 'created_at')
+    raw_id_fields = ('kiosk_station', 'channel', 'sales_order')
 
     def has_add_permission(self, request):
         return False
@@ -319,3 +319,39 @@ class ListingAdmin(admin.ModelAdmin):
     def unpublish_listings(self, request, queryset):
         updated = queryset.update(is_published=False)
         self.message_user(request, f'{updated} listing(s) unpublished.', messages.SUCCESS)
+
+
+@admin.register(ChannelOrder)
+class ChannelOrderAdmin(admin.ModelAdmin):
+    """What came in through a channel. View-only: the order itself is managed as any other."""
+    list_display = ('client_reference', 'channel', 'sales_order', 'fulfillment', 'expires_at', 'created_at')
+    list_filter = ('channel', 'fulfillment')
+    search_fields = ('client_reference', 'sales_order__order_number')
+    list_select_related = ('channel', 'sales_order')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(ChannelCustomerLink)
+class ChannelCustomerLinkAdmin(admin.ModelAdmin):
+    """A store's customer and the RetailOps customer it is tied to. View-only."""
+    list_display = ('channel', 'external_ref', 'customer', 'created_at')
+    list_filter = ('channel',)
+    search_fields = ('external_ref', 'customer__email', 'customer__first_name', 'customer__last_name')
+    list_select_related = ('channel', 'customer')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

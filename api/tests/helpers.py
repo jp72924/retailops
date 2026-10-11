@@ -263,3 +263,34 @@ def make_listing(*products, slug=None, title=None, published=True, **attrs):
             listing=listing, product=product, label=product.sku, position=position,
         )
     return listing
+
+
+def make_channel_order(channel, product, *, reference='WEB-1', quantity=1, external_ref='user-1',
+                       email='ana@example.com', fulfillment='pickup', minutes_old=None):
+    """
+    Create a channel order through the service, as the API would.
+
+    The product must already be in a published listing. `minutes_old` moves
+    its expiry into the past by that long beyond its natural lifetime, for
+    expiry tests. Returns the ChannelOrder.
+    """
+    from datetime import timedelta
+
+    from core.services.channel_orders import create_channel_order
+    from core.services.customer_links import CustomerProfile
+    from django.utils import timezone
+
+    channel_order, _created = create_channel_order(
+        channel,
+        client_reference=reference,
+        profile=CustomerProfile(
+            external_ref=external_ref, email=email, first_name='Ana', last_name='Perez',
+        ),
+        items=[(product.sku, quantity)],
+        fulfillment=fulfillment,
+        contact={},
+    )
+    if minutes_old is not None:
+        channel_order.expires_at = timezone.now() - timedelta(minutes=minutes_old)
+        channel_order.save(update_fields=['expires_at'])
+    return channel_order

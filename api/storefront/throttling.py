@@ -16,3 +16,12 @@ class _ChannelThrottle(SimpleRateThrottle):
 
 class StorefrontReadThrottle(_ChannelThrottle):
     scope = 'storefront_read'
+
+
+class StorefrontOrderThrottle(_ChannelThrottle):
+    scope = 'storefront_order'
+
+
+class StorefrontPaymentThrottle(_ChannelThrottle):
+    """Caps what a channel can spend on receipt OCR, which is a paid third-party call."""
+    scope = 'storefront_payment'

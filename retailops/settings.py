@@ -564,6 +564,8 @@ REST_FRAMEWORK = {
         'kiosk_poll':       '60/min',
         # Sales channels (per channel, not per user)
         'storefront_read':  '300/min',
+        'storefront_order': '60/min',
+        'storefront_payment': '30/min',   # each one can cost an OCR call
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }

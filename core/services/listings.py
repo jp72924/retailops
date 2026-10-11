@@ -16,7 +16,7 @@ from django.db.models import Exists, IntegerField, OuterRef, Prefetch, Subquery,
 from django.db.models.functions import Coalesce
 from django.utils.text import slugify
 
-from core.models import Listing, ListingVariant, Product, ProductCategory
+from core.models import Listing, ListingVariant, ProductCategory
 
 UNLIMITED = 'unlimited'
 IN_STOCK = 'in_stock'
@@ -83,6 +83,23 @@ def published_listings():
             Prefetch('variants', queryset=visible_variants(), to_attr=VARIANTS_ATTR)
         )
     )
+
+
+def orderable_products(skus):
+    """
+    ``{sku: Product}`` for the SKUs a channel may order.
+
+    The same rule as the catalogue, so a channel can order exactly what it can
+    see: a variant of a published listing whose product is active. A SKU that
+    belongs to no listing, or to an unpublished one, is simply absent; an
+    internal product cannot be bought by guessing its SKU.
+    """
+    variants = (
+        ListingVariant.objects
+        .filter(listing__is_published=True, product__is_active=True, product__sku__in=list(skus))
+        .select_related('product')
+    )
+    return {variant.product.sku: variant.product for variant in variants}
 
 
 def category_and_descendants(category_id):

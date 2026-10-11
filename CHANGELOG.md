@@ -142,6 +142,61 @@
   The `Role.name` choices gain `Channel`; the role appears in the user lists
   once a channel has been provisioned.
 
+- **Online stores can place orders and pay them.** The storefront could read a
+  catalogue but not sell from it. A store now creates an order, is told what to
+  charge, and sends the receipt that pays it, in the two steps a receipt payment
+  needs: the customer gets an order number and an amount in bolívares *before*
+  they pay.
+
+  `POST /api/v1/storefront/orders/` creates and confirms an order in one short
+  transaction, reserving stock through the same rule every other order uses and
+  freezing the exchange rate, so the quoted amount in the secondary currency
+  does not move. `client_reference`, the store's own order id, is the
+  idempotency key: a retry returns the same order instead of a second order and
+  a second stock reservation. Only products in a published listing can be
+  ordered, and a failed order leaves nothing behind: no order, no reserved
+  stock, no customer. It takes product locks in the same order the kiosk does,
+  so the two cannot deadlock.
+
+  `POST /api/v1/storefront/orders/{order_number}/payments/` takes the receipt.
+  It is validated by the same code as the kiosk's, under a stricter policy: only
+  RetailOps's own OCR reading counts, never a transaction key or reading the
+  request claims, and when OCR is unavailable the payment waits for a person
+  instead of failing the customer. The receipt is checked against the rate
+  frozen at order creation and the payment is recorded with it, so a rate change
+  between the purchase and the payment does not refuse a customer who paid what
+  they were quoted. OCR runs before any lock is taken. Each call is logged in
+  `OcrCallLog` against the channel that spent it (`OcrCallLog.channel`), and
+  channels are limited to 60 orders and 30 payments a minute.
+
+  The store authenticates its own customers. Each travels as an `external_ref`
+  and is tied to a RetailOps customer the first time they order: an existing
+  link always decides; a new customer whose email is unknown is created; one
+  whose email already belongs to a customer is linked only when the channel is
+  set to **trust email verification** (off by default) and the store reports the
+  address verified, and is otherwise refused with `409 customer_email_conflict`.
+  A national id never links anyone, a customer is never overwritten, and
+  nothing stored about a customer is returned to the store.
+
+  `GET /api/v1/storefront/orders/{order_number}/` and
+  `GET /api/v1/storefront/customers/{external_ref}/orders/` return the channel's
+  own orders only. `customer_status` (`awaiting_payment`, `payment_under_review`,
+  `processing`, `completed`, `cancelled`, `refunded`) and each payment's
+  `review_status` (`verified`, `needs_review`, `rejected`) are pure functions of
+  the order and its payments.
+
+  Unpaid orders hold their stock until `expires_at`, the channel's **order
+  expiry minutes** after creation (60 by default). Schedule
+  `manage.py expire_channel_orders` to cancel the ones that lapsed and return
+  their stock; an order with any payment is never expired. Back-office order
+  pages show where an online order came from, and the admin lists channel orders
+  and customer links read-only.
+
+  New tables: `ChannelOrder` and `ChannelCustomerLink`, side tables that leave
+  `SalesOrder` and `Customer` untouched. `SalesChannel` gains
+  `trusts_email_verification` and `order_expiry_minutes`. See
+  `STOREFRONT_INTEGRATION.md`.
+
 ### Fixed
 
 - **The back-office payment form re-checks the order before writing.** The form

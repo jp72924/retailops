@@ -1,23 +1,52 @@
 """
-The catalogue a sales channel reads.
+What a sales channel reads and does.
 
 Every view here authenticates with a channel key and nothing else: a staff
 token or a kiosk key is not accepted, and a channel key is accepted nowhere
-outside this namespace. Responses carry the live `currency` block so a
-storefront never needs the staff-only settings endpoint.
+outside this namespace. Catalogue responses carry the live `currency` block so
+a storefront never needs the staff-only settings endpoint.
+
+A channel only ever reaches its own orders: another channel's order number is a
+404, indistinguishable from one that does not exist.
 """
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework import status
+from rest_framework.exceptions import NotFound
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.kiosk.serializers import KioskRecipientProfileSerializer
+from api.pagination import CappedPageNumberPagination
+from core.exceptions import InsufficientStockError
 from core.models import RecipientProfile
+from core.services.channel_orders import (
+    ClientReferenceConflict,
+    InvalidOrderItems,
+    channel_orders,
+    create_channel_order,
+    customer_status,
+)
+from core.services.channel_payments import PaymentUnderReview, register_channel_payment
+from core.services.customer_links import CustomerEmailConflict, CustomerProfile
 from core.services.listings import category_tree, published_listings
+from core.services.payments import OrderNotPayableError
+from core.services.receipt_validation import (
+    AmountMismatchError,
+    DuplicateTransactionError,
+    InvalidReceiptImageError,
+    ReceiptValidationError,
+)
 
 from .authentication import ChannelKeyAuthentication
 from .filters import ListingFilter
+from .order_serializers import (
+    StorefrontOrderCreatedSerializer,
+    StorefrontOrderCreateSerializer,
+    StorefrontOrderSerializer,
+    StorefrontPaymentCreateSerializer,
+)
 from .pagination import StorefrontPagination
 from .permissions import IsSalesChannel
 from .serializers import (
@@ -27,7 +56,7 @@ from .serializers import (
     StorefrontListingSerializer,
     live_currency_payload,
 )
-from .throttling import StorefrontReadThrottle
+from .throttling import StorefrontOrderThrottle, StorefrontPaymentThrottle, StorefrontReadThrottle
 
 TAGS = ['storefront']
 
@@ -132,3 +161,182 @@ class PaymentInstructionsView(StorefrontAPIMixin, APIView):
             'results': KioskRecipientProfileSerializer(profiles, many=True).data,
             'currency': live_currency_payload(),
         })
+
+
+# ── Orders and payments ──────────────────────────────────────────────────────
+
+def _error(message, code, http_status, **extra):
+    return Response({'error': message, 'code': code, **extra}, status=http_status)
+
+
+def _own_order(request, order_number):
+    """The channel's order with this number, or 404. Another channel's is a 404 too."""
+    channel_order = (
+        channel_orders()
+        .filter(channel=request.channel, sales_order__order_number=order_number)
+        .first()
+    )
+    if channel_order is None:
+        raise NotFound()
+    return channel_order
+
+
+@extend_schema_view(post=extend_schema(
+    tags=TAGS,
+    summary='Create an order',
+    description=(
+        'Creates the order, reserves its stock and freezes the exchange rate, so the '
+        'amount in the secondary currency in `quote` is what the customer pays. '
+        '`client_reference` is the idempotency key: repeating it returns the same order '
+        'with `200` instead of making a second one, and reusing it for a different cart is '
+        '`409 client_reference_conflict`. Only products in a published listing can be ordered. '
+        'The response carries the payment instructions to show the customer.'
+    ),
+    request=StorefrontOrderCreateSerializer,
+    responses={201: StorefrontOrderCreatedSerializer, 200: StorefrontOrderCreatedSerializer},
+))
+class OrderCreateView(StorefrontAPIMixin, APIView):
+    throttle_classes = [StorefrontOrderThrottle]
+    cache_max_age = None
+
+    def post(self, request):
+        serializer = StorefrontOrderCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        customer = data['customer']
+
+        try:
+            channel_order, created = create_channel_order(
+                request.channel,
+                client_reference=data['client_reference'],
+                profile=CustomerProfile(
+                    external_ref=customer['external_ref'],
+                    email=customer['email'],
+                    first_name=customer['first_name'],
+                    last_name=customer['last_name'],
+                    email_verified=customer['email_verified'],
+                    phone=customer['phone'],
+                ),
+                items=[(line['sku'], line['quantity']) for line in data['items']],
+                fulfillment=data['fulfillment'],
+                contact=data['contact'],
+            )
+        except InvalidOrderItems as exc:
+            return _error(str(exc), exc.code, status.HTTP_400_BAD_REQUEST)
+        except CustomerEmailConflict as exc:
+            return _error(str(exc), exc.code, status.HTTP_409_CONFLICT)
+        except ClientReferenceConflict as exc:
+            return _error(str(exc), exc.code, status.HTTP_409_CONFLICT)
+        except InsufficientStockError as exc:
+            # Which products fell short, never how many are left.
+            return _error(
+                'Insufficient stock', 'insufficient_stock', status.HTTP_409_CONFLICT,
+                insufficient=[
+                    {'sku': shortfall['sku'], 'requested': shortfall['requested']}
+                    for shortfall in exc.shortfalls
+                ],
+            )
+
+        return Response(
+            StorefrontOrderCreatedSerializer(channel_order).data,
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+@extend_schema_view(get=extend_schema(
+    tags=TAGS,
+    summary='Retrieve an order',
+    description='One of the channel\'s own orders. `404` for any other, including another channel\'s.',
+    responses=StorefrontOrderSerializer,
+))
+class OrderDetailView(StorefrontAPIMixin, APIView):
+    cache_max_age = None
+
+    def get(self, request, order_number):
+        return Response(StorefrontOrderSerializer(_own_order(request, order_number)).data)
+
+
+@extend_schema_view(post=extend_schema(
+    tags=TAGS,
+    summary='Register a payment',
+    description=(
+        'Sends the receipt for an order. It is read through OCR and compared with the quote the '
+        'customer was given, so a change of the exchange rate since the order was created does not '
+        'matter. A receipt that matches is `verified` and the order becomes paid; when OCR cannot '
+        'decide it is `needs_review` and a person settles it. Returns the order. '
+        'Only a confirmed order takes a payment, and not while another is under review.'
+    ),
+    request=StorefrontPaymentCreateSerializer,
+    responses={201: StorefrontOrderSerializer},
+))
+class OrderPaymentView(StorefrontAPIMixin, APIView):
+    throttle_classes = [StorefrontPaymentThrottle]
+    cache_max_age = None
+
+    def post(self, request, order_number):
+        channel_order = _own_order(request, order_number)
+        serializer = StorefrontPaymentCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        try:
+            register_channel_payment(
+                channel_order,
+                payment_method=data['payment_method'],
+                receipt=dict(data['receipt']),
+            )
+        except OrderNotPayableError as exc:
+            return _error(
+                'This order can no longer take a payment.', exc.code, status.HTTP_409_CONFLICT,
+                customer_status=customer_status(exc.order, exc.order.payments.all()),
+            )
+        except PaymentUnderReview as exc:
+            return _error(str(exc), exc.code, status.HTTP_409_CONFLICT)
+        except DuplicateTransactionError as exc:
+            return _error(
+                'This receipt transaction has already been recorded.',
+                'duplicate_transaction', status.HTTP_409_CONFLICT,
+                details={'transaction_key': exc.transaction_key},
+            )
+        except AmountMismatchError as exc:
+            return _error(
+                'Receipt amount does not match the amount owed.',
+                'amount_mismatch', status.HTTP_422_UNPROCESSABLE_ENTITY,
+                details={
+                    'receipt_amount': str(exc.receipt_amount),
+                    'order_total': str(exc.order_total),
+                },
+            )
+        except ReceiptValidationError as exc:
+            extra = {'details': exc.details} if exc.details else {}
+            return _error(str(exc), exc.code, exc.http_status, **extra)
+        except InvalidReceiptImageError as exc:
+            return _error(str(exc), exc.code, exc.http_status)
+
+        fresh = channel_orders().get(pk=channel_order.pk)
+        return Response(StorefrontOrderSerializer(fresh).data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema_view(get=extend_schema(
+    tags=TAGS,
+    summary="A customer's orders",
+    description=(
+        'The channel\'s orders for one of its customers, newest first. A customer the channel '
+        'has not ordered for is an empty list, not an error.'
+    ),
+))
+class CustomerOrdersView(StorefrontAPIMixin, ListAPIView):
+    serializer_class = StorefrontOrderSerializer
+    pagination_class = CappedPageNumberPagination
+    filter_backends = []
+    cache_max_age = None
+
+    def get_queryset(self):
+        return (
+            channel_orders()
+            .filter(
+                channel=self.request.channel,
+                customer_link__external_ref=self.kwargs['external_ref'],
+            )
+            .order_by('-created_at', '-pk')
+        )

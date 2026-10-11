@@ -26,6 +26,7 @@ import base64
 import binascii
 import uuid
 from dataclasses import dataclass
+from time import perf_counter
 from decimal import Decimal, InvalidOperation
 
 from asgiref.sync import async_to_sync
@@ -126,7 +127,7 @@ def assert_receipt_total_unchanged(receipt_fields, order_total):
 
 
 def validate_receipt(receipt_data, payment_method, order_total, *, settings, currency,
-                     policy=KIOSK_POLICY):
+                     policy=KIOSK_POLICY, ocr_report=None):
     """
     Validate receipt metadata against an order total and map it onto Payment
     fields.
@@ -140,6 +141,12 @@ def validate_receipt(receipt_data, payment_method, order_total, *, settings, cur
     `settings` supplies the OCR and image rules; `currency` supplies the
     exchange rate a secondary-currency receipt is converted at, and is the
     context the caller records on the payment.
+
+    `ocr_report`, if given, is a dict filled in when a VEPay call is actually
+    made: `status` ('ok' or the VEPay error code), `latency_ms` and
+    `bytes_sent`. It stays empty when OCR did not run, and it is filled even
+    when this function goes on to raise, so a caller can record what the call
+    cost.
     """
     if not isinstance(receipt_data, dict):
         receipt_data = {}
@@ -177,7 +184,7 @@ def validate_receipt(receipt_data, payment_method, order_total, *, settings, cur
                 'receipt_image_required',
                 HTTP_400_BAD_REQUEST,
             )
-        vepay_data = _read_receipt(image_data, payment_method, settings, policy)
+        vepay_data = _read_receipt(image_data, payment_method, settings, policy, ocr_report)
 
         if vepay_data is not None:
             comparison = compare_receipt_fields(
@@ -253,7 +260,7 @@ def validate_receipt(receipt_data, payment_method, order_total, *, settings, cur
     }
 
 
-def _read_receipt(image_data, payment_method, settings, policy):
+def _read_receipt(image_data, payment_method, settings, policy, ocr_report=None):
     """
     Read the receipt through VEPay, or decide OCR cannot run.
 
@@ -278,13 +285,17 @@ def _read_receipt(image_data, payment_method, settings, policy):
             HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
+    started = perf_counter()
     try:
-        return async_to_sync(VEPayClient().parse_receipt)(
+        reading = async_to_sync(VEPayClient().parse_receipt)(
             image_data['raw'],
             image_data['name'],
             image_data['content_type'],
         )
+        _report_ocr(ocr_report, 'ok', image_data, started)
+        return reading
     except VEPayError as exc:
+        _report_ocr(ocr_report, exc.code, image_data, started)
         # A retryable failure is VEPay being unavailable, not the receipt
         # being bad, so it can wait for a person. A non-retryable one means
         # the image itself could not be read and the customer should retake it.
@@ -298,6 +309,15 @@ def _read_receipt(image_data, payment_method, settings, policy):
                 if exc.is_retryable else HTTP_422_UNPROCESSABLE_ENTITY
             ),
             details={'retryable': exc.is_retryable},
+        )
+
+
+def _report_ocr(report, status, image_data, started):
+    if report is not None:
+        report.update(
+            status=status,
+            latency_ms=max(0, int((perf_counter() - started) * 1000)),
+            bytes_sent=len(image_data['raw']),
         )
 
 
