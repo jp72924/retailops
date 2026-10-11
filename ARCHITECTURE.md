@@ -61,7 +61,8 @@ shape the rest of the architecture:
   and the kiosk endpoints (section 6), which makes this worth knowing before scaling
   out.
 - **No task queue.** There is no Celery, RQ, or Redis. Scheduled work runs as
-  management commands intended for cron: `update_bcv_rate` and `purge_receipts`.
+  management commands intended for cron: `update_bcv_rate`, `purge_receipts` and
+  `expire_channel_orders`.
 - **`responses` is a test-only library shipped in the production requirements file.**
 
 ## 2. Module map
@@ -83,10 +84,13 @@ retailops/
 │   ├── middleware.py       KioskCORSMiddleware, RegionalMiddleware
 │   ├── context_processors.py  system_settings on every template
 │   ├── decorators.py       @role_required
-│   ├── services/           bcv.py, vepay.py, receipt_matching.py, currency.py,
-│   │                       inventory.py, customers.py
+│   ├── services/           bcv.py, vepay.py, receipt_matching.py, receipt_validation.py,
+│   │                       currency.py, inventory.py, orders.py, payments.py, customers.py,
+│   │                       listings.py, customer_links.py, channel_orders.py,
+│   │                       channel_payments.py
 │   ├── management/         site_initialization.py (shared by init commands)
 │   │   └── commands/       init, bootstrap_local, seed, provision_kiosk,
+│   │                       provision_channel, expire_channel_orders,
 │   │                       purge_receipts, update_bcv_rate, initialize_site
 │   ├── templates/core/     Back-office templates
 │   ├── templatetags/       regional.py
@@ -244,7 +248,24 @@ translates them into its own error format.
   would force a `GROUP BY` and make pagination materialise every group), and variants
   prefetched with their stock. `variant_availability()` turns stock into a label and
   never a number. `category_tree()` prunes branches with nothing to show, and
-  `publish_product()` is what the back-office button calls.
+  `publish_product()` is what the back-office button calls, and `orderable_products()`
+  gives a channel the same view of the catalogue when it orders.
+- **`customer_links.py`** - ties a store's customer to a `Customer`. An existing link
+  decides; without one the only match is a verified email, and only on a channel set to
+  trust that claim, otherwise `CustomerEmailConflict`. It never matches a national id and
+  never writes to a `Customer`.
+- **`channel_orders.py`** - creates a channel order and confirms it in one short
+  transaction with no third-party call. It takes product locks first, in primary-key
+  order, then the order number: the order the kiosk takes them in, so the two cannot
+  deadlock. It freezes the currency, is idempotent on `client_reference`, and holds
+  `customer_status()` and `review_status()`, the pure functions behind every status a
+  store shows. `expire_channel_orders()` cancels lapsed unpaid orders through
+  `cancel_order()`, locking each and skipping any with a payment.
+- **`channel_payments.py`** - records a receipt payment for a channel order. It
+  validates through `validate_receipt()` under `CHANNEL_POLICY` against the order's
+  frozen currency snapshot, before any lock; then locks the order, re-checks its status,
+  any payment under review, the amount owed and the transaction key; records the payment
+  with that same snapshot; and applies it through `apply_confirmed_payments()`.
 - **`customers.py`** - national-ID resolution for every surface that registers or
   finds a customer: the API, both back-office forms, quick-create, and kiosk
   identify/register. It matches through any punctuation of the same ID and still
@@ -331,7 +352,8 @@ makes the write path readable top to bottom.
 There is likewise no task queue. Deferred work is a management command on a cron
 schedule: `update_bcv_rate` refreshes the secondary exchange rate, and
 `purge_receipts` deletes receipt images past the retention window configured in
-`SystemSettings.delete_receipt_image_after_days`.
+`SystemSettings.delete_receipt_image_after_days`, and `expire_channel_orders` cancels
+unpaid online orders that lapsed and returns their stock.
 
 ### Cross-cutting concerns
 
@@ -503,6 +525,17 @@ authentication. `Listing` carries the commercial layer of a product (slug, copy,
 `label`, a `position` and an optional `compare_at_price`. Price and stock stay on the
 product. Nothing about a channel is stored on `SalesOrder` or `Product`.
 
+**Channel orders.** `ChannelOrder` is a side table with one row per `SalesOrder` that
+arrived through a channel, so `SalesOrder`, which the kiosk, the CLI and the MCP server
+read, gains no column. It is unique on `(channel, client_reference)`, the store's own
+order id and the idempotency key, and carries the `CurrencySnapshot` the customer was
+quoted, `expires_at`, `fulfillment`, a small `contact` object, and the
+`ChannelCustomerLink` that placed it. `ChannelCustomerLink` is unique on
+`(channel, external_ref)` and ties a store's customer to a `Customer`; its `profile` is
+a copy of what the store sent, never written to the `Customer` and never returned.
+`OcrCallLog.channel` attributes OCR cost to the channel that spent it. `SalesChannel`
+also holds `trusts_email_verification` and `order_expiry_minutes`.
+
 **No many-to-many fields exist** outside those inherited from `PermissionsMixin`.
 `groups` and `user_permissions` are present but unused: authorization is the `role`
 foreign key, not Django groups.
@@ -571,11 +604,15 @@ Note the singular `product/<sku>/` for barcode lookup against the plural
 
 ### Storefront namespace
 
-Defined in `api/storefront/urls.py`, mounted at `/api/v1/storefront/`. Read-only.
+Defined in `api/storefront/urls.py`, mounted at `/api/v1/storefront/`. The catalogue is
+read-only; a channel can also create orders and send receipts for its own orders.
 
 ```
 GET  catalog/listings/        GET  catalog/listings/<slug>/
 GET  catalog/categories/      GET  payment-instructions/
+POST orders/                  GET  orders/<order_number>/
+POST orders/<order_number>/payments/
+GET  customers/<external_ref>/orders/
 ```
 
 ### OpenAPI
@@ -710,7 +747,9 @@ Rates are defined at `retailops/settings.py:552`.
 | `kiosk_scan` | 120/min | station | Kiosk product lookup |
 | `kiosk_checkout` | 30/min | station | Kiosk checkout |
 | `kiosk_poll` | 60/min | station | Kiosk heartbeat and polling |
-| `storefront_read` | 300/min | channel | Storefront catalogue reads |
+| `storefront_read` | 300/min | channel | Storefront catalogue and order reads |
+| `storefront_order` | 60/min | channel | Storefront order creation |
+| `storefront_payment` | 30/min | channel | Storefront receipt payments (each can cost an OCR call) |
 
 `AnonRateThrottle` is deliberately absent from `DEFAULT_THROTTLE_CLASSES`. The
 settings comment explains why: the only anonymous endpoint is `POST /auth/token/`,

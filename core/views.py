@@ -759,7 +759,9 @@ def order_detail(request, pk):
     Allowed roles: Staff, Manager, Admin.
     """
     order = get_object_or_404(
-        SalesOrder.objects.prefetch_related(_payments_with_currency()),
+        SalesOrder.objects
+        .select_related('channel_order__channel', 'channel_order__currency_snapshot')
+        .prefetch_related(_payments_with_currency()),
         pk=pk,
     )
 

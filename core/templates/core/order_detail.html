@@ -364,6 +364,25 @@
         </div>
         {% endif %}
 
+        {% with channel_order=order.channel_order %}
+        {% if channel_order %}
+        <!-- Online order (arrived through a sales channel) -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">{% trans "Online Order" %}</div></div>
+          <div class="card-body">
+            <div class="info-panel">
+              <div class="info-row"><span class="info-label">{% trans "Channel" %}</span>{{ channel_order.channel.name }}</div>
+              <div class="info-row"><span class="info-label">{% trans "Reference" %}</span><span class="td-mono">{{ channel_order.client_reference }}</span></div>
+              <div class="info-row"><span class="info-label">{% trans "Fulfillment" %}</span>{{ channel_order.get_fulfillment_display }}</div>
+              {% if order.status == 'confirmed' %}<div class="info-row"><span class="info-label">{% trans "Expires" %}</span>{{ channel_order.expires_at|date:"M j, Y H:i" }}</div>{% endif %}
+              {% if channel_order.currency_snapshot.secondary_currency_enabled %}<div class="info-row"><span class="info-label">{% trans "Quoted rate" %}</span>{{ channel_order.currency_snapshot.secondary_exchange_rate|floatformat:2 }} {{ channel_order.currency_snapshot.secondary_currency_code }} / {{ channel_order.currency_snapshot.currency_code }}</div>{% endif %}
+              {% for key, value in channel_order.contact.items %}<div class="info-row"><span class="info-label">{{ key }}</span>{{ value }}</div>{% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
       </div>
     </div>
   </form>
