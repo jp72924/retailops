@@ -25,6 +25,7 @@ from .services.customers import (
     normalized_national_id_expr,
 )
 from .services.currency import attach_order_amounts, order_amounts
+from .services.listings import publish_product
 from .services.orders import cancel_order, refund_order
 from .services.payments import (
     OrderNotPayableError,
@@ -1457,6 +1458,38 @@ def product_edit(request, pk):
             'track_inventory':     '1' if product.track_inventory else '',
         },
     })
+
+
+@require_POST
+@login_required
+@role_required('Manager', 'Admin')
+def product_publish(request, pk):
+    """
+    POST: list a product in the online store catalogue.
+    Allowed roles: Manager, Admin.
+
+    Creates a published listing holding the product as its only variant. A
+    product that is already listed is left where it is.
+    """
+    product = get_object_or_404(Product, pk=pk)
+    listing, created = publish_product(product)
+    if not created:
+        messages.info(
+            request,
+            _('%(sku)s is already in the online store catalogue.') % {'sku': product.sku},
+        )
+    elif product.is_active:
+        messages.success(
+            request,
+            _('%(sku)s was published to the online store.') % {'sku': product.sku},
+        )
+    else:
+        messages.warning(
+            request,
+            _('%(sku)s was listed, but it will not appear in the online store until the product is active.')
+            % {'sku': product.sku},
+        )
+    return redirect('product-edit', pk=pk)
 
 
 @login_required

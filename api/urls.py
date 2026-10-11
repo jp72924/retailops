@@ -62,6 +62,9 @@ urlpatterns = router.urls + [
     # Kiosk integration — per-station API key auth, isolated namespace
     path('kiosk/', include('api.kiosk.urls')),
 
+    # Online storefronts — per-channel API key auth, isolated namespace
+    path('storefront/', include('api.storefront.urls')),
+
     # Phase 5 — OpenAPI schema (drf-spectacular)
     path('schema/',          SpectacularAPIView.as_view(),                        name='api-schema'),
     path('schema/swagger/',  SpectacularSwaggerView.as_view(url_name='api:api-schema'), name='api-swagger'),

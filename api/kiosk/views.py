@@ -192,13 +192,7 @@ class KioskRecipientProfileView(KioskAPIMixin, APIView):
     throttle_classes = [KioskScanThrottle]
 
     def get(self, request):
-        # is_active matters as much as is_primary here: a payment method whose
-        # only profile has been deactivated still carries the primary flag
-        # (see RecipientProfile.ensure_sole_profile_is_primary), and a disabled
-        # account must never reach a customer's screen.
-        profiles = RecipientProfile.objects.filter(
-            is_active=True, is_primary=True,
-        ).order_by('payment_method')
+        profiles = RecipientProfile.primary_for_customers()
         return Response(
             {'results': KioskRecipientProfileSerializer(profiles, many=True).data}
         )

@@ -32,6 +32,7 @@ A complete reference for the RetailOps REST API, intended for developers integra
    - [Settings](#411-settings)
    - [Recipient Profiles](#412-recipient-profiles)
    - [MCP Skill Card](#413-mcp-skill-card)
+   - [Storefront Catalogue](#414-storefront-catalogue)
 5. [Object Schemas](#5-object-schemas)
 
 ---
@@ -196,7 +197,7 @@ The `details` key is only present on validation errors (`code: "validation_error
 
 ### 2.5 Authorization Roles
 
-The API uses four roles. Three are for human users with escalating privileges; the fourth is reserved for kiosk terminals:
+The API uses five roles. Three are for human users with escalating privileges; the other two, Kiosk and Channel, belong to service accounts:
 
 | Role | Capabilities |
 |------|-------------|
@@ -204,10 +205,13 @@ The API uses four roles. Three are for human users with escalating privileges; t
 | **Manager** | All Staff capabilities; manage products, categories, inventory; confirm and cancel orders |
 | **Admin** | All Manager capabilities; manage users; issue refunds |
 | **Kiosk** | Self-checkout terminal service accounts; read settings and product catalog; initiate checkout flow only |
+| **Channel** | Online sales channel service accounts; authenticate only with a channel key, only under `/api/v1/storefront/`; no access to the staff API |
 
 Endpoints that say "any authenticated user" are accessible to Staff, Manager, and Admin roles.
 
 > **Note:** The Kiosk role is reserved for `KioskStation` service accounts, which are created automatically when a kiosk terminal is provisioned. It cannot be assigned via `POST /api/v1/users/`.
+
+> **Note:** The Channel role belongs to the service user that `manage.py provision_channel` creates for a sales channel. That user has no usable password; the channel authenticates with a key (see [Storefront Catalogue](#414-storefront-catalogue)).
 
 ### 2.6 Rate Limiting
 
@@ -228,6 +232,7 @@ Certain endpoint categories have their own per-user scopes that apply in additio
 | `kiosk_scan` | 120 / minute | Product barcode scan (kiosk flow) |
 | `kiosk_checkout` | 30 / minute | Checkout submission (kiosk flow) |
 | `kiosk_poll` | 60 / minute | Status polling (kiosk flow) |
+| `storefront_read` | 300 / minute | Storefront catalogue reads (per sales channel) |
 
 When throttled, the response is `429 Too Many Requests` with:
 ```json
@@ -1315,6 +1320,24 @@ The JSON response shape:
   "errors": { "<code>": "<recovery message>" }
 }
 ```
+
+---
+
+### 4.14 Storefront Catalogue
+
+A read-only catalogue for online stores. These endpoints authenticate with a **channel key** (`Authorization: ChannelKey <secret>`), not a staff token: a channel key is accepted nowhere else, and a staff token or kiosk key is not accepted here (`401`). Provisioning, key rotation, the listing model and worked examples are in `STOREFRONT_INTEGRATION.md`.
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/storefront/catalog/listings/` | Paginated published listings with their variants. Filters: `category` (includes subcategories), `display_type`; `search`; `ordering` = `sort` · `title` · `created_at` · `from_price` |
+| `GET` | `/api/v1/storefront/catalog/listings/{slug}/` | One listing, with `description`, `features`, `attributes` and `currency` |
+| `GET` | `/api/v1/storefront/catalog/categories/` | Categories that lead to a visible listing, nested, with `listing_count` |
+| `GET` | `/api/v1/storefront/payment-instructions/` | The primary active recipient profile for each payment method |
+
+- A listing is visible when it is published and at least one variant is an active product. Prices come from the product.
+- `availability` is `in_stock`, `low_stock`, `out_of_stock` or `unlimited`. It is a label: **exact stock is never published**.
+- Every response carries a live `currency` block. The catalogue is sent with `Cache-Control: max-age=60` and payment instructions with `no-store`.
+- Each channel is limited to 300 requests per minute (`429` beyond that).
 
 ---
 

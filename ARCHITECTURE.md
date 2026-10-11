@@ -97,6 +97,7 @@ retailops/
 │   │                       settings, and mcp_skill
 │   ├── serializers/        One module per resource, plus the shared currency.py
 │   ├── kiosk/              Self-contained kiosk sub-package
+│   ├── storefront/         Self-contained sales-channel catalogue sub-package
 │   ├── permissions.py      role_permission() factory
 │   ├── filters.py  pagination.py  throttling.py  exceptions.py
 │   └── tests/
@@ -118,6 +119,7 @@ retailops/
 | `core` | Domain model, back-office UI, Django admin, business services, management commands, i18n. |
 | `api` | The DRF layer. Serializers, viewsets, permissions, throttles, the error envelope, OpenAPI schema. |
 | `api.kiosk` | Isolated namespace for unattended self-checkout terminals. Own authentication, permissions, throttles, serializers, and views. |
+| `api.storefront` | Isolated namespace for online sales channels. Own authentication, permissions, throttle, serializers, filters, views, and provisioning. Read-only. |
 | `mcp_server` | Agent-facing MCP wrapper over `/api/v1/`. Deliberately **not** in `INSTALLED_APPS`. |
 | `retailops` | Project configuration, storage routing, custom test runner. |
 
@@ -139,8 +141,8 @@ URLconf  ->  Middleware  ->  Authentication  ->  Permission  ->  Throttle
 
 `retailops/urls.py` mounts three trees: `admin/`, `api/v1/` (namespace `api`), and
 `''` for the back-office. `api/urls.py` combines a `DefaultRouter` covering nine
-resources with twelve explicit paths, and includes `api.kiosk.urls` under `kiosk/`
-with its own `app_name`.
+resources with twelve explicit paths, and includes `api.kiosk.urls` under `kiosk/` and
+`api.storefront.urls` under `storefront/`, each with its own `app_name`.
 
 ### Middleware
 
@@ -236,6 +238,13 @@ translates them into its own error format.
   second reversal gives back nothing. `cancel_order()` and `refund_order()` lock the
   order row (the lock the payment paths take), re-check its status, and are what the
   API and the back-office call.
+- **`listings.py`** - what a storefront may see of the catalogue. `published_listings()`
+  is the one queryset behind the list and the detail: published, with at least one
+  variant on an active product, `from_price` as a correlated subquery (an aggregate
+  would force a `GROUP BY` and make pagination materialise every group), and variants
+  prefetched with their stock. `variant_availability()` turns stock into a label and
+  never a number. `category_tree()` prunes branches with nothing to show, and
+  `publish_product()` is what the back-office button calls.
 - **`customers.py`** - national-ID resolution for every surface that registers or
   finds a customer: the API, both back-office forms, quick-create, and kiosk
   identify/register. It matches through any punctuation of the same ID and still
@@ -361,6 +370,12 @@ erDiagram
     User              ||--o{ InventoryMovement : "created_by (PROTECT)"
     User              ||--o{ RecipientProfile : "created_by (PROTECT)"
     User              ||--o{ KioskStation : "created_by (PROTECT)"
+    User              ||--|| SalesChannel : "service_user (PROTECT)"
+    User              ||--o{ SalesChannel : "created_by (PROTECT)"
+    SalesChannel      ||--o{ ChannelKey : "keys (CASCADE)"
+    ProductCategory   ||--o{ Listing : "category (PROTECT)"
+    Listing           ||--o{ ListingVariant : "variants (CASCADE)"
+    Product           ||--o| ListingVariant : "listing_variant (CASCADE)"
 ```
 
 `SequenceCounter` and `SystemSettings` stand outside the graph: the first is a
@@ -478,6 +493,16 @@ receipt contents. `SystemSettings` holds currency configuration, the secondary
 currency and its auto-refresh settings, OCR and VEPay configuration (`ocr_api_key` is
 masked to `***` on read), receipt retention, and `recipient_validation_enabled`.
 
+**Sales channels and listings.** `SalesChannel` is unique on `name` and `slug` and owns a
+`OneToOneField` to its `service_user`, a `Channel`-role user with an unusable password.
+`ChannelKey` stores an indexed 8-character `prefix` and a unique SHA-256 `key_hash`, plus
+`revoked_at`; a channel may hold several active keys. Neither table is written on
+authentication. `Listing` carries the commercial layer of a product (slug, copy,
+`features` and `attributes` as JSON, badge, image, `sort`, `is_published`) and
+`ListingVariant` groups products into it, one product to at most one variant, with a
+`label`, a `position` and an optional `compare_at_price`. Price and stock stay on the
+product. Nothing about a channel is stored on `SalesOrder` or `Product`.
+
 **No many-to-many fields exist** outside those inherited from `PermissionsMixin`.
 `groups` and `user_permissions` are present but unused: authorization is the `role`
 foreign key, not Django groups.
@@ -544,6 +569,15 @@ GET  receipt/<order_id>/  POST heartbeat/
 Note the singular `product/<sku>/` for barcode lookup against the plural
 `products/<pk>/` for lookup by primary key.
 
+### Storefront namespace
+
+Defined in `api/storefront/urls.py`, mounted at `/api/v1/storefront/`. Read-only.
+
+```
+GET  catalog/listings/        GET  catalog/listings/<slug>/
+GET  catalog/categories/      GET  payment-instructions/
+```
+
 ### OpenAPI
 
 `drf-spectacular`, configured at `retailops/settings.py:577`. Title "RetailOps API",
@@ -570,7 +604,7 @@ passes the submitted email as the `username=` argument to `authenticate()`, whic
 ### Roles
 
 Authorization is a single foreign key from `User` to `Role`, with the hierarchy
-Admin > Manager > Staff and a reserved `Kiosk` role. Enforcement is per-view through
+Admin > Manager > Staff and the reserved `Kiosk` and `Channel` roles. Enforcement is per-view through
 `get_permissions()`. `api/views/order.py:165` is representative:
 
 ```python
@@ -612,6 +646,19 @@ with a fire-and-forget single-statement `UPDATE`.
 Provisioning lives in `api/kiosk/provisioning.py`: it generates
 `secrets.token_urlsafe(36)`, displays the raw key exactly once, sets an unusable
 password on the service user, and offers `rotate_api_key()`.
+
+### Sales channel authentication
+
+`api/storefront/authentication.py:ChannelKeyAuthentication` implements
+`Authorization: ChannelKey <key>`. It resolves the key, its channel, the channel's
+service user and the user's role with one `SELECT`, keyed by the 8-character prefix and
+the full hash, and refuses a key that is revoked or whose channel or service user is
+inactive. Unlike the kiosk's, it writes nothing. Every storefront view sets this as its
+only authentication class and `IsSalesChannel` as its only permission, so the fence runs
+both ways: a channel key is not accepted by `TokenAuthentication` or
+`KioskTokenAuthentication`, and a staff token or kiosk key is not accepted here.
+Provisioning is `api/storefront/provisioning.py` (`create_channel`, `issue_key`,
+`revoke_key`, `revoke_all_keys`), driven by `manage.py provision_channel` and the admin.
 
 ### Fencing the kiosk credential
 
@@ -663,6 +710,7 @@ Rates are defined at `retailops/settings.py:552`.
 | `kiosk_scan` | 120/min | station | Kiosk product lookup |
 | `kiosk_checkout` | 30/min | station | Kiosk checkout |
 | `kiosk_poll` | 60/min | station | Kiosk heartbeat and polling |
+| `storefront_read` | 300/min | channel | Storefront catalogue reads |
 
 `AnonRateThrottle` is deliberately absent from `DEFAULT_THROTTLE_CLASSES`. The
 settings comment explains why: the only anonymous endpoint is `POST /auth/token/`,

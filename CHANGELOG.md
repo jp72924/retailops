@@ -103,6 +103,45 @@
   which changes the generated OpenAPI type. The CLI and the MCP server show it as
   empty.
 
+- **Online stores can read a catalogue from RetailOps.** RetailOps was built
+  for physical stores; an online store or a web catalogue had nothing to read:
+  the kiosk namespace shows six products at a time and writes to the database on
+  every request, and the staff API exposes customers and orders.
+
+  A storefront is now a **sales channel**: a server-to-server integration with
+  its own service user (role `Channel`, no usable password) and one or more
+  keys, sent as `Authorization: ChannelKey <secret>`. Only the SHA-256 of a key
+  and an 8-character prefix are stored. A channel can hold several active keys,
+  so a store can switch to a new one before the old one is revoked. A channel
+  key works only under `/api/v1/storefront/`: the staff and kiosk APIs answer
+  `401` to it, and the storefront answers `401` to a staff token or a kiosk key.
+  Authenticating is one read and writes nothing. Each channel is limited to 300
+  requests per minute. Provision one with `manage.py provision_channel` (add
+  `--new-key` for another key); the admin can issue and revoke keys and
+  deactivate a channel.
+
+  A **listing** is how a product, or a family of related products, is
+  presented: a slug, text, features, a badge, free-form attributes, an image,
+  and **variants** such as the same licence for 12 or 24 months. The product
+  stays the unit of price, stock and sale, and each variant is a separate
+  product. Back-office managers publish a product with **Publish to store** on
+  its page; everything else is edited in the admin. Deleting a product takes its
+  variant with it; orders and stock movements still protect a product from being
+  deleted, as before.
+
+  Four read-only endpoints under `/api/v1/storefront/` serve published
+  listings (paginated, filterable, searchable), one listing by slug, the
+  category tree, and the payment instructions a customer is shown. Prices come
+  from the product. Availability is a label (`in_stock`, `low_stock`,
+  `out_of_stock` or `unlimited`) and exact stock is never published. Every
+  response carries the live currency and rate, so a store never reads the
+  staff-only settings endpoint. The catalogue is sent with
+  `Cache-Control: max-age=60`; payment instructions are never cached. See
+  `STOREFRONT_INTEGRATION.md`.
+
+  The `Role.name` choices gain `Channel`; the role appears in the user lists
+  once a channel has been provisioned.
+
 ### Fixed
 
 - **The back-office payment form re-checks the order before writing.** The form

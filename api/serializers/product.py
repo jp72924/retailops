@@ -6,8 +6,7 @@ from core.models import Product, ProductCategory
 from .category import ProductCategoryNestedSerializer
 
 
-def product_image_url(obj, request=None):
-    url = obj.primary_image_url
+def absolute_image_url(url, request=None):
     if not url:
         return ''
     if url.startswith(('http://', 'https://')):
@@ -15,6 +14,10 @@ def product_image_url(obj, request=None):
     if request is not None:
         return request.build_absolute_uri(url)
     return url
+
+
+def product_image_url(obj, request=None):
+    return absolute_image_url(obj.primary_image_url, request)
 
 
 class ProductSerializer(serializers.ModelSerializer):

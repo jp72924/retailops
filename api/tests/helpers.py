@@ -12,6 +12,8 @@ from core.models import (
     Customer,
     InventoryMovement,
     KioskStation,
+    Listing,
+    ListingVariant,
     Payment,
     Product,
     ProductCategory,
@@ -226,3 +228,38 @@ def vepay_payload(
         },
         'transaction_key': transaction_key,
     }
+
+
+def make_channel(slug='trend-store', **attrs):
+    """Provision a sales channel; returns ``(channel, raw_key)``."""
+    from api.storefront.provisioning import create_channel
+
+    admin = attrs.pop('admin', None) or make_user(Role.ADMIN, is_staff=True)
+    return create_channel(
+        name=attrs.pop('name', slug.replace('-', ' ').title()),
+        slug=slug,
+        created_by=admin,
+        label=attrs.pop('label', 'first key'),
+    )
+
+
+def channel_auth(raw_key):
+    """Request kwargs that authenticate as a channel."""
+    return {'HTTP_AUTHORIZATION': f'ChannelKey {raw_key}'}
+
+
+def make_listing(*products, slug=None, title=None, published=True, **attrs):
+    """A listing with one variant per product, in the order given."""
+    count = Listing.objects.count() + 1
+    listing = Listing.objects.create(
+        slug=slug or f'listing-{count}',
+        title=title or f'Listing {count}',
+        category=attrs.pop('category', None) or products[0].category,
+        is_published=published,
+        **attrs,
+    )
+    for position, product in enumerate(products):
+        ListingVariant.objects.create(
+            listing=listing, product=product, label=product.sku, position=position,
+        )
+    return listing

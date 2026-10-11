@@ -1,5 +1,6 @@
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from django.db.models import Count, Q
 from django.utils.html import format_html
 from .models import (
     Role, User, Customer,
@@ -8,6 +9,7 @@ from .models import (
     CurrencySnapshot, Payment, InventoryMovement,
     SystemSettings, OcrCallLog,
     KioskStation,
+    ChannelKey, Listing, ListingVariant, SalesChannel,
 )
 
 
@@ -206,3 +208,114 @@ class KioskStationAdmin(admin.ModelAdmin):
         updated = queryset.update(is_active=True)
         self.message_user(request, f'{updated} station(s) activated.', messages.SUCCESS)
 
+
+class ChannelKeyInline(admin.TabularInline):
+    model = ChannelKey
+    extra = 0
+    can_delete = False
+    fields = ('prefix', 'label', 'created_at', 'revoked_at')
+    readonly_fields = fields
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(SalesChannel)
+class SalesChannelAdmin(admin.ModelAdmin):
+    """
+    Channels are provisioned with `manage.py provision_channel`, which creates
+    the service user and the first key; the admin manages them afterwards.
+    """
+    list_display = ('name', 'slug', 'is_active', 'active_keys', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('name', 'slug')
+    readonly_fields = ('slug', 'service_user', 'created_by', 'created_at', 'updated_at')
+    inlines = [ChannelKeyInline]
+    actions = ['issue_key', 'revoke_all_keys', 'deactivate_channels', 'activate_channels']
+
+    def has_add_permission(self, request):
+        return False
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(
+            _active_keys=Count('keys', filter=Q(keys__revoked_at__isnull=True)),
+        )
+
+    @admin.display(description='Active keys', ordering='_active_keys')
+    def active_keys(self, obj):
+        return obj._active_keys
+
+    @admin.action(description='Issue a new key (existing keys keep working; shown once)')
+    def issue_key(self, request, queryset):
+        from api.storefront.provisioning import issue_key
+        for channel in queryset:
+            _key, raw_key = issue_key(channel, label='issued in admin')
+            messages.warning(
+                request,
+                f'{channel}: new channel key (copy now — shown only once): {raw_key}',
+            )
+
+    @admin.action(description='Revoke all keys of the selected channels')
+    def revoke_all_keys(self, request, queryset):
+        from api.storefront.provisioning import revoke_all_keys
+        revoked = sum(revoke_all_keys(channel) for channel in queryset)
+        self.message_user(request, f'{revoked} key(s) revoked.', messages.SUCCESS)
+
+    @admin.action(description='Deactivate selected channels')
+    def deactivate_channels(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        self.message_user(request, f'{updated} channel(s) deactivated.', messages.SUCCESS)
+
+    @admin.action(description='Activate selected channels')
+    def activate_channels(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        self.message_user(request, f'{updated} channel(s) activated.', messages.SUCCESS)
+
+
+@admin.register(ChannelKey)
+class ChannelKeyAdmin(admin.ModelAdmin):
+    """Keys are issued from the channel; here an operator can revoke one."""
+    list_display = ('channel', 'prefix', 'label', 'created_at', 'revoked_at')
+    list_filter = ('channel',)
+    search_fields = ('prefix', 'label', 'channel__name')
+    readonly_fields = ('channel', 'prefix', 'key_hash', 'label', 'created_at', 'revoked_at')
+    actions = ['revoke_keys']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.action(description='Revoke selected keys', permissions=['change'])
+    def revoke_keys(self, request, queryset):
+        from api.storefront.provisioning import revoke_key
+        revoked = sum(revoke_key(key) for key in queryset)
+        self.message_user(request, f'{revoked} key(s) revoked.', messages.SUCCESS)
+
+
+class ListingVariantInline(admin.TabularInline):
+    model = ListingVariant
+    extra = 1
+    raw_id_fields = ('product',)
+
+
+@admin.register(Listing)
+class ListingAdmin(admin.ModelAdmin):
+    list_display = ('title', 'slug', 'category', 'display_type', 'badge', 'is_published', 'sort')
+    list_editable = ('is_published', 'sort')
+    list_filter = ('is_published', 'display_type', 'category')
+    search_fields = ('title', 'slug', 'variants__product__sku', 'variants__product__name')
+    prepopulated_fields = {'slug': ('title',)}
+    inlines = [ListingVariantInline]
+    actions = ['publish_listings', 'unpublish_listings']
+
+    @admin.action(description='Publish selected listings')
+    def publish_listings(self, request, queryset):
+        updated = queryset.update(is_published=True)
+        self.message_user(request, f'{updated} listing(s) published.', messages.SUCCESS)
+
+    @admin.action(description='Unpublish selected listings')
+    def unpublish_listings(self, request, queryset):
+        updated = queryset.update(is_published=False)
+        self.message_user(request, f'{updated} listing(s) unpublished.', messages.SUCCESS)

@@ -562,6 +562,8 @@ REST_FRAMEWORK = {
         'kiosk_scan':       '120/min',
         'kiosk_checkout':   '30/min',
         'kiosk_poll':       '60/min',
+        # Sales channels (per channel, not per user)
+        'storefront_read':  '300/min',
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }

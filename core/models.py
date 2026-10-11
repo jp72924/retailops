@@ -59,11 +59,13 @@ class Role(models.Model):
     MANAGER = 'Manager'
     STAFF = 'Staff'
     KIOSK = 'Kiosk'
+    CHANNEL = 'Channel'
     NAME_CHOICES = [
         (ADMIN, _('Admin')),
         (MANAGER, _('Manager')),
         (STAFF, _('Staff')),
         (KIOSK, _('Kiosk')),
+        (CHANNEL, _('Channel')),
     ]
 
     name = models.CharField(max_length=20, choices=NAME_CHOICES, unique=True)
@@ -1038,6 +1040,19 @@ class RecipientProfile(models.Model):
         self._original_payment_method = self.payment_method
 
     @classmethod
+    def primary_for_customers(cls):
+        """
+        The profile to show a customer for each payment method: at most one.
+
+        is_active matters as much as is_primary here: a payment method whose
+        only profile has been deactivated still carries the primary flag (see
+        ensure_sole_profile_is_primary), and a disabled account must never
+        reach a customer's screen. The kiosk and the storefront share this so
+        the two cannot disagree about where a customer is told to pay.
+        """
+        return cls.objects.filter(is_active=True, is_primary=True).order_by('payment_method')
+
+    @classmethod
     def demote_other_primaries(cls, payment_method, exclude_pk=None):
         """
         Clear is_primary on every other profile sharing payment_method, so the
@@ -1177,4 +1192,208 @@ class OcrCallLog(models.Model):
 
     def __str__(self):
         return f'OCR {self.status} ({self.sales_order_id or "no-order"})'
+
+
+# ─── SalesChannel ─────────────────────────────────────────────────────────────
+
+class SalesChannel(models.Model):
+    """
+    An online storefront or web catalogue that sells through RetailOps.
+
+    A channel is a server-to-server integration, not a person: its keys never
+    reach a browser. Like a kiosk station it owns a service User (role
+    Channel, unusable password), so orders and payments it creates satisfy the
+    existing created_by / recorded_by constraints without touching those
+    tables. It does not authenticate its own customers; the storefront does.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    slug = models.SlugField(max_length=50, unique=True)
+    is_active = models.BooleanField(default=True)
+    service_user = models.OneToOneField(
+        User,
+        on_delete=models.PROTECT,
+        related_name='sales_channel',
+    )
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='provisioned_channels',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
+class ChannelKey(models.Model):
+    """
+    One secret a channel authenticates with.
+
+    A channel may hold several active keys so a storefront can switch to a new
+    one before the old one is revoked. Only the SHA-256 of the secret and an
+    8-character lookup prefix are stored; the raw key is shown once, when it
+    is issued. Authenticating reads this table and never writes to it.
+    """
+    channel = models.ForeignKey(
+        SalesChannel,
+        on_delete=models.CASCADE,
+        related_name='keys',
+    )
+    prefix = models.CharField(max_length=8, db_index=True)
+    key_hash = models.CharField(max_length=64, unique=True)
+    label = models.CharField(max_length=100, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['channel_id', '-created_at']
+
+    @property
+    def is_active(self):
+        return self.revoked_at is None
+
+    def __str__(self):
+        state = 'revoked' if self.revoked_at else 'active'
+        return f'{self.channel} / {self.prefix}… ({state})'
+
+
+# ─── Listing ──────────────────────────────────────────────────────────────────
+
+LISTING_FEATURES_MAX = 20
+
+
+def listing_image_upload_path(instance, filename):
+    ext = (filename.rsplit('.', 1)[-1].lower() if '.' in filename else 'jpg')[:12]
+    safe_slug = ''.join(
+        ch if ch.isalnum() or ch in {'-', '_'} else '-'
+        for ch in (instance.slug or 'listing')
+    )
+    today = timezone.now()
+    return f'listings/{today:%Y/%m}/{safe_slug}-{uuid.uuid4().hex}.{ext}'
+
+
+def validate_listing_features(value):
+    if (
+        not isinstance(value, list)
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        raise ValidationError('Features must be a list of non-empty strings.')
+    if len(value) > LISTING_FEATURES_MAX:
+        raise ValidationError(f'A listing can have at most {LISTING_FEATURES_MAX} features.')
+
+
+def validate_listing_attributes(value):
+    if not isinstance(value, dict):
+        raise ValidationError('Attributes must be a JSON object.')
+
+
+class Listing(models.Model):
+    """
+    How a product, or a family of related products, is presented to a
+    storefront.
+
+    The product stays the unit of price, stock and sale. A listing only adds
+    the commercial layer a catalogue needs (a slug, marketing copy, badges,
+    free-form attributes) and groups the products customers choose between,
+    such as the same licence for 12 or 24 months, as variants. It belongs to
+    no channel yet: every channel sees every published listing.
+
+    Empty `description` and `image` fall back to the first variant's product
+    when the catalogue is served.
+    """
+    slug = models.SlugField(max_length=120, unique=True)
+    title = models.CharField(max_length=255)
+    summary = models.CharField(max_length=300, blank=True)
+    description = models.TextField(blank=True)
+    features = models.JSONField(
+        default=list, blank=True, validators=[validate_listing_features],
+        help_text=_('A list of short selling points.'),
+    )
+    badge = models.CharField(max_length=40, blank=True)
+    display_type = models.CharField(
+        max_length=40, blank=True,
+        help_text=_('How the storefront groups it, for example "license" or "subscription".'),
+    )
+    attributes = models.JSONField(
+        default=dict, blank=True, validators=[validate_listing_attributes],
+        help_text=_('Free-form details such as platform, activation or delivery.'),
+    )
+    category = models.ForeignKey(
+        ProductCategory,
+        on_delete=models.PROTECT,
+        related_name='listings',
+    )
+    image = models.ImageField(
+        upload_to=listing_image_upload_path,
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(allowed_extensions=PRODUCT_IMAGE_ALLOWED_EXTENSIONS),
+            validate_product_image_file,
+        ],
+    )
+    external_image_url = models.URLField(max_length=500, blank=True)
+    sort = models.PositiveIntegerField(default=0)
+    is_published = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sort', 'pk']
+
+    @property
+    def primary_image_url(self):
+        """The listing's own image; the catalogue falls back to a product's."""
+        if self.image:
+            return self.image.url
+        return (self.external_image_url or '').strip()
+
+    def __str__(self):
+        return self.title
+
+
+class ListingVariant(models.Model):
+    """
+    One product a customer can pick within a listing.
+
+    Variants are separate products because price lives on the product and an
+    order line is unique per (order, product). A product belongs to at most
+    one variant. Deleting a product takes its variant with it: a catalogue
+    entry must not make deletable a product that was never sold or stocked
+    suddenly undeletable (orders and stock movements still protect it).
+    """
+    listing = models.ForeignKey(
+        Listing,
+        on_delete=models.CASCADE,
+        related_name='variants',
+    )
+    product = models.OneToOneField(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='listing_variant',
+    )
+    label = models.CharField(max_length=60, blank=True)
+    compare_at_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text=_('Shown struck through next to the price; ignored unless higher than the price.'),
+    )
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ['position', 'pk']
+
+    def clean(self):
+        super().clean()
+        if self.compare_at_price is not None and self.product_id:
+            if self.compare_at_price <= self.product.unit_price:
+                raise ValidationError({
+                    'compare_at_price': 'Must be higher than the product price.',
+                })
+
+    def __str__(self):
+        return f'{self.listing} — {self.label or self.product.sku}'
 

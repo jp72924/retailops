@@ -66,6 +66,7 @@ Kiosk project.
 - `MULTI_TENANCY.md` - multi-tenant SaaS feasibility study and migration path
 - `INSTALL.md` - local setup and developer workflow
 - `KIOSK_INTEGRATION.md` - connecting an external RetailOps Kiosk station
+- `STOREFRONT_INTEGRATION.md` - connecting an online store or web catalogue as a sales channel
 - `DATABASE_CONFIGURATION.md` - SQLite, PostgreSQL, and Cloud SQL profiles
 - `MEDIA_STORAGE_CONFIGURATION.md` - local, GCS, and S3-compatible media storage
 - `API_GUIDE.md` - REST API reference
