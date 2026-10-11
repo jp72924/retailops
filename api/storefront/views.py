@@ -9,6 +9,8 @@ a storefront never needs the staff-only settings endpoint.
 A channel only ever reaches its own orders: another channel's order number is a
 404, indistinguishable from one that does not exist.
 """
+import logging
+
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
@@ -20,7 +22,7 @@ from rest_framework.views import APIView
 from api.kiosk.serializers import KioskRecipientProfileSerializer
 from api.pagination import CappedPageNumberPagination
 from core.exceptions import InsufficientStockError
-from core.models import RecipientProfile
+from core.models import Entitlement, RecipientProfile
 from core.services.channel_orders import (
     ClientReferenceConflict,
     InvalidOrderItems,
@@ -30,6 +32,15 @@ from core.services.channel_orders import (
 )
 from core.services.channel_payments import PaymentUnderReview, register_channel_payment
 from core.services.customer_links import CustomerEmailConflict, CustomerProfile
+from core.services.entitlements import (
+    EncryptionNotConfigured,
+    EntitlementDecryptionError,
+    EntitlementStateError,
+    InvalidEntitlementValue,
+    delivery_complete,
+    reveal,
+    supply_value,
+)
 from core.services.listings import category_tree, published_listings
 from core.services.payments import OrderNotPayableError
 from core.services.receipt_validation import (
@@ -42,6 +53,8 @@ from core.services.receipt_validation import (
 from .authentication import ChannelKeyAuthentication
 from .filters import ListingFilter
 from .order_serializers import (
+    StorefrontEntitlementSerializer,
+    StorefrontEntitlementValueSerializer,
     StorefrontOrderCreatedSerializer,
     StorefrontOrderCreateSerializer,
     StorefrontOrderSerializer,
@@ -56,7 +69,14 @@ from .serializers import (
     StorefrontListingSerializer,
     live_currency_payload,
 )
-from .throttling import StorefrontOrderThrottle, StorefrontPaymentThrottle, StorefrontReadThrottle
+from .throttling import (
+    StorefrontEntitlementThrottle,
+    StorefrontOrderThrottle,
+    StorefrontPaymentThrottle,
+    StorefrontReadThrottle,
+)
+
+logger = logging.getLogger(__name__)
 
 TAGS = ['storefront']
 
@@ -288,7 +308,9 @@ class OrderPaymentView(StorefrontAPIMixin, APIView):
         except OrderNotPayableError as exc:
             return _error(
                 'This order can no longer take a payment.', exc.code, status.HTTP_409_CONFLICT,
-                customer_status=customer_status(exc.order, exc.order.payments.all()),
+                customer_status=customer_status(
+                    exc.order, exc.order.payments.all(), delivery_complete(exc.order),
+                ),
             )
         except PaymentUnderReview as exc:
             return _error(str(exc), exc.code, status.HTTP_409_CONFLICT)
@@ -340,3 +362,106 @@ class CustomerOrdersView(StorefrontAPIMixin, ListAPIView):
             )
             .order_by('-created_at', '-pk')
         )
+
+
+# ── Delivered entitlements ───────────────────────────────────────────────────
+
+def _own_entitlement(request, pk):
+    """The channel's own entitlement, or 404. Another channel's, or a non-channel order's, is a 404 too."""
+    entitlement = (
+        Entitlement.objects
+        .select_related('order_item__product')
+        .filter(pk=pk, order_item__sales_order__channel_order__channel=request.channel)
+        .first()
+    )
+    if entitlement is None:
+        raise NotFound()
+    return entitlement
+
+
+@extend_schema_view(
+    get=extend_schema(
+        tags=TAGS,
+        summary='Retrieve an entitlement',
+        description='What was delivered for an order line. A licence key is masked; see `reveal`.',
+        responses=StorefrontEntitlementSerializer,
+    ),
+    put=extend_schema(
+        tags=TAGS,
+        summary='Supply an entitlement',
+        description=(
+            'Provides the value of a `pending` entitlement and activates it: its term starts now. '
+            'This is how a store that issues its own licence keys hands them to RetailOps. '
+            'Only a pending entitlement can be supplied; an active or revoked one is `409`.'
+        ),
+        request=StorefrontEntitlementValueSerializer,
+        responses=StorefrontEntitlementSerializer,
+    ),
+)
+class EntitlementDetailView(StorefrontAPIMixin, APIView):
+    throttle_classes = [StorefrontEntitlementThrottle]
+    cache_max_age = None
+
+    def get(self, request, pk):
+        return Response(StorefrontEntitlementSerializer(_own_entitlement(request, pk)).data)
+
+    def put(self, request, pk):
+        entitlement = _own_entitlement(request, pk)
+        serializer = StorefrontEntitlementValueSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            supply_value(entitlement.pk, serializer.validated_data['value'])
+        except EntitlementStateError as exc:
+            return _error(str(exc), exc.code, status.HTTP_409_CONFLICT, entitlement_status=exc.entitlement.status)
+        except InvalidEntitlementValue as exc:
+            return _error(str(exc), exc.code, status.HTTP_400_BAD_REQUEST)
+        except EncryptionNotConfigured as exc:
+            logger.error('Cannot store an entitlement key: %s', exc)
+            return _error(
+                'Licence keys cannot be stored right now.', exc.code, status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        return Response(StorefrontEntitlementSerializer(_own_entitlement(request, pk)).data)
+
+
+@extend_schema_view(post=extend_schema(
+    tags=TAGS,
+    summary='Reveal an entitlement',
+    description=(
+        'Returns the whole licence key, link or instructions. This is the one place a key is ever '
+        'read back, and it is a POST because it changes state: the first reveal is recorded as '
+        '`revealed_at`, which is the evidence if the customer later disputes a refund. Only an '
+        '`active` entitlement can be revealed. Never cached.'
+    ),
+    request=None,
+    responses={200: {
+        'type': 'object',
+        'properties': {
+            'id': {'type': 'integer'},
+            'kind': {'type': 'string', 'enum': ['key', 'link', 'instructions']},
+            'value': {'type': 'string'},
+            'revealed_at': {'type': 'string', 'format': 'date-time'},
+        },
+    }},
+))
+class EntitlementRevealView(StorefrontAPIMixin, APIView):
+    throttle_classes = [StorefrontEntitlementThrottle]
+    cache_max_age = None
+
+    def post(self, request, pk):
+        entitlement = _own_entitlement(request, pk)
+        try:
+            entitlement, value = reveal(entitlement.pk)
+        except EntitlementStateError as exc:
+            return _error(str(exc), exc.code, status.HTTP_409_CONFLICT, entitlement_status=exc.entitlement.status)
+        except (EncryptionNotConfigured, EntitlementDecryptionError) as exc:
+            logger.error('Cannot reveal entitlement %s: %s', entitlement.pk, exc)
+            return _error('This key cannot be read right now.', exc.code, status.HTTP_503_SERVICE_UNAVAILABLE)
+
+        return Response({
+            'id': entitlement.pk,
+            'kind': entitlement.kind,
+            'value': value,
+            'revealed_at': entitlement.revealed_at,
+        })

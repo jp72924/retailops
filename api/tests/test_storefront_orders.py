@@ -52,7 +52,7 @@ ORDERS = '/api/v1/storefront/orders/'
 ORDER_KEYS = {
     'order_number', 'client_reference', 'customer_status', 'created_at', 'expires_at',
     'fulfillment', 'contact', 'items', 'total', 'amount_paid', 'amount_outstanding',
-    'quote', 'payments',
+    'quote', 'payments', 'entitlements',
 }
 
 

@@ -47,6 +47,7 @@ Dependencies are declared in a single `requirements.txt`. There is no
 | `requests` | `>=2.32,<3.0` | Synchronous HTTP for the two outbound integrations: VEPay OCR and the BCV exchange rate. |
 | `responses` | `>=0.25,<0.26` | Mocks `requests` in the test suite. |
 | `psycopg[binary]` | `>=3.2,<4.0` | PostgreSQL driver. |
+| `cryptography` | `>=42.0,<51.0` | Fernet encryption of the licence keys delivered to customers (`core/services/entitlements.py`). |
 | `mcp` | `>=1.27.0,<2` | FastMCP server under `mcp_server/`. Capped below 2 because the server is written against the v1 API. |
 | `httpx` | `>=0.28.1` | Async client the MCP layer uses to call this same REST API. |
 | `python-dotenv` | `>=1.2.2` | Loads `.env` for the MCP server only. Django itself does not auto-load `.env`. |
@@ -82,15 +83,16 @@ retailops/
 │   ├── exceptions.py       DomainError and the order/stock errors it roots
 │   ├── views.py            Function-based HTML views
 │   ├── middleware.py       KioskCORSMiddleware, RegionalMiddleware
+│   ├── checks.py           System check: warns when ENTITLEMENT_ENCRYPTION_KEYS is unset
 │   ├── context_processors.py  system_settings on every template
 │   ├── decorators.py       @role_required
 │   ├── services/           bcv.py, vepay.py, receipt_matching.py, receipt_validation.py,
 │   │                       currency.py, inventory.py, orders.py, payments.py, customers.py,
 │   │                       listings.py, customer_links.py, channel_orders.py,
-│   │                       channel_payments.py
+│   │                       channel_payments.py, entitlements.py
 │   ├── management/         site_initialization.py (shared by init commands)
 │   │   └── commands/       init, bootstrap_local, seed, provision_kiosk,
-│   │                       provision_channel, expire_channel_orders,
+│   │                       provision_channel, expire_channel_orders, rotate_entitlement_keys,
 │   │                       purge_receipts, update_bcv_rate, initialize_site
 │   ├── templates/core/     Back-office templates
 │   ├── templatetags/       regional.py
@@ -266,6 +268,15 @@ translates them into its own error format.
   frozen currency snapshot, before any lock; then locks the order, re-checks its status,
   any payment under review, the amount owed and the transaction key; records the payment
   with that same snapshot; and applies it through `apply_confirmed_payments()`.
+- **`entitlements.py`** - what a paid order delivers. `create_entitlements()` is called
+  from `apply_confirmed_payments()` in the transaction that marks the order paid, so a
+  cancelled or expired order never owes anything, and `refund_order()` calls
+  `revoke_for_order()` in its own. Fixed text is active at once; anything else waits for
+  `supply_value()`, which starts the term. Keys are sealed with `MultiFernet` over
+  `ENTITLEMENT_ENCRYPTION_KEYS`; `reveal()` is the only function that returns one in
+  clear and it stamps `revealed_at` once, never overwriting it; `rotate_keys()` re-encrypts
+  under the primary key. `delivery_complete()` is what lets `customer_status` read
+  `completed` without software moving a paid order to Delivered, which would stop a refund.
 - **`customers.py`** - national-ID resolution for every surface that registers or
   finds a customer: the API, both back-office forms, quick-create, and kiosk
   identify/register. It matches through any punctuation of the same ID and still
@@ -398,6 +409,8 @@ erDiagram
     ProductCategory   ||--o{ Listing : "category (PROTECT)"
     Listing           ||--o{ ListingVariant : "variants (CASCADE)"
     Product           ||--o| ListingVariant : "listing_variant (CASCADE)"
+    Product           ||--o| ProductFulfillment : "fulfillment (CASCADE)"
+    SalesOrderItem    ||--o{ Entitlement : "entitlements (PROTECT)"
 ```
 
 `SequenceCounter` and `SystemSettings` stand outside the graph: the first is a
@@ -536,6 +549,17 @@ a copy of what the store sent, never written to the `Customer` and never returne
 `OcrCallLog.channel` attributes OCR cost to the channel that spent it. `SalesChannel`
 also holds `trusts_email_verification` and `order_expiry_minutes`.
 
+**Digital delivery.** `ProductFulfillment` is a side table, one row per product, that says
+what paying for it delivers (`mode` fixed text or supplied, `entitlement_kind` key, link
+or instructions, a `template`, `duration_days`, `per_unit`), so the product form is
+unchanged and a product with none delivers nothing. `Entitlement` is one thing delivered
+for a paid `SalesOrderItem`, created when the order becomes paid and never before:
+`status` is `pending`, `active` or `revoked`, `seats` is how many units it covers, and
+`activated_at`, `expires_at`, `revealed_at` and `revoked_at` record its life. `value`
+holds the text of a link or instructions, or, for a key, a Fernet token; `hint` keeps
+the key's last four characters in clear so nothing that lists entitlements ever decrypts
+one. `revealed_at` is the evidence of the first reveal.
+
 **No many-to-many fields exist** outside those inherited from `PermissionsMixin`.
 `groups` and `user_permissions` are present but unused: authorization is the `role`
 foreign key, not Django groups.
@@ -613,6 +637,7 @@ GET  catalog/categories/      GET  payment-instructions/
 POST orders/                  GET  orders/<order_number>/
 POST orders/<order_number>/payments/
 GET  customers/<external_ref>/orders/
+GET  PUT entitlements/<id>/   POST entitlements/<id>/reveal/
 ```
 
 ### OpenAPI
@@ -750,6 +775,7 @@ Rates are defined at `retailops/settings.py:552`.
 | `storefront_read` | 300/min | channel | Storefront catalogue and order reads |
 | `storefront_order` | 60/min | channel | Storefront order creation |
 | `storefront_payment` | 30/min | channel | Storefront receipt payments (each can cost an OCR call) |
+| `storefront_entitlement` | 60/min | channel | Supplying and revealing delivered keys |
 
 `AnonRateThrottle` is deliberately absent from `DEFAULT_THROTTLE_CLASSES`. The
 settings comment explains why: the only anonymous endpoint is `POST /auth/token/`,
@@ -770,6 +796,14 @@ a deployment variable fails at boot instead of at request time.
 if not DEBUG and SECRET_KEY == _SECRET_KEY_DEFAULT:
     raise RuntimeError('DJANGO_SECRET_KEY environment variable must be set ...')
 ```
+
+`ENTITLEMENT_ENCRYPTION_KEYS` is a comma-separated list of Fernet keys for the licence keys
+a store delivers: the first encrypts and all decrypt, so a key is retired by putting the
+new one first, running `manage.py rotate_entitlement_keys`, then dropping the old one. A
+malformed value raises `RuntimeError` at boot. With `DEBUG` on and none set a development
+key is derived from `SECRET_KEY`; in production there is no fallback, `manage.py check`
+warns (`core.W001`), and storing a key is refused while links and instructions, which are
+not secret, still work.
 
 Security toggles default to the safe value when `DEBUG` is false:
 `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`,

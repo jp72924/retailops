@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
-from django.core.validators import FileExtensionValidator, MinValueValidator
+from django.core.validators import FileExtensionValidator, MinValueValidator, URLValidator
 from django.db import models, transaction
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
@@ -1533,3 +1533,159 @@ class ChannelOrder(models.Model):
 
     def __str__(self):
         return f'{self.channel} / {self.client_reference}'
+
+
+# ─── Digital delivery ─────────────────────────────────────────────────────────
+
+ENTITLEMENT_VALUE_MAX = 2000
+ENTITLEMENT_MASK = '•' * 8
+
+
+def validate_entitlement_value(kind, value):
+    """
+    Check what is being delivered, by kind, and return it stripped.
+
+    A link must be an http(s) URL; a key or instructions text only has to be
+    present and fit. Raises ValidationError.
+    """
+    value = (value or '').strip()
+    if not value:
+        raise ValidationError('A value is required.')
+    if len(value) > ENTITLEMENT_VALUE_MAX:
+        raise ValidationError(f'A value can be at most {ENTITLEMENT_VALUE_MAX} characters.')
+    if kind == ProductFulfillment.LINK:
+        URLValidator(schemes=['http', 'https'])(value)
+    return value
+
+
+class ProductFulfillment(models.Model):
+    """
+    What a customer is given when they pay for a product.
+
+    A side table, one row per product, so the product form is unchanged and a
+    product with none delivers nothing. It is configured in the admin.
+
+    `template` mode releases fixed text, a link or instructions, the moment the
+    order is paid. `supplied` mode leaves the delivery pending until someone
+    provides the value for that order: staff in the back-office, or the channel
+    that sold it. There is no pool of keys: each value is given for one
+    entitlement and belongs to it.
+
+    One entitlement is created per order line, covering the whole quantity, or
+    one per unit with `per_unit`.
+    """
+    TEMPLATE = 'template'
+    SUPPLIED = 'supplied'
+    MODE_CHOICES = [
+        (TEMPLATE, _('Fixed text, released when the order is paid')),
+        (SUPPLIED, _('Supplied for each order')),
+    ]
+
+    KEY = 'key'
+    LINK = 'link'
+    INSTRUCTIONS = 'instructions'
+    KIND_CHOICES = [
+        (KEY, _('Licence key')),
+        (LINK, _('Link')),
+        (INSTRUCTIONS, _('Instructions')),
+    ]
+
+    product = models.OneToOneField(
+        Product,
+        on_delete=models.CASCADE,
+        related_name='fulfillment',
+    )
+    mode = models.CharField(max_length=10, choices=MODE_CHOICES)
+    entitlement_kind = models.CharField(max_length=15, choices=KIND_CHOICES)
+    template = models.TextField(
+        blank=True,
+        help_text=_('The link or instructions to release, for fixed-text delivery.'),
+    )
+    duration_days = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1)],
+        help_text=_('How long it lasts from the moment it is delivered. Empty means it does not expire.'),
+    )
+    per_unit = models.BooleanField(
+        default=False,
+        help_text=_('One entitlement per unit ordered instead of one for the whole line.'),
+    )
+
+    def clean(self):
+        super().clean()
+        if self.mode == self.TEMPLATE:
+            if self.entitlement_kind == self.KEY:
+                raise ValidationError({
+                    'entitlement_kind': 'A licence key cannot be fixed text: every customer would receive the same one.',
+                })
+            try:
+                validate_entitlement_value(self.entitlement_kind, self.template)
+            except ValidationError as exc:
+                raise ValidationError({'template': exc.messages})
+
+    def __str__(self):
+        return f'{self.product} - {self.get_entitlement_kind_display()}'
+
+
+class Entitlement(models.Model):
+    """
+    One thing delivered for a paid order line: a licence key, a link, or
+    instructions.
+
+    Created when the order becomes paid, and never before, so a cancelled or
+    expired order leaves none. It starts `pending` unless its value is fixed
+    text, and becomes `active` when the value is provided. A refund revokes it.
+
+    A **key** is stored encrypted and cannot be read back except through
+    `core.services.entitlements.reveal`, which stamps `revealed_at`: that time
+    is the evidence if the customer later disputes a refund. Only the last four
+    characters are kept in clear (`hint`), so listings can show a masked key
+    without ever decrypting one. Links and instructions are not secret.
+    """
+    PENDING = 'pending'
+    ACTIVE = 'active'
+    REVOKED = 'revoked'
+    STATUS_CHOICES = [
+        (PENDING, _('Pending')),
+        (ACTIVE, _('Active')),
+        (REVOKED, _('Revoked')),
+    ]
+
+    order_item = models.ForeignKey(
+        SalesOrderItem,
+        on_delete=models.PROTECT,
+        related_name='entitlements',
+    )
+    kind = models.CharField(max_length=15, choices=ProductFulfillment.KIND_CHOICES)
+    value = models.TextField(blank=True)
+    hint = models.CharField(max_length=4, blank=True)
+    seats = models.PositiveIntegerField(
+        default=1,
+        help_text=_('How many units this entitlement covers.'),
+    )
+    duration_days = models.PositiveIntegerField(null=True, blank=True)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=PENDING)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    revealed_at = models.DateTimeField(null=True, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['pk']
+
+    @property
+    def display_value(self):
+        """What is safe to show: the text of a link or instructions, a key masked."""
+        if not self.value:
+            return None
+        if self.kind == ProductFulfillment.KEY:
+            return ENTITLEMENT_MASK + self.hint
+        return self.value
+
+    @property
+    def is_expired(self):
+        return self.expires_at is not None and self.expires_at <= timezone.now()
+
+    def __str__(self):
+        # Never the value: this appears in logs and in the admin.
+        return f'{self.get_kind_display()} #{self.pk} ({self.get_status_display()})'

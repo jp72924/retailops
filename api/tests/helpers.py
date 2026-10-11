@@ -16,6 +16,7 @@ from core.models import (
     ListingVariant,
     Payment,
     Product,
+    ProductFulfillment,
     ProductCategory,
     Role,
     SalesOrder,
@@ -294,3 +295,25 @@ def make_channel_order(channel, product, *, reference='WEB-1', quantity=1, exter
         channel_order.expires_at = timezone.now() - timedelta(minutes=minutes_old)
         channel_order.save(update_fields=['expires_at'])
     return channel_order
+
+
+def make_fulfillment(product, mode=ProductFulfillment.TEMPLATE, kind=ProductFulfillment.LINK,
+                     template='https://downloads.example.com/setup', **attrs):
+    """Configure what a customer is given when they pay for `product`."""
+    return ProductFulfillment.objects.create(
+        product=product, mode=mode, entitlement_kind=kind,
+        template=template if mode == ProductFulfillment.TEMPLATE else '',
+        **attrs,
+    )
+
+
+def pay_order(order, user=None):
+    """
+    Record a confirmed payment covering `order` and apply it, as every payment
+    path does. The order must be Confirmed; it becomes Paid.
+    """
+    from core.services.payments import apply_confirmed_payments
+
+    payment = make_payment(order=order, user=user, amount=order.total_amount)
+    apply_confirmed_payments(order)
+    return payment

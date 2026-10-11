@@ -19,6 +19,7 @@ from django.db import transaction
 from django.db.models import Sum
 
 from core.exceptions import OrderStateError
+from core.services.entitlements import revoke_for_order
 from core.services.payments import lock_order
 
 
@@ -56,13 +57,15 @@ def restore_stock_for_order(order, user, *, notes):
     return InventoryMovement.objects.bulk_create(movements)
 
 
-def _reverse(order, user, *, expected, new_status, verb):
+def _reverse(order, user, *, expected, new_status, verb, revoke_deliveries=False):
     with transaction.atomic():
         locked = lock_order(order.pk)
         if locked.status != expected:
             raise OrderStateError(expected, locked.status)
         locked.status = new_status
         locked.save(update_fields=['status', 'updated_at'])
+        if revoke_deliveries:
+            revoke_for_order(locked)
         restore_stock_for_order(
             locked, user, notes=f'Stock restored on {verb} of {locked.order_number}',
         )
@@ -81,9 +84,12 @@ def cancel_order(order, user):
 
 
 def refund_order(order, user):
-    """Paid -> Refunded, giving back the stock the order took."""
+    """
+    Paid -> Refunded, giving back the stock the order took and revoking
+    what it delivered: a refunded customer keeps no licence.
+    """
     from core.models import SalesOrder
     return _reverse(
         order, user, expected=SalesOrder.PAID, new_status=SalesOrder.REFUNDED,
-        verb='refund',
+        verb='refund', revoke_deliveries=True,
     )

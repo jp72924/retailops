@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Count, F, Prefetch, Q, Sum, Value
 from django.db.models.deletion import ProtectedError
@@ -25,6 +25,13 @@ from .services.customers import (
     normalized_national_id_expr,
 )
 from .services.currency import attach_order_amounts, order_amounts
+from .services.entitlements import (
+    EncryptionNotConfigured,
+    EntitlementStateError,
+    InvalidEntitlementValue,
+    revoke,
+    supply_value,
+)
 from .services.listings import publish_product
 from .services.orders import cancel_order, refund_order
 from .services.payments import (
@@ -41,7 +48,7 @@ from .services.receipt_matching import normalize_document_id, receipt_currency
 from .services.vepay import PAYMENT_AMOUNT_VALUE_PATH, get_receipt_value
 from .templatetags.regional import currency_plain
 from .models import (
-    Customer, InventoryMovement, Payment,
+    Customer, Entitlement, InventoryMovement, Payment,
     Product, ProductCategory, RecipientProfile, Role,
     SalesOrder, SalesOrderItem, SystemSettings, User,
 )
@@ -761,7 +768,7 @@ def order_detail(request, pk):
     order = get_object_or_404(
         SalesOrder.objects
         .select_related('channel_order__channel', 'channel_order__currency_snapshot')
-        .prefetch_related(_payments_with_currency()),
+        .prefetch_related(_payments_with_currency(), 'items__product', 'items__entitlements'),
         pk=pk,
     )
 
@@ -810,6 +817,9 @@ def order_detail(request, pk):
 
     ctx = _order_form_context(order)
     ctx['order_amounts'] = order_amounts(order)
+    ctx['entitlements'] = [
+        entitlement for item in order.items.all() for entitlement in item.entitlements.all()
+    ]
     return render(request, 'core/order_detail.html', ctx)
 
 
@@ -880,6 +890,47 @@ def order_confirm(request, pk):
         return redirect('order-detail', pk=pk)
 
     messages.success(request, f'{order.order_number} confirmed.')
+    return redirect('order-detail', pk=pk)
+
+
+@require_POST
+@role_required('Staff', 'Manager', 'Admin')
+def entitlement_supply(request, pk, entitlement_pk):
+    """
+    POST: provide the licence key, link or instructions delivered for an order line.
+    Allowed roles: Staff, Manager, Admin; changing a value already delivered
+    (a reissue) is Manager or Admin.
+
+    A key is write-only here: it is stored encrypted and shown masked afterwards.
+    """
+    entitlement = get_object_or_404(Entitlement, pk=entitlement_pk, order_item__sales_order_id=pk)
+    replacing = entitlement.status == Entitlement.ACTIVE
+    if replacing and request.user.role.name not in ('Manager', 'Admin'):
+        raise PermissionDenied
+    try:
+        supply_value(entitlement.pk, request.POST.get('value', ''), replace=replacing)
+    except EntitlementStateError as exc:
+        messages.error(request, _('This delivery was revoked and can no longer be changed.')
+                       if exc.code == 'entitlement_revoked'
+                       else _('This delivery was already supplied.'))
+    except InvalidEntitlementValue as exc:
+        messages.error(request, str(exc))
+    except EncryptionNotConfigured:
+        messages.error(request, _('Licence keys cannot be stored: ENTITLEMENT_ENCRYPTION_KEYS is not configured.'))
+    else:
+        messages.success(request, _('Delivery supplied.'))
+    return redirect('order-detail', pk=pk)
+
+
+@require_POST
+@role_required('Manager', 'Admin')
+def entitlement_revoke(request, pk, entitlement_pk):
+    """POST: revoke what an order delivered. Allowed roles: Manager, Admin."""
+    entitlement = get_object_or_404(Entitlement, pk=entitlement_pk, order_item__sales_order_id=pk)
+    if revoke(entitlement.pk):
+        messages.success(request, _('Delivery revoked.'))
+    else:
+        messages.info(request, _('This delivery was already revoked.'))
     return redirect('order-detail', pk=pk)
 
 

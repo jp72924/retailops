@@ -17,13 +17,16 @@ from rest_framework import serializers
 from api.kiosk.serializers import KioskRecipientProfileSerializer
 from api.serializers.currency import recorded_currency_payload, secondary_amount_payload
 from core.models import (
+    ENTITLEMENT_VALUE_MAX,
     ChannelOrder,
+    Entitlement,
     Payment,
     RecipientProfile,
     SalesOrderItem,
     validate_channel_contact,
 )
 from core.services.channel_orders import MAX_LINE_QUANTITY, customer_status, review_status
+from core.services.entitlements import delivery_complete
 from core.services.receipt_validation import RECEIPT_PAYMENT_METHODS
 
 from .serializers import LIVE_CURRENCY_SCHEMA
@@ -34,6 +37,8 @@ CUSTOMER_STATUSES = [
     'awaiting_payment', 'payment_under_review', 'processing', 'completed', 'cancelled', 'refunded',
 ]
 REVIEW_STATUSES = ['verified', 'needs_review', 'rejected']
+ENTITLEMENT_KINDS = ['key', 'link', 'instructions']
+ENTITLEMENT_STATUSES = ['pending', 'active', 'revoked']
 
 external_ref_validator = RegexValidator(
     r'^[\w.:@+-]+$',
@@ -117,6 +122,13 @@ class StorefrontPaymentCreateSerializer(serializers.Serializer):
     receipt = StorefrontReceiptSerializer()
 
 
+class StorefrontEntitlementValueSerializer(serializers.Serializer):
+    value = serializers.CharField(
+        max_length=ENTITLEMENT_VALUE_MAX,
+        help_text='The licence key, link or instructions to deliver. A link must be an http(s) URL.',
+    )
+
+
 # ── What a store reads ───────────────────────────────────────────────────────
 
 class StorefrontOrderLineOutSerializer(serializers.ModelSerializer):
@@ -145,6 +157,27 @@ class StorefrontPaymentOutSerializer(serializers.ModelSerializer):
         return review_status(obj)
 
 
+class StorefrontEntitlementSerializer(serializers.ModelSerializer):
+    sku = serializers.CharField(source='order_item.product.sku', read_only=True)
+    value = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Entitlement
+        fields = ['id', 'sku', 'kind', 'status', 'seats', 'value', 'activated_at', 'expires_at']
+        read_only_fields = fields
+
+    @extend_schema_field({
+        'type': 'string', 'nullable': True,
+        'description': (
+            'The link or instructions to show the customer. A licence key is always masked '
+            'here, showing only its last four characters; the whole key is read once, with '
+            '`POST /entitlements/{id}/reveal/`. Null until the value is supplied.'
+        ),
+    })
+    def get_value(self, obj):
+        return obj.display_value
+
+
 class StorefrontOrderSerializer(serializers.ModelSerializer):
     order_number = serializers.CharField(source='sales_order.order_number', read_only=True)
     customer_status = serializers.SerializerMethodField()
@@ -156,13 +189,14 @@ class StorefrontOrderSerializer(serializers.ModelSerializer):
     amount_outstanding = serializers.SerializerMethodField()
     quote = serializers.SerializerMethodField()
     payments = serializers.SerializerMethodField()
+    entitlements = serializers.SerializerMethodField()
 
     class Meta:
         model = ChannelOrder
         fields = [
             'order_number', 'client_reference', 'customer_status', 'created_at', 'expires_at',
             'fulfillment', 'contact', 'items', 'total', 'amount_paid', 'amount_outstanding',
-            'quote', 'payments',
+            'quote', 'payments', 'entitlements',
         ]
         read_only_fields = fields
 
@@ -178,7 +212,9 @@ class StorefrontOrderSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.ChoiceField(choices=CUSTOMER_STATUSES))
     def get_customer_status(self, obj):
-        return customer_status(obj.sales_order, obj.sales_order.payments.all())
+        return customer_status(
+            obj.sales_order, obj.sales_order.payments.all(), delivery_complete(obj.sales_order),
+        )
 
     def get_amount_paid(self, obj) -> str:
         return money(self._paid(obj))
@@ -212,6 +248,16 @@ class StorefrontOrderSerializer(serializers.ModelSerializer):
     @extend_schema_field(StorefrontPaymentOutSerializer(many=True))
     def get_payments(self, obj):
         return StorefrontPaymentOutSerializer(self._payments(obj), many=True).data
+
+    @extend_schema_field(StorefrontEntitlementSerializer(many=True))
+    def get_entitlements(self, obj):
+        # Prefetched by channel_orders(), so a list of orders costs no extra query.
+        rows = [
+            entitlement
+            for item in obj.sales_order.items.all()
+            for entitlement in item.entitlements.all()
+        ]
+        return StorefrontEntitlementSerializer(sorted(rows, key=lambda e: e.pk), many=True).data
 
 
 class StorefrontOrderCreatedSerializer(StorefrontOrderSerializer):

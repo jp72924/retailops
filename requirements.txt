@@ -9,6 +9,7 @@ Pillow>=10.0,<13.0
 requests>=2.32,<3.0
 responses>=0.25,<0.26
 psycopg[binary]>=3.2,<4.0
+cryptography>=42.0,<51.0
 
 # MCP server layer
 mcp>=1.27.0,<2

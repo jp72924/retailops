@@ -197,6 +197,43 @@
   `trusts_email_verification` and `order_expiry_minutes`. See
   `STOREFRONT_INTEGRATION.md`.
 
+- **A paid order delivers what it sold.** A licence, a subscription or a download
+  has to reach the customer, and until now RetailOps only recorded that it was
+  paid. A product can now have a **fulfillment**, configured in the admin: fixed
+  text (a link or instructions, released when the order is paid) or a value
+  supplied for each order; the kind (`key`, `link`, `instructions`); how long it
+  lasts; and whether there is one per unit or one for the whole line. There is no
+  pool of keys: each value belongs to one delivery.
+
+  When an order becomes paid, and only then, an **entitlement** is created for
+  each line that delivers, inside the same transaction that marks it paid, so a
+  cancelled or expired order leaves none. Fixed text is active at once; anything
+  else is `pending` until its value is supplied by staff on the order page or by
+  the store (`PUT /api/v1/storefront/entitlements/{id}/`), and its term starts
+  then. A refund revokes everything the order delivered in the same transaction.
+  `customer_status` reads `completed` for a paid order once every line has been
+  delivered and is still active. A paid order is not moved to Delivered by
+  software, because a refund needs it Paid.
+
+  A licence key is a secret and is held to a stricter rule than anything else:
+  it is stored encrypted (Fernet, keys from the new `ENTITLEMENT_ENCRYPTION_KEYS`
+  setting), every listing shows it masked from a four-character hint without
+  decrypting it, staff can supply or replace a key but never read it, and the
+  staff API, the admin and the MCP server never carry one. The one way to read it
+  back is `POST /api/v1/storefront/entitlements/{id}/reveal/`, which is a POST
+  because it records the first reveal as `revealed_at`, the evidence if the
+  customer disputes a refund. It is rate limited, never cached, and cannot be
+  triggered by a prefetch.
+
+  Orders gain `entitlements` in the storefront API. Back-office order pages gain a
+  Deliverables card (supply and revoke; replacing a delivered value and revoking
+  are for managers). `manage.py rotate_entitlement_keys` re-encrypts stored keys
+  under the primary key so an old encryption key can be retired, and
+  `manage.py check` warns when `ENTITLEMENT_ENCRYPTION_KEYS` is not set (with
+  `DEBUG` on, a development key is derived from `SECRET_KEY`). `cryptography` is
+  now a declared dependency. New tables: `ProductFulfillment` and `Entitlement`.
+  See `STOREFRONT_INTEGRATION.md`.
+
 ### Fixed
 
 - **The back-office payment form re-checks the order before writing.** The form

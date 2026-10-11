@@ -383,9 +383,54 @@
         {% endif %}
         {% endwith %}
 
+        {% if entitlements %}
+        <!-- Deliverables (licence keys, links, instructions owed for this paid order) -->
+        <div class="card">
+          <div class="card-header"><div class="card-title">{% trans "Deliverables" %}</div></div>
+          <div class="card-body">
+            {% for e in entitlements %}
+            <div class="info-panel" style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+              <div class="info-row">
+                <span class="td-mono">{{ e.order_item.product.sku }}</span>
+                <span class="badge {% if e.status == 'active' %}badge-paid{% elif e.status == 'revoked' %}badge-cancelled{% else %}badge-pending{% endif %}">{{ e.get_status_display }}</span>
+              </div>
+              <div class="info-row"><span class="info-label">{% trans "Type" %}</span>{{ e.get_kind_display }}{% if e.seats > 1 %} × {{ e.seats }}{% endif %}</div>
+              {% if e.display_value %}<div class="info-row"><span class="info-label">{% trans "Value" %}</span><span class="td-mono" style="word-break:break-all;">{{ e.display_value }}</span></div>{% endif %}
+              {% if e.expires_at %}<div class="info-row"><span class="info-label">{% trans "Expires" %}</span>{{ e.expires_at|date:"M j, Y" }}</div>{% endif %}
+              {% if e.revealed_at %}<div class="info-row"><span class="info-label">{% trans "Revealed" %}</span>{{ e.revealed_at|date:"M j, Y H:i" }}</div>{% endif %}
+              {% if e.status != 'revoked' %}
+              {% if e.status == 'pending' or user.role.name == 'Manager' or user.role.name == 'Admin' %}
+              <div style="margin-top:8px;display:flex;gap:6px;">
+                <input type="text" name="value" form="supply-{{ e.pk }}" class="form-control" autocomplete="off" required
+                  placeholder="{% if e.status == 'pending' %}{% trans 'Value to deliver' %}{% else %}{% trans 'New value' %}{% endif %}">
+                <button type="submit" form="supply-{{ e.pk }}" class="btn btn-primary btn-sm">{% if e.status == 'pending' %}{% trans "Supply" %}{% else %}{% trans "Replace" %}{% endif %}</button>
+              </div>
+              {% endif %}
+              {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
+              <button type="submit" form="revoke-{{ e.pk }}" class="btn btn-danger btn-sm" style="margin-top:6px;"
+                onclick="return confirm('{% trans "Revoke this delivery? The customer will no longer be able to read it." %}');">{% trans "Revoke" %}</button>
+              {% endif %}
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
       </div>
     </div>
   </form>
+
+  {# Declared outside the order form, which the deliverables card sits inside. #}
+  {# Only the forms this user's controls point at: the same conditions as the card. #}
+  {% for e in entitlements %}{% if e.status != 'revoked' %}
+  {% if e.status == 'pending' or user.role.name == 'Manager' or user.role.name == 'Admin' %}
+  <form id="supply-{{ e.pk }}" method="post" action="{% url 'entitlement-supply' order.pk e.pk %}">{% csrf_token %}</form>
+  {% endif %}
+  {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
+  <form id="revoke-{{ e.pk }}" method="post" action="{% url 'entitlement-revoke' order.pk e.pk %}">{% csrf_token %}</form>
+  {% endif %}
+  {% endif %}{% endfor %}
 </div>
 {% endblock %}
 

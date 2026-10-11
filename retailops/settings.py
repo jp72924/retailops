@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import os
 from pathlib import Path
 
@@ -65,6 +67,36 @@ if not DEBUG and SECRET_KEY == _SECRET_KEY_DEFAULT:
         'DJANGO_SECRET_KEY environment variable must be set to a strong random '
         'value before running with DEBUG=False.'
     )
+
+# ── Entitlement encryption ────────────────────────────────────────────────────
+# Licence keys delivered to customers are stored encrypted.
+# ENTITLEMENT_ENCRYPTION_KEYS is a comma-separated list of Fernet keys: the first
+# encrypts and every one decrypts, so a key is retired by putting the new one first,
+# running `manage.py rotate_entitlement_keys`, and only then dropping the old one.
+# Generate one with:
+#   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+# With DEBUG on and none set, a development key is derived from SECRET_KEY so the
+# feature works locally. Production has no fallback; `manage.py check` warns.
+
+def _entitlement_keys(env):
+    from cryptography.fernet import Fernet
+
+    keys = _csv_env(env, 'ENTITLEMENT_ENCRYPTION_KEYS')
+    for key in keys:
+        try:
+            Fernet(key)
+        except ValueError as exc:
+            raise RuntimeError(
+                'ENTITLEMENT_ENCRYPTION_KEYS must be comma-separated Fernet keys '
+                '(32 url-safe base64-encoded bytes each).'
+            ) from exc
+    if not keys and DEBUG:
+        digest = hashlib.sha256(SECRET_KEY.encode()).digest()
+        keys = [base64.urlsafe_b64encode(digest).decode()]
+    return keys
+
+
+ENTITLEMENT_ENCRYPTION_KEYS = _entitlement_keys(os.environ)
 
 _allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = (
@@ -566,6 +598,7 @@ REST_FRAMEWORK = {
         'storefront_read':  '300/min',
         'storefront_order': '60/min',
         'storefront_payment': '30/min',   # each one can cost an OCR call
+        'storefront_entitlement': '60/min',  # supplying and revealing delivered keys
     },
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }

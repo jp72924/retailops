@@ -101,6 +101,11 @@ urlpatterns = [
     # Manager or Admin: Confirmed → Cancelled  (also restores reserved stock)
     path('orders/<int:pk>/cancel/', views.order_cancel, name='order-cancel'),
 
+    # POST /orders/<pk>/entitlements/<id>/supply|revoke/  — what a paid order delivers
+    path('orders/<int:pk>/entitlements/<int:entitlement_pk>/supply/', views.entitlement_supply, name='entitlement-supply'),
+    path('orders/<int:pk>/entitlements/<int:entitlement_pk>/revoke/', views.entitlement_revoke, name='entitlement-revoke'),
+
+
     # Admin only: Paid → Refunded  (also restores stock)
     path('orders/<int:pk>/refund/', views.order_refund, name='order-refund'),
 
