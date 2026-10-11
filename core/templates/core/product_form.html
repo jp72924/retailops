@@ -239,6 +239,35 @@
       </form>
     </div>
   </div>
+
+  {% if product %}
+  <div class="card" style="max-width:720px;margin-top:16px;">
+    <div class="card-body">
+      <div class="form-section-title">{% trans "Online store" %}</div>
+      {% with variant=product.listing_variant %}
+      {% if variant %}
+        <p style="margin:0 0 12px;">
+          {% blocktrans with slug=variant.listing.slug %}Listed in the online store as “{{ slug }}”.{% endblocktrans %}
+          {% if not variant.listing.is_published %}
+            <span class="badge badge-inactive" style="margin-left:6px;">{% trans "Unpublished" %}</span>
+          {% endif %}
+        </p>
+        {% if user.is_staff %}
+        <a href="{% url 'admin:core_listing_change' variant.listing.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit listing" %}</a>
+        {% endif %}
+      {% else %}
+        <p style="margin:0 0 12px;color:var(--muted);font-size:0.875rem;">
+          {% trans "Publish this product to the catalogue that online stores read. Its text, variants and badge can be edited afterwards." %}
+        </p>
+        <form method="post" action="{% url 'product-publish' product.pk %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-primary btn-sm">{% trans "Publish to store" %}</button>
+        </form>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
 

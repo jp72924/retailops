@@ -133,6 +133,9 @@ urlpatterns = [
     # POST /inventory/products/<pk>/edit/  — update product; redirect to inventory-list
     path('inventory/products/<int:pk>/edit/', views.product_edit, name='product-edit'),
 
+    # POST /inventory/products/<pk>/publish/  — list the product in the online store catalogue
+    path('inventory/products/<int:pk>/publish/', views.product_publish, name='product-publish'),
+
     # GET /inventory/products/<pk>/movements/  — JSON: movement history for slide-in panel
     path('inventory/products/<int:pk>/movements/', views.product_movements, name='product-movements'),
 

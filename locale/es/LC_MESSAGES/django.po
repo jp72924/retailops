@@ -1520,3 +1520,45 @@ msgstr "%(sku)s no controla inventario, por lo que su stock no se puede ajustar.
 
 msgid "Untracked products can always be sold; no stock is counted or deducted."
 msgstr "Los productos sin control de inventario siempre se pueden vender; no se cuenta ni se descuenta stock."
+
+msgid "Channel"
+msgstr "Canal"
+
+msgid "Online store"
+msgstr "Tienda en línea"
+
+msgid "Listed in the online store as “%(slug)s”."
+msgstr "Publicado en la tienda en línea como “%(slug)s”."
+
+msgid "Unpublished"
+msgstr "No publicado"
+
+msgid "Edit listing"
+msgstr "Editar ficha"
+
+msgid "Publish this product to the catalogue that online stores read. Its text, variants and badge can be edited afterwards."
+msgstr "Publique este producto en el catálogo que leen las tiendas en línea. Su texto, variantes e insignia se pueden editar después."
+
+msgid "Publish to store"
+msgstr "Publicar en tienda"
+
+msgid "%(sku)s is already in the online store catalogue."
+msgstr "%(sku)s ya está en el catálogo de la tienda en línea."
+
+msgid "%(sku)s was published to the online store."
+msgstr "%(sku)s se publicó en la tienda en línea."
+
+msgid "%(sku)s was listed, but it will not appear in the online store until the product is active."
+msgstr "%(sku)s se añadió al catálogo, pero no aparecerá en la tienda en línea hasta que el producto esté activo."
+
+msgid "A list of short selling points."
+msgstr "Una lista de puntos de venta breves."
+
+msgid "How the storefront groups it, for example \"license\" or \"subscription\"."
+msgstr "Cómo lo agrupa la tienda, por ejemplo \"license\" o \"subscription\"."
+
+msgid "Free-form details such as platform, activation or delivery."
+msgstr "Detalles libres como plataforma, activación o entrega."
+
+msgid "Shown struck through next to the price; ignored unless higher than the price."
+msgstr "Se muestra tachado junto al precio; se ignora si no es mayor que el precio."
