@@ -11,6 +11,13 @@ from api.throttling import InventoryAdjustRateThrottle
 from api.serializers.inventory import InventoryMovementSerializer, ManualAdjustmentSerializer
 
 
+def _not_tracked_payload(product):
+    return {
+        'error': f'{product.sku} does not track inventory, so its stock cannot be adjusted.',
+        'code': 'inventory_not_tracked',
+    }
+
+
 class InventoryMovementViewSet(
     mixins.RetrieveModelMixin,
     mixins.ListModelMixin,
@@ -81,9 +88,19 @@ class InventoryMovementViewSet(
         movement_type is fixed to 'adjustment'.
         reference_type is fixed to 'ManualAdjustment'.
         reference_id is set to 0 (no external document reference).
+
+        A product that does not track inventory has no stock to adjust:
+        400 inventory_not_tracked.
         """
         serializer = ManualAdjustmentSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        product = serializer.validated_data['product']
+        if not product.track_inventory:
+            return Response(
+                _not_tracked_payload(product),
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         movement = serializer.save(created_by=request.user)
 
@@ -116,6 +133,8 @@ class InventoryMovementViewSet(
 
         Each adjustment follows the same rules as POST /inventory/adjust/:
           - quantity must be a non-zero integer
+          - a product that does not track inventory fails with
+            "code": "inventory_not_tracked"
           - movement_type is fixed to "adjustment"
           - reference_type is fixed to "ManualAdjustment"
 
@@ -156,6 +175,9 @@ class InventoryMovementViewSet(
                 product = Product.objects.get(pk=product_id)
             except Product.DoesNotExist:
                 failed.append({'product_id': product_id, 'error': 'Product not found.'})
+                continue
+            if not product.track_inventory:
+                failed.append({'product_id': product_id, **_not_tracked_payload(product)})
                 continue
 
             try:

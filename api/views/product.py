@@ -66,7 +66,10 @@ class ProductViewSet(
       ?category=<id>       filter by category FK
       ?is_active=true|false
       ?unit_of_measure=piece|kg|liter|meter|box|pack
-      ?stock=out|low|ok|all   annotation-backed; no extra queries
+      ?kind=physical|digital|service
+      ?track_inventory=true|false
+      ?stock=out|low|ok|all   annotation-backed; no extra queries;
+                              untracked products count as ok
 
     Search (DRF SearchFilter):
       ?search=<term>       matches sku, name, description

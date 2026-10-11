@@ -76,6 +76,33 @@
   `?status=` on `GET /api/v1/payments/`. Clients that branch on every status
   value (RetailOps CLI, the MCP server) should expect it.
 
+- **Products can be sold without a stock limit.** A licence, a subscription or a
+  service has no stock to run out of, but every product used to: with no
+  inventory movements it read as 0 in stock, every sale path refused it with
+  `insufficient_stock`, and the back-office listed it as out of stock.
+  Products gain `kind` (`physical`, `digital` or `service`) and
+  `track_inventory`. They are independent: `kind` only classifies, and
+  `track_inventory` alone decides whether stock exists, so a limited-run digital
+  product can track stock and a made-to-order physical one need not. Existing
+  products stay physical and tracked.
+
+  A product that does not track inventory is never locked, checked or deducted
+  when an order is confirmed, so an order made only of such products takes no
+  stock locks at all. Its `current_stock` is `null`, it is never low or out of
+  stock, `?stock=ok` includes it, and `?kind=` and `?track_inventory=` filter on
+  the new fields. Manual adjustments for it are refused with
+  `400 inventory_not_tracked`. The product form gains the type and a "Track
+  inventory" switch, and the inventory page shows "Unlimited".
+
+  The kiosk does not list or sell these products: Konteo Express reads a null
+  `current_stock` as zero and would refuse the sale, so kiosk search, detail and
+  scan skip them and checkout refuses them as `invalid_product` until the app
+  supports them.
+
+  **API:** `current_stock` on products becomes nullable (`int` to `int | null`),
+  which changes the generated OpenAPI type. The CLI and the MCP server show it as
+  empty.
+
 ### Fixed
 
 - **The back-office payment form re-checks the order before writing.** The form
@@ -143,6 +170,16 @@
   `500` rather than a `400`. Both are fixed in the same expression.
 - `mcp_server/prompts/workflows.py` told the agent to collect a reference for
   `mobile_payment` or `bank_transfer` — the wrong method set on both ends.
+
+- **Cancelling or refunding an order gives back only the stock it took.** Both
+  added each line's quantity to stock whatever the order had deducted. An order
+  that never deducted any (one set to Confirmed in the Django admin, say) got
+  back stock it never took, and an order reversed twice got it back twice.
+  Stock is now restored from the order's own inventory movements: it reverses
+  what they still net to, so there is nothing left to give back the second time,
+  and no line for a product that does not track inventory is ever credited. The
+  API and the back-office share one implementation, which locks the order row
+  and re-checks its status first.
 
 ## Initial public backend release
 

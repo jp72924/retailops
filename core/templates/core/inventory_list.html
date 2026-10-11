@@ -108,22 +108,30 @@
           <td style="color:var(--muted);">{{ product.get_unit_of_measure_display }}</td>
           <td>{{ product.unit_price|currency }}</td>
           <td>
-            {% if product.current_stock <= 0 %}
-              <span class="stock-out">{{ product.current_stock }}</span>
-            {% elif product.is_low_stock %}
-              <span class="stock-low">{{ product.current_stock }}</span>
+            {% if not product.track_inventory %}
+              <span class="stock-ok">{% trans "Unlimited" %}</span>
             {% else %}
-              <span class="stock-ok">{{ product.current_stock }}</span>
+              {% with stock=product.current_stock %}
+              {% if stock <= 0 %}
+                <span class="stock-out">{{ stock }}</span>
+              {% elif stock <= product.low_stock_threshold %}
+                <span class="stock-low">{{ stock }}</span>
+              {% else %}
+                <span class="stock-ok">{{ stock }}</span>
+              {% endif %}
+              {% endwith %}
+              <span style="font-size:0.75rem;color:var(--muted);">{% blocktrans with threshold=product.low_stock_threshold %}(min: {{ threshold }}){% endblocktrans %}</span>
             {% endif %}
-            <span style="font-size:0.75rem;color:var(--muted);">{% blocktrans with threshold=product.low_stock_threshold %}(min: {{ threshold }}){% endblocktrans %}</span>
           </td>
           <td class="td-actions">
             {% if user.role.name == 'Manager' or user.role.name == 'Admin' %}
             <a href="{% url 'product-edit' product.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
+            {% if product.track_inventory %}
             <button type="button" class="btn btn-secondary btn-sm"
               onclick="openAdjustModal({{ product.pk }}, '{{ product.sku|escapejs }} — {{ product.name|escapejs }}')">
               {% trans "Adjust" %}
             </button>
+            {% endif %}
             {% endif %}
             <button type="button" class="btn btn-ghost btn-sm"
               onclick="loadMovements({{ product.pk }}, '{{ product.sku|escapejs }} — {{ product.name|escapejs }}')">
@@ -171,9 +179,9 @@
           <label class="form-label" for="adjust-product-select">{% trans "Product" %} <span style="color:var(--danger)">*</span></label>
           <select id="adjust-product-select" class="form-control" required>
             <option value="">{% trans "— Select product —" %}</option>
-            {% for product in products %}
+            {% for product in products %}{% if product.track_inventory %}
             <option value="{{ product.pk }}">{{ product.sku }} — {{ product.name }}</option>
-            {% endfor %}
+            {% endif %}{% endfor %}
           </select>
           <div id="adjust-product-name" style="font-size:0.85rem;color:var(--muted);margin-top:6px;"></div>
         </div>
@@ -261,9 +269,12 @@
       .then(r => r.json())
       .then(data => {
         const { product, movements } = data;
+        const stock = product.current_stock;
+        const stockColor = stock === null ? 'var(--success)'
+          : stock <= 0 ? 'var(--danger)' : stock <= 10 ? 'var(--warning)' : 'var(--success)';
         let html = `<div style="font-size:0.8rem;color:var(--muted);margin-bottom:12px;">
-          {% trans "Current stock:" %} <strong style="color:${product.current_stock <= 0 ? 'var(--danger)' : product.current_stock <= 10 ? 'var(--warning)' : 'var(--success)'}">
-            ${product.current_stock}
+          {% trans "Current stock:" %} <strong style="color:${stockColor}">
+            ${stock === null ? '{% trans "Unlimited" %}' : stock}
           </strong></div>`;
         if (movements.length === 0) {
           html += '<div style="color:var(--muted);font-style:italic;">{% trans "No movements recorded." %}</div>';

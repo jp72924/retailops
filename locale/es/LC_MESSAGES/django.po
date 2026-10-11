@@ -1395,11 +1395,11 @@ msgstr "El producto %(label)s aparece en más de una línea. Combínelas en una 
 msgid "Keep Order"
 msgstr "Conservar pedido"
 
-msgid "The order moves to Cancelled and every line item's stock is returned to inventory. This cannot be undone."
-msgstr "El pedido pasa a Cancelado y el stock de cada línea se devuelve al inventario. Esta acción no se puede deshacer."
+msgid "The order moves to Cancelled and the stock it took is returned to inventory. This cannot be undone."
+msgstr "El pedido pasa a Cancelado y el stock que descontó se devuelve al inventario. Esta acción no se puede deshacer."
 
-msgid "The order moves to Refunded and every line item's stock is returned to inventory. This cannot be undone, and no money is transferred — record the actual refund with your payment provider separately."
-msgstr "El pedido pasa a Reembolsado y el stock de cada línea se devuelve al inventario. Esta acción no se puede deshacer, y no se transfiere dinero — registre el reembolso real con su proveedor de pagos por separado."
+msgid "The order moves to Refunded and the stock it took is returned to inventory. This cannot be undone, and no money is transferred — record the actual refund with your payment provider separately."
+msgstr "El pedido pasa a Reembolsado y el stock que descontó se devuelve al inventario. Esta acción no se puede deshacer, y no se transfiere dinero — registre el reembolso real con su proveedor de pagos por separado."
 
 # ── "Back to …" navigation links ──────────────────────────────────────────────
 msgid "Back to Orders"
@@ -1493,3 +1493,30 @@ msgstr "Pago %(payment)s aprobado."
 
 msgid "Payment %(payment)s rejected."
 msgstr "Pago %(payment)s rechazado."
+
+msgid "Unlimited"
+msgstr "Ilimitado"
+
+msgid "Physical"
+msgstr "Físico"
+
+msgid "Digital"
+msgstr "Digital"
+
+msgid "Service"
+msgstr "Servicio"
+
+msgid "Product Type"
+msgstr "Tipo de producto"
+
+msgid "Track inventory (stock is counted and can run out)"
+msgstr "Controlar inventario (el stock se cuenta y puede agotarse)"
+
+msgid "Turn off for licences, subscriptions and services: they can always be sold and never show as low or out of stock. Stock already recorded is kept."
+msgstr "Desactívelo para licencias, suscripciones y servicios: siempre se pueden vender y nunca aparecen con stock bajo ni agotado. El stock ya registrado se conserva."
+
+msgid "%(sku)s does not track inventory, so its stock cannot be adjusted."
+msgstr "%(sku)s no controla inventario, por lo que su stock no se puede ajustar."
+
+msgid "Untracked products can always be sold; no stock is counted or deducted."
+msgstr "Los productos sin control de inventario siempre se pueden vender; no se cuenta ni se descuenta stock."

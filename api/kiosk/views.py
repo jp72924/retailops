@@ -107,6 +107,22 @@ class KioskRegisterView(KioskAPIMixin, APIView):
 
 # ── Product search ────────────────────────────────────────────────────────────
 
+def _kiosk_products():
+    """
+    Products a kiosk may show and sell: active, physical, and stock-tracked.
+
+    Konteo Express reads a null current_stock as zero and would refuse to sell
+    an untracked product, and a licence or a service has no place on a
+    self-checkout shelf. Until the app handles both, the kiosk does not see
+    them; its checkout refuses them as it does any unknown SKU.
+    """
+    return Product.objects.filter(is_active=True, kind=Product.PHYSICAL, track_inventory=True)
+
+
+def _kiosk_sellable(product):
+    return product.is_active and product.kind == Product.PHYSICAL and product.track_inventory
+
+
 class KioskProductSearchView(KioskAPIMixin, APIView):
     """
     GET /api/v1/kiosk/products/           — return up to 6 active products
@@ -116,7 +132,7 @@ class KioskProductSearchView(KioskAPIMixin, APIView):
 
     def get(self, request):
         q = request.query_params.get('search', '').strip()
-        qs = Product.objects.filter(is_active=True)
+        qs = _kiosk_products()
         if q:
             qs = qs.filter(Q(name__icontains=q) | Q(sku__icontains=q))
         products = qs.order_by('name')[:6]
@@ -134,7 +150,7 @@ class KioskProductDetailView(KioskAPIMixin, APIView):
 
     def get(self, request, pk):
         try:
-            product = Product.objects.get(pk=pk, is_active=True)
+            product = _kiosk_products().get(pk=pk)
         except Product.DoesNotExist:
             return Response(
                 {'error': 'Product not found', 'code': 'not_found'},
@@ -151,7 +167,7 @@ class KioskProductLookupView(KioskAPIMixin, APIView):
 
     def get(self, request, sku):
         try:
-            product = Product.objects.get(sku=sku, is_active=True)
+            product = _kiosk_products().get(sku=sku)
         except Product.DoesNotExist:
             return Response(
                 {'error': 'Product not found', 'code': 'not_found'},
@@ -489,9 +505,7 @@ def _resolve_products(items, *, lock=False):
     """
     found = {
         product.sku: product
-        for product in Product.objects.filter(
-            sku__in=[item['sku'] for item in items], is_active=True,
-        )
+        for product in _kiosk_products().filter(sku__in=[item['sku'] for item in items])
     }
     # Report the first unavailable SKU in cart order, as before.
     for item in items:
@@ -506,8 +520,8 @@ def _resolve_products(items, *, lock=False):
     products = {}
     for item in items:
         product = locked.get(found[item['sku']].pk)
-        # Deactivated between the read above and the lock: no longer for sale.
-        if product is None or not product.is_active:
+        # Changed between the read above and the lock: no longer for sale here.
+        if product is None or not _kiosk_sellable(product):
             raise _InvalidProductError(
                 f"Product not found or inactive: {item['sku']}"
             )

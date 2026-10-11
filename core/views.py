@@ -19,12 +19,13 @@ from django.utils.translation import gettext as _
 from django.views.decorators.http import require_POST
 
 from .decorators import role_required
-from .exceptions import EmptyOrderError, InsufficientStockError
+from .exceptions import EmptyOrderError, InsufficientStockError, OrderStateError
 from .services.customers import (
     check_national_id,
     normalized_national_id_expr,
 )
 from .services.currency import attach_order_amounts, order_amounts
+from .services.orders import cancel_order, refund_order
 from .services.payments import (
     OrderNotPayableError,
     PaymentReviewError,
@@ -146,9 +147,11 @@ def dashboard(request):
 
     pending_payments_count = SalesOrder.objects.filter(status=SalesOrder.CONFIRMED).count()
 
-    # current_stock is a computed property — evaluate in Python after prefetch
+    # current_stock is a computed property — evaluate in Python after prefetch.
+    # Products that do not track inventory cannot run low.
     all_products = list(
-        Product.objects.prefetch_related('inventory_movements').select_related('category')
+        Product.objects.filter(track_inventory=True)
+        .prefetch_related('inventory_movements').select_related('category')
     )
     low_stock_products = [p for p in all_products if p.is_low_stock or p.is_out_of_stock]
 
@@ -911,24 +914,14 @@ def order_cancel(request, pk):
     """
     POST: Confirmed → Cancelled.
     Allowed roles: Manager, Admin.
-    Side-effect: creates InventoryMovement records restoring reserved stock for each line item.
+    Side-effect: returns the stock the order took (see core.services.orders).
     """
     order = get_object_or_404(SalesOrder, pk=pk, status=SalesOrder.CONFIRMED)
-
-    with transaction.atomic():
-        order.status = SalesOrder.CANCELLED
-        order.save()
-
-        for item in order.items.select_related('product').all():
-            InventoryMovement.objects.create(
-                product=item.product,
-                movement_type=InventoryMovement.RETURN,
-                quantity=item.quantity,
-                reference_type=InventoryMovement.SALES_ORDER,
-                reference_id=order.pk,
-                notes=f'Stock restored on cancellation of {order.order_number}',
-                created_by=request.user,
-            )
+    try:
+        cancel_order(order, request.user)
+    except OrderStateError as exc:
+        messages.error(request, str(exc))
+        return redirect('order-detail', pk=pk)
 
     messages.success(request, f'{order.order_number} cancelled.')
     return redirect('order-detail', pk=pk)
@@ -940,24 +933,14 @@ def order_refund(request, pk):
     """
     POST: Paid → Refunded.
     Allowed roles: Admin only.
-    Side-effect: creates InventoryMovement records adding stock back per line item.
+    Side-effect: returns the stock the order took (see core.services.orders).
     """
     order = get_object_or_404(SalesOrder, pk=pk, status=SalesOrder.PAID)
-
-    with transaction.atomic():
-        order.status = SalesOrder.REFUNDED
-        order.save()
-
-        for item in order.items.select_related('product').all():
-            InventoryMovement.objects.create(
-                product=item.product,
-                movement_type=InventoryMovement.RETURN,
-                quantity=item.quantity,
-                reference_type=InventoryMovement.SALES_ORDER,
-                reference_id=order.pk,
-                notes=f'Stock restored on refund of {order.order_number}',
-                created_by=request.user,
-            )
+    try:
+        refund_order(order, request.user)
+    except OrderStateError as exc:
+        messages.error(request, str(exc))
+        return redirect('order-detail', pk=pk)
 
     messages.success(request, f'{order.order_number} marked as refunded.')
     return redirect('order-detail', pk=pk)
@@ -1239,6 +1222,7 @@ def _merge_product_validation_errors(errors, exc):
         target = field if field in {
             'sku', 'name', 'category', 'unit_of_measure', 'unit_price',
             'low_stock_threshold', 'image', 'external_image_url', 'is_active',
+            'kind',
         } else 'image'
         errors[target] = ' '.join(str(message) for message in messages_)
 
@@ -1263,6 +1247,8 @@ def product_create(request):
         image_upload = request.FILES.get('image')
         external_image_url = data.get('external_image_url', '').strip()
         is_active   = data.get('is_active') == '1'
+        kind        = data.get('kind', Product.PHYSICAL).strip()
+        track_inventory = data.get('track_inventory') == '1'
 
         errors = {}
         category = None
@@ -1282,6 +1268,8 @@ def product_create(request):
         valid_units = [u[0] for u in Product.UNIT_CHOICES]
         if unit_of_measure not in valid_units:
             errors['unit_of_measure'] = 'Please select a valid unit of measure.'
+        if kind not in dict(Product.KIND_CHOICES):
+            errors['kind'] = 'Please select a valid product type.'
         if unit_price <= Decimal('0'):
             errors['unit_price'] = 'Unit price must be greater than zero.'
         try:
@@ -1298,6 +1286,8 @@ def product_create(request):
             'unit_price': str(unit_price), 'low_stock_threshold': low_stock_threshold,
             'external_image_url': external_image_url,
             'is_active': '1' if is_active else '',
+            'kind': kind,
+            'track_inventory': '1' if track_inventory else '',
         }
 
         product = None
@@ -1306,6 +1296,7 @@ def product_create(request):
                 sku=sku, name=name, category=category,
                 unit_of_measure=unit_of_measure, description=description,
                 unit_price=unit_price, low_stock_threshold=threshold,
+                kind=kind, track_inventory=track_inventory,
                 image=image_upload, external_image_url=external_image_url,
                 is_active=is_active,
             )
@@ -1319,6 +1310,7 @@ def product_create(request):
                 'product': None,
                 'categories': ProductCategory.objects.all(),
                 'unit_choices': Product.UNIT_CHOICES,
+                'kind_choices': Product.KIND_CHOICES,
                 'errors': errors,
                 'form_data': form_data,
             })
@@ -1331,8 +1323,9 @@ def product_create(request):
         'product': None,
         'categories': ProductCategory.objects.all(),
         'unit_choices': Product.UNIT_CHOICES,
+        'kind_choices': Product.KIND_CHOICES,
         'errors': {},
-        'form_data': {},
+        'form_data': {'kind': Product.PHYSICAL, 'track_inventory': '1'},
     })
 
 
@@ -1354,11 +1347,13 @@ def product_edit(request, pk):
         unit_of_measure = data.get('unit_of_measure', '').strip()
         description = data.get('description', '').strip()
         unit_price  = _to_decimal(data.get('unit_price', ''))
-        low_stock_threshold = data.get('low_stock_threshold', '10').strip()
+        low_stock_threshold = data.get('low_stock_threshold', str(product.low_stock_threshold)).strip()
         image_upload = request.FILES.get('image')
         external_image_url = data.get('external_image_url', '').strip()
         remove_image = data.get('remove_image') == '1'
         is_active   = data.get('is_active') == '1'
+        kind        = data.get('kind', Product.PHYSICAL).strip()
+        track_inventory = data.get('track_inventory') == '1'
 
         errors = {}
         category = None
@@ -1378,6 +1373,8 @@ def product_edit(request, pk):
         valid_units = [u[0] for u in Product.UNIT_CHOICES]
         if unit_of_measure not in valid_units:
             errors['unit_of_measure'] = 'Please select a valid unit of measure.'
+        if kind not in dict(Product.KIND_CHOICES):
+            errors['kind'] = 'Please select a valid product type.'
         if unit_price <= Decimal('0'):
             errors['unit_price'] = 'Unit price must be greater than zero.'
         try:
@@ -1394,6 +1391,8 @@ def product_edit(request, pk):
             'unit_price': str(unit_price), 'low_stock_threshold': low_stock_threshold,
             'external_image_url': external_image_url,
             'is_active': '1' if is_active else '',
+            'kind': kind,
+            'track_inventory': '1' if track_inventory else '',
         }
 
         old_image_name = product.image.name if product.image else ''
@@ -1407,6 +1406,8 @@ def product_edit(request, pk):
             product.description       = description
             product.unit_price        = unit_price
             product.low_stock_threshold = threshold
+            product.kind              = kind
+            product.track_inventory   = track_inventory
             product.external_image_url = external_image_url
             if remove_image:
                 product.image = None
@@ -1423,6 +1424,7 @@ def product_edit(request, pk):
                 'product': get_object_or_404(Product, pk=pk),
                 'categories': ProductCategory.objects.all(),
                 'unit_choices': Product.UNIT_CHOICES,
+                'kind_choices': Product.KIND_CHOICES,
                 'errors': errors,
                 'form_data': form_data,
             })
@@ -1439,6 +1441,7 @@ def product_edit(request, pk):
         'product': product,
         'categories': ProductCategory.objects.all(),
         'unit_choices': Product.UNIT_CHOICES,
+        'kind_choices': Product.KIND_CHOICES,
         'errors': {},
         'form_data': {
             'sku':                 product.sku,
@@ -1450,6 +1453,8 @@ def product_edit(request, pk):
             'low_stock_threshold': str(product.low_stock_threshold),
             'external_image_url':  product.external_image_url or '',
             'is_active':           '1' if product.is_active else '',
+            'kind':                product.kind,
+            'track_inventory':     '1' if product.track_inventory else '',
         },
     })
 
@@ -1462,7 +1467,8 @@ def product_movements(request, pk):
 
     Response shape:
         {
-          "product": {"sku": str, "name": str, "current_stock": int},
+          "product": {"sku": str, "name": str, "current_stock": int | null,
+                      "track_inventory": bool},
           "movements": [
             {"date": str, "type": str, "quantity": int,
              "reference_type": str, "reference_id": int,
@@ -1482,6 +1488,7 @@ def product_movements(request, pk):
             'sku': product.sku,
             'name': product.name,
             'current_stock': product.current_stock,
+            'track_inventory': product.track_inventory,
         },
         'movements': [
             {
@@ -1744,6 +1751,13 @@ def inventory_adjust(request):
         return redirect('inventory-list')
 
     product = get_object_or_404(Product, pk=int(product_id))
+    if not product.track_inventory:
+        messages.error(
+            request,
+            _('%(sku)s does not track inventory, so its stock cannot be adjusted.')
+            % {'sku': product.sku},
+        )
+        return redirect('inventory-list')
 
     InventoryMovement.objects.create(
         product=product,

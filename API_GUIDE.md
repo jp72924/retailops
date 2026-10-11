@@ -294,7 +294,7 @@ Note the returned `id` (e.g. `14`).
 GET /api/v1/products/?is_active=true&stock=ok
 ```
 
-Each product in the response includes `current_stock`, `is_low_stock`, and `is_out_of_stock`. Note the `id` values for the items you want to order.
+Each product in the response includes `current_stock`, `is_low_stock`, and `is_out_of_stock`. Note the `id` values for the items you want to order. A product that does not track inventory (a licence or a service) has `current_stock: null` and can always be ordered; `stock=ok` includes it.
 
 ---
 
@@ -541,7 +541,7 @@ Summary statistics for the current calendar month. **Any authenticated user.**
 | `orders_this_month` | integer | Total orders created this month |
 | `revenue_this_month` | string (decimal) | Sum of `total_amount` for Paid/Shipped/Delivered orders whose `paid_at` falls within this month |
 | `pending_payments_count` | integer | Confirmed orders not yet paid |
-| `low_stock_count` | integer | Products at or below their `low_stock_threshold`, including out-of-stock |
+| `low_stock_count` | integer | Products at or below their `low_stock_threshold`, including out-of-stock. Products that do not track inventory are never counted |
 | `recent_orders` | array | The 5 most recently created orders (compact representation) |
 
 **`recent_orders` item:**
@@ -740,7 +740,9 @@ Response: [Category object](#category-object).
 | `category` | integer | Filter by category primary key |
 | `is_active` | `true` \| `false` | Filter by active status |
 | `unit_of_measure` | `piece` · `kg` · `liter` · `meter` · `box` · `pack` | Filter by unit |
-| `stock` | `out` · `low` · `ok` · `all` | `out` = stock ≤ 0; `low` = 0 < stock ≤ threshold; `ok` = stock > threshold |
+| `kind` | `physical` · `digital` · `service` | Filter by product type |
+| `track_inventory` | `true` \| `false` | Filter by whether stock is counted |
+| `stock` | `out` · `low` · `ok` · `all` | `out` = tracked and stock ≤ 0; `low` = tracked and 0 < stock ≤ threshold; `ok` = tracked with stock > threshold, **or not tracking inventory**. A product that does not track inventory is never `out` or `low`. |
 
 **Search:** `?search=` matches `sku`, `name`, `description`  
 **Ordering:** `?ordering=name|sku|unit_price|created_at`
@@ -757,12 +759,26 @@ Response: [Category object](#category-object).
 | `category_id` | integer | Yes | Category primary key |
 | `unit_of_measure` | string | Yes | `piece` · `kg` · `liter` · `meter` · `box` · `pack` |
 | `unit_price` | string (decimal) | Yes | Must be > 0 |
-| `low_stock_threshold` | integer | No | Alert level; must be ≥ 0; defaults to 10 |
+| `kind` | string | No | `physical` (default) · `digital` · `service`. Classifies the product; it does not change how stock behaves |
+| `track_inventory` | boolean | No | Defaults to `true`. When `false`, no stock is counted or deducted for the product and it can always be sold — see [Products without stock](#products-without-stock) |
+| `low_stock_threshold` | integer | No | Alert level; must be ≥ 0; defaults to 10. Ignored when `track_inventory` is `false` |
 | `is_active` | boolean | No | Defaults to `true` |
 
 **Read-only fields returned:** `current_stock`, `is_low_stock`, `is_out_of_stock`. These are computed from `InventoryMovement` records — they are not stored columns and cannot be set directly.
 
 Response: [Product object](#product-object).
+
+##### Products without stock
+
+`kind` and `track_inventory` are independent: `kind` only classifies, and `track_inventory` alone decides whether stock exists. A digital product sold in a limited run keeps `track_inventory: true`; a physical product made to order sets it to `false`. Existing products are `physical` with `track_inventory: true`, so nothing changes for them.
+
+For a product with `track_inventory: false`:
+
+- `current_stock` is **`null`** (not `0`), and `is_low_stock` and `is_out_of_stock` are `false`. Clients that read `current_stock` as a number must handle `null`.
+- Confirming an order never checks, locks or deducts its stock. An order made only of such products takes no stock locks at all.
+- Cancelling or refunding gives back only the stock the order actually deducted.
+- Manual adjustments are refused with `400` and code `inventory_not_tracked` (in a bulk adjustment, only that entry fails). Stock recorded before tracking was turned off is kept and comes back if it is turned on again.
+- The kiosk does not list or sell it: kiosk search, detail and scan return nothing for it, and kiosk checkout refuses it with `invalid_product`. The kiosk only shows `physical` products that track inventory.
 
 ---
 
@@ -807,6 +823,8 @@ Inventory movements are **immutable** records. They cannot be updated or deleted
 
 Response `201 Created`: the created [InventoryMovement object](#inventorymovement-object) with `movement_type: "adjustment"` and `reference_type: "ManualAdjustment"`.
 
+A product with `track_inventory: false` has no stock to adjust: `400` with code `inventory_not_tracked`.
+
 ---
 
 #### Bulk adjustment — `POST /api/v1/inventory/bulk-adjust/`
@@ -847,7 +865,7 @@ Each item in the `adjustments` array is processed independently. If one item fai
 }
 ```
 
-A `200` is returned even if all items fail — inspect `failed` to identify errors.
+A `200` is returned even if all items fail — inspect `failed` to identify errors. An entry for a product that does not track inventory fails with `"code": "inventory_not_tracked"`.
 
 ---
 
@@ -867,11 +885,11 @@ Each transition is a separate POST action. Transitions that move stock create `I
 |--------|----------|-----------------|------------|--------------|
 | Create | `POST /api/v1/orders/` | — | Staff+ | None |
 | Submit | `POST /api/v1/orders/{id}/submit/` | `draft` | Staff+ | None |
-| Confirm | `POST /api/v1/orders/{id}/confirm/` | `pending` | Manager+ | Deducts (negative movements) |
+| Confirm | `POST /api/v1/orders/{id}/confirm/` | `pending` | Manager+ | Deducts (negative movements), for products that track inventory |
 | Ship | `POST /api/v1/orders/{id}/ship/` | `paid` | Staff+ | None |
 | Deliver | `POST /api/v1/orders/{id}/deliver/` | `shipped` | Staff+ | None |
-| Cancel | `POST /api/v1/orders/{id}/cancel/` | `confirmed` | Manager+ | Restores (positive movements) |
-| Refund | `POST /api/v1/orders/{id}/refund/` | `paid` | Admin | Restores (positive movements) |
+| Cancel | `POST /api/v1/orders/{id}/cancel/` | `confirmed` | Manager+ | Restores what the order deducted (positive movements) |
+| Refund | `POST /api/v1/orders/{id}/refund/` | `paid` | Admin | Restores what the order deducted (positive movements) |
 | Bulk confirm | `POST /api/v1/orders/bulk-transition/` | `pending` (per order) | Manager+ | Deducts per confirmed order |
 | Bulk ship | `POST /api/v1/orders/bulk-transition/` | `paid` (per order) | Manager+ | None |
 | Bulk deliver | `POST /api/v1/orders/bulk-transition/` | `shipped` (per order) | Manager+ | None |
@@ -1362,6 +1380,8 @@ The JSON response shape:
   },
   "unit_of_measure": "piece",
   "unit_price": "12.99",
+  "kind": "physical",
+  "track_inventory": true,
   "low_stock_threshold": 20,
   "is_active": true,
   "current_stock": 85,
@@ -1373,6 +1393,8 @@ The JSON response shape:
 ```
 
 `category_id` is accepted on write but not returned on read (the nested `category` object is returned instead).
+
+`current_stock` is `null` when `track_inventory` is `false`; see [Products without stock](#products-without-stock).
 
 ### InventoryMovement object
 

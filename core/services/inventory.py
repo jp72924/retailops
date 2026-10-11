@@ -17,6 +17,11 @@ Two properties of this domain shape the implementation:
   Without SELECT FOR UPDATE two concurrent confirmations can each read "5
   available", each deduct 5, and leave the product at -5.  That is why the
   check and the write must happen together, inside one transaction.
+
+Products with ``track_inventory=False`` (a licence, a service) have no stock to
+run out of.  Their lines are dropped before anything is locked or checked, and
+no movement is ever written for them, so an order of only such products takes
+no row locks at all.
 """
 from django.db import models
 
@@ -54,7 +59,7 @@ def assert_stock_available(requirements):
 
     ``requirements`` is an iterable of ``(product, quantity)`` pairs.  Repeated
     products are summed first: two lines for five units each must be checked as
-    ten, not twice as five.
+    ten, not twice as five.  Products that do not track inventory are skipped.
 
     Call this with the product rows already locked (see `lock_products`) if the
     result is about to be acted on.
@@ -62,6 +67,8 @@ def assert_stock_available(requirements):
     needed = {}
     products = {}
     for product, quantity in requirements:
+        if not product.track_inventory:
+            continue
         products[product.pk] = product
         needed[product.pk] = needed.get(product.pk, 0) + quantity
 
@@ -111,8 +118,10 @@ def deduct_stock_for_order(order, user, *, notes=None):
     """
     Lock the order's products, verify stock, and write the SALE movements.
 
-    Returns the created InventoryMovement rows.  Raises InsufficientStockError
-    -- before writing anything -- if any line exceeds what is available.
+    Only lines whose product tracks inventory are locked, checked and
+    deducted.  Returns the created InventoryMovement rows.  Raises
+    InsufficientStockError -- before writing anything -- if any line exceeds
+    what is available.
 
     Must be called inside a transaction: the lock taken here has to be held
     until the caller's status change is committed, or the check it guards is
@@ -120,11 +129,17 @@ def deduct_stock_for_order(order, user, *, notes=None):
     """
     from core.models import InventoryMovement
 
-    items = list(order.items.select_related('product').all())
+    items = [
+        item for item in order.items.select_related('product')
+        if item.product.track_inventory
+    ]
     if not items:
         return []
 
     locked = lock_products(item.product_id for item in items)
+    # Re-read under the lock: a product switched to untracked in the meantime
+    # must not get a movement.
+    items = [item for item in items if locked[item.product_id].track_inventory]
     assert_stock_available(
         (locked[item.product_id], item.quantity) for item in items
     )

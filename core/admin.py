@@ -57,9 +57,9 @@ class ProductCategoryAdmin(admin.ModelAdmin):
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
         'product_thumbnail', 'sku', 'name', 'category', 'unit_of_measure',
-        'unit_price', 'low_stock_threshold', 'is_active',
+        'unit_price', 'kind', 'track_inventory', 'low_stock_threshold', 'is_active',
     )
-    list_filter = ('category', 'unit_of_measure', 'is_active')
+    list_filter = ('category', 'unit_of_measure', 'kind', 'track_inventory', 'is_active')
     search_fields = ('sku', 'name')
     readonly_fields = ('image_preview',)
 

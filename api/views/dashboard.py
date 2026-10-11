@@ -74,6 +74,7 @@ class DashboardView(APIView):
       dashboard view exactly.
     * low_stock_count uses a queryset annotation (_stock) so it is resolved in a
       single SQL query rather than loading every product into Python and iterating.
+      Products that do not track inventory are never counted.
     * recent_orders returns the 5 most recently created orders.
     """
     permission_classes = [IsAuthenticated]
@@ -106,7 +107,7 @@ class DashboardView(APIView):
         # Annotate each product with its net stock, then filter in SQL.
         # This avoids loading every product into Python memory (contrast with
         # the HTML dashboard's list comprehension over all_products).
-        annotated = Product.objects.annotate(
+        annotated = Product.objects.filter(track_inventory=True).annotate(
             _stock=Coalesce(
                 Sum('inventory_movements__quantity'),
                 Value(0, output_field=IntegerField()),
