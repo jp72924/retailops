@@ -61,7 +61,43 @@
   **Run the migrations with the application stopped** — `0023` makes the
   reference mandatory and fails if a payment was created without one mid-deploy.
 
+- **Payments pending review can be approved or rejected.** A payment whose
+  receipt could not be verified automatically was recorded as `pending_review`
+  and then had nowhere to go but the Django admin, where changing its status
+  did not touch the order. Managers and Admins now settle it from the payment's
+  page in the back-office, or with `POST /api/v1/payments/{id}/approve/` and
+  `/reject/`. Approving applies the payment to its order exactly as if it had
+  been recorded confirmed, and can record the bank transaction key the reviewer
+  checked, refusing one already held by another payment. Rejecting requires a
+  reason and leaves the order unchanged. Payments gain `reviewed_by`,
+  `reviewed_at` and `review_notes`.
+
+  `Payment.status` gains a third value, `rejected`, also accepted by
+  `?status=` on `GET /api/v1/payments/`. Clients that branch on every status
+  value (RetailOps CLI, the MCP server) should expect it.
+
 ### Fixed
+
+- **The back-office payment form re-checks the order before writing.** The form
+  is only offered on Confirmed and Paid orders, but the view never checked: a
+  crafted POST could pay a cancelled order back to Paid after its stock had
+  already been restored. The order is now locked and its status re-checked, and
+  anything other than Confirmed or Paid is refused.
+- **An extra payment on a Paid order no longer moves its `paid_at`.** The
+  back-office re-stamped `paid_at` whenever the paid total covered the order, so
+  a late top-up moved the sale into the month it was topped up in.
+- **Concurrent partial payments can no longer leave a covered order
+  Confirmed.** `POST /api/v1/payments/` summed the order's payments without
+  locking it, so two partial payments recorded at the same moment on
+  PostgreSQL could each miss the other and leave a fully paid order unpaid. It
+  also checked the order's status before the write, unlocked. Every path that
+  pays an existing order now locks the order row first and re-checks its status;
+  an order cancelled in the meantime returns `409 order_not_payable`.
+- **Kiosk checkout locks its products in primary-key order.** It locked one
+  product at a time in cart order, while every other stock writer locks in
+  primary-key order. On PostgreSQL, two checkouts holding the same products in
+  opposite orders could deadlock, and one was aborted with a `500` after its
+  receipt had already been read. Error codes are unchanged.
 
 - **Kiosk checkout records the exchange rate its receipt was validated at.** The
   receipt was converted at the rate read before the OCR call, but nothing tied

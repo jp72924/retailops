@@ -69,7 +69,7 @@
           <td><strong>{{ payment.amount|money:payment.currency_snapshot }}</strong></td>
           <td>{{ payment.get_payment_method_display }}</td>
           <td>
-            <span class="badge {% if payment.status == 'confirmed' %}badge-paid{% else %}badge-pending{% endif %}">
+            <span class="badge {% if payment.status == 'confirmed' %}badge-paid{% elif payment.status == 'rejected' %}badge-cancelled{% else %}badge-pending{% endif %}">
               {{ payment.get_status_display }}
             </span>
           </td>

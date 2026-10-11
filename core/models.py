@@ -590,6 +590,7 @@ class Payment(models.Model):
     OTHER = 'other'
     PENDING_REVIEW = 'pending_review'
     CONFIRMED = 'confirmed'
+    REJECTED = 'rejected'
     METHOD_CHOICES = [
         (CASH, _('Cash')),
         (MOBILE_PAYMENT, _('Mobile Payment')),
@@ -601,6 +602,7 @@ class Payment(models.Model):
     STATUS_CHOICES = [
         (PENDING_REVIEW, _('Pending Review')),
         (CONFIRMED, _('Confirmed')),
+        (REJECTED, _('Rejected')),
     ]
 
     payment_number = models.CharField(max_length=30, unique=True, blank=True, editable=False)
@@ -627,6 +629,19 @@ class Payment(models.Model):
         related_name='recorded_payments',
     )
     notes = models.TextField(blank=True)
+    # Who settled a pending_review payment, when, and why. Written only by
+    # core.services.payments.approve_payment / reject_payment, so not editable
+    # in the admin form.
+    reviewed_by = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        editable=False,
+        related_name='reviewed_payments',
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True, editable=False)
+    review_notes = models.TextField(blank=True)
     # The currency and rate in effect when the payment was recorded. Set once
     # in save() and never changed: that is what keeps a payment's value in the
     # secondary currency fixed while the live rate moves. Not indexed — nothing

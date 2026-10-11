@@ -4,8 +4,7 @@ from time import perf_counter
 
 from asgiref.sync import async_to_sync
 from django.db import transaction
-from django.db.models import Sum
-from django.utils import timezone
+from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status
 from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from rest_framework.decorators import action
@@ -33,8 +32,22 @@ from core.services.vepay import (
 from api.filters import PaymentFilter
 from api.kiosk.authentication import KioskTokenAuthentication
 from api.permissions import IsManagerOrAdmin
-from api.serializers.payment import PaymentSerializer, ReceiptVerifySerializer
+from api.serializers.payment import (
+    PaymentApproveSerializer,
+    PaymentRejectSerializer,
+    PaymentSerializer,
+    ReceiptVerifySerializer,
+)
 from api.throttling import OcrVerifyRateThrottle
+from core.services.payments import (
+    OrderNotPayableError,
+    PaymentReviewError,
+    apply_confirmed_payments,
+    approve_payment,
+    lock_payable_order,
+    reject_payment,
+)
+from core.services.receipt_validation import DuplicateTransactionError
 
 
 ALLOWED_RECEIPT_MIME_TYPES = {'image/jpeg', 'image/png', 'image/heic', 'image/heif'}
@@ -68,20 +81,24 @@ class PaymentViewSet(
     """
     Payment recording.
 
-    GET  /api/v1/payments/          paginated list (any auth user)
-    POST /api/v1/payments/          record a payment (any auth user)
-    GET  /api/v1/payments/<id>/     retrieve (any auth user)
+    GET  /api/v1/payments/                paginated list (any auth user)
+    POST /api/v1/payments/                record a payment (any auth user)
+    GET  /api/v1/payments/<id>/           retrieve (any auth user)
+    POST /api/v1/payments/<id>/approve/   confirm a pending_review payment (Manager+)
+    POST /api/v1/payments/<id>/reject/    reject a pending_review payment (Manager+)
 
-    Payments cannot be updated or deleted (immutable financial records).
+    Payments cannot be edited or deleted (immutable financial records); a
+    pending_review payment is settled only through approve or reject.
 
-    Creating a payment against a Confirmed order automatically transitions
-    the order to Paid once total_paid >= order.total_amount.
+    Creating or approving a payment applies it to the order through
+    core.services.payments: a Confirmed order becomes Paid once confirmed
+    payments cover its total.
 
     Filtering:
       ?sales_order=<id>
       ?payment_method=cash|mobile_payment|bank_transfer|card|check|other
       ?method=cash|mobile_payment|bank_transfer|card|check|other
-      ?status=confirmed|pending_review
+      ?status=confirmed|pending_review|rejected
       ?has_receipt=true|false
       ?bank=<partial bank name>
       ?date_from=YYYY-MM-DD
@@ -99,10 +116,15 @@ class PaymentViewSet(
     ordering         = ['-created_at']
 
     def get_permissions(self):
-        if getattr(self, 'action', None) == 'verify_receipt':
+        # Overriding get_permissions replaces any permission_classes given to
+        # an @action, so every action's rule lives here.
+        action_name = getattr(self, 'action', None)
+        if action_name == 'verify_receipt':
             return [IsAuthenticated(), IsManagerOrAdminOrKiosk()]
-        if getattr(self, 'action', None) == 'receipt_healthz':
+        if action_name == 'receipt_healthz':
             return [IsAuthenticated(), IsManagerOrAdmin()]
+        if action_name in ('approve', 'reject'):
+            return [IsAuthenticated(), IsNotKioskStation(), IsManagerOrAdmin()]
         return [IsAuthenticated(), IsNotKioskStation()]
 
     def get_throttles(self):
@@ -119,35 +141,33 @@ class PaymentViewSet(
             .order_by('-created_at')
         )
 
-    @transaction.atomic
     def perform_create(self, serializer):
         """
-        Save the payment then check whether the order should auto-transition
-        to Paid.  Both writes happen inside a single transaction so the order
-        status can never be left inconsistent if the payment save fails.
+        Record the payment and apply it to its order in one transaction.
+
+        The order row is locked before the payment is written, and its status
+        is checked again under the lock: the serializer's check ran before the
+        lock, and the order may have been cancelled since.
         """
-        payment = serializer.save(recorded_by=self.request.user)
-        order   = payment.sales_order
-
-        # Re-read total_paid inside the same transaction (with a lock) so
-        # concurrent payment requests don't both trigger the transition.
-        if payment.status == Payment.CONFIRMED:
-            total_paid = (
-                Payment.objects
-                .filter(sales_order=order, status=Payment.CONFIRMED)
-                .select_for_update()
-                .aggregate(total=Sum('amount'))
-            )['total'] or Decimal('0.00')
-
-            if total_paid >= order.total_amount:
-                order.status  = SalesOrder.PAID
-                order.paid_at = timezone.now()
-                order.save(update_fields=['status', 'paid_at', 'updated_at'])
+        with transaction.atomic():
+            order = lock_payable_order(
+                serializer.validated_data['sales_order'].pk,
+                allowed={SalesOrder.CONFIRMED},
+            )
+            payment = serializer.save(recorded_by=self.request.user, sales_order=order)
+            if payment.status == Payment.CONFIRMED:
+                apply_confirmed_payments(order)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_create(serializer)
+        try:
+            self.perform_create(serializer)
+        except OrderNotPayableError as exc:
+            return Response(
+                {'error': str(exc), 'code': exc.code},
+                status=status.HTTP_409_CONFLICT,
+            )
         # Re-read from DB to get the generated payment_number
         instance = Payment.objects.select_related(
             'sales_order', 'sales_order__customer', 'recorded_by', 'currency_snapshot',
@@ -156,6 +176,63 @@ class PaymentViewSet(
             PaymentSerializer(instance).data,
             status=status.HTTP_201_CREATED,
         )
+
+    @extend_schema(request=PaymentApproveSerializer, responses=PaymentSerializer)
+    @action(detail=True, methods=['post'], url_path='approve')
+    def approve(self, request, pk=None):
+        """
+        POST /api/v1/payments/<id>/approve/
+
+        Confirm a payment pending review and apply it to its order: a
+        Confirmed order that is now covered becomes Paid; a Shipped or
+        Delivered order (a kiosk sale) just gets its paid_at.
+        """
+        payment = self.get_object()
+        serializer = PaymentApproveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            approve_payment(
+                payment,
+                user=request.user,
+                notes=serializer.validated_data['notes'],
+                transaction_key=serializer.validated_data['transaction_key'],
+            )
+        except DuplicateTransactionError as exc:
+            return Response(
+                {
+                    'error': 'This receipt transaction has already been recorded.',
+                    'code': 'duplicate_transaction',
+                    'details': {'transaction_key': exc.transaction_key},
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        except (PaymentReviewError, OrderNotPayableError) as exc:
+            return Response(
+                {'error': str(exc), 'code': exc.code},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(PaymentSerializer(self.get_queryset().get(pk=payment.pk)).data)
+
+    @extend_schema(request=PaymentRejectSerializer, responses=PaymentSerializer)
+    @action(detail=True, methods=['post'], url_path='reject')
+    def reject(self, request, pk=None):
+        """
+        POST /api/v1/payments/<id>/reject/
+
+        Reject a payment pending review. The order is left unchanged. A reason
+        in `notes` is required.
+        """
+        payment = self.get_object()
+        serializer = PaymentRejectSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            reject_payment(payment, user=request.user, notes=serializer.validated_data['notes'])
+        except PaymentReviewError as exc:
+            return Response(
+                {'error': str(exc), 'code': exc.code},
+                status=status.HTTP_409_CONFLICT,
+            )
+        return Response(PaymentSerializer(self.get_queryset().get(pk=payment.pk)).data)
 
     @action(
         detail=False,

@@ -63,7 +63,7 @@ class PaymentFilter(django_filters.FilterSet):
       ?sales_order=<id>
       ?payment_method=cash|bank_transfer|card|check|other
       ?method=cash|mobile_payment|bank_transfer|card|check|other
-      ?status=confirmed|pending_review
+      ?status=confirmed|pending_review|rejected
       ?has_receipt=true|false
       ?bank=<partial bank name>
       ?date_from=YYYY-MM-DD

@@ -213,7 +213,7 @@ class KioskCurrencyTests(APITestCase):
                     settings.save()
                 return payload
             return run
-        return patch('api.kiosk.views.async_to_sync', fake_async_to_sync)
+        return patch('core.services.receipt_validation.async_to_sync', fake_async_to_sync)
 
     def test_the_rate_that_validated_the_receipt_is_the_rate_recorded(self):
         # 500 VES is 10.00 USD at the rate in effect when checkout began (50),

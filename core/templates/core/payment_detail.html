@@ -27,6 +27,10 @@
               <span class="td-mono">{{ payment.payment_number }}</span>
             </div>
             <div class="info-row">
+              <span class="info-label">{% trans "Status" %}</span>
+              <span class="badge {% if payment.status == 'confirmed' %}badge-paid{% elif payment.status == 'rejected' %}badge-cancelled{% else %}badge-pending{% endif %}">{{ payment.get_status_display }}</span>
+            </div>
+            <div class="info-row">
               <span class="info-label">{% trans "Amount" %}</span>
               <strong style="font-size:1.1rem;">{{ payment.amount|money:payment.currency_snapshot }}</strong>
             </div>
@@ -73,9 +77,55 @@
               {{ payment.notes }}
             </div>
             {% endif %}
+            {% if payment.reviewed_at %}
+            <div class="info-row">
+              <span class="info-label">{% trans "Reviewed By" %}</span>
+              <span>
+                {{ payment.reviewed_by.get_full_name }}
+                <span class="currency-secondary" style="display:block;">{{ payment.reviewed_at|date:"M j, Y g:i A" }}</span>
+              </span>
+            </div>
+            {% if payment.review_notes %}
+            <div class="info-row">
+              <span class="info-label">{% trans "Review Notes" %}</span>
+              {{ payment.review_notes }}
+            </div>
+            {% endif %}
+            {% endif %}
           </div>
         </div>
       </div>
+
+      {% if payment.status == 'pending_review' and user.role.name in 'Manager,Admin' %}
+      <!-- Review -->
+      <div class="card">
+        <div class="card-header"><div class="card-title">{% trans "Review Payment" %}</div></div>
+        <div class="card-body" style="display:flex;flex-direction:column;gap:20px;">
+          <form method="post" action="{% url 'payment-approve' payment.pk %}" style="display:flex;flex-direction:column;gap:12px;">
+            {% csrf_token %}
+            {% if not payment.transaction_key %}
+            <div class="form-group">
+              <label class="form-label" for="id_transaction_key">{% trans "Bank transaction key (optional)" %}</label>
+              <input type="text" id="id_transaction_key" name="transaction_key" class="form-control" maxlength="128">
+            </div>
+            {% endif %}
+            <div class="form-group">
+              <label class="form-label" for="id_approve_notes">{% trans "Notes (optional)" %}</label>
+              <input type="text" id="id_approve_notes" name="review_notes" class="form-control">
+            </div>
+            <div><button type="submit" class="btn btn-success btn-sm">{% trans "Approve Payment" %}</button></div>
+          </form>
+          <form method="post" action="{% url 'payment-reject' payment.pk %}" style="display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--border);padding-top:16px;">
+            {% csrf_token %}
+            <div class="form-group">
+              <label class="form-label" for="id_reject_notes">{% trans "Reason for rejection" %}<span class="req">*</span></label>
+              <textarea id="id_reject_notes" name="review_notes" class="form-control" required></textarea>
+            </div>
+            <div><button type="submit" class="btn btn-danger btn-sm">{% trans "Reject Payment" %}</button></div>
+          </form>
+        </div>
+      </div>
+      {% endif %}
     </div>
 
     <div style="display:flex;flex-direction:column;gap:24px;">

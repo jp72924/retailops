@@ -57,6 +57,27 @@ class ReceiptVerifySerializer(serializers.Serializer):
         return attrs
 
 
+class PaymentApproveSerializer(serializers.Serializer):
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+    transaction_key = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        max_length=128,
+        help_text=(
+            "The bank's transaction key, if the reviewer checked it by hand. "
+            'Refused if another payment already holds it.'
+        ),
+    )
+
+
+class PaymentRejectSerializer(serializers.Serializer):
+    notes = serializers.CharField(
+        allow_blank=False,
+        help_text='Why the payment was rejected. Required.',
+    )
+
+
 class PaymentSerializer(serializers.ModelSerializer):
     """
     Single serializer used for both reads and writes.
@@ -107,12 +128,14 @@ class PaymentSerializer(serializers.ModelSerializer):
             'recipient_bank', 'recipient_account', 'verified_at',
             'notes',
             'recorded_by', 'recorded_by_name',
+            'reviewed_by', 'reviewed_at', 'review_notes',
             'created_at',
         ]
         read_only_fields = [
             'id', 'payment_number', 'sales_order_number',
             'payment_method_display', 'status_display',
             'recorded_by', 'recorded_by_name',
+            'reviewed_by', 'reviewed_at', 'review_notes',
             'verified_at', 'created_at',
         ]
 
@@ -140,6 +163,16 @@ class PaymentSerializer(serializers.ModelSerializer):
     def validate_amount(self, value):
         if value <= Decimal('0'):
             raise serializers.ValidationError('Amount must be greater than zero.')
+        return value
+
+    def validate_status(self, value):
+        # Rejection is a review outcome with an audit trail, reached through
+        # POST /payments/{id}/reject/ — not a status a payment is born with.
+        if value == Payment.REJECTED:
+            raise serializers.ValidationError(
+                'A payment cannot be recorded as rejected. Record it, then reject it '
+                'through the review action.'
+            )
         return value
 
     def validate(self, attrs):

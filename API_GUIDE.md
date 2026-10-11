@@ -975,6 +975,8 @@ Payments are **immutable** financial records. They cannot be updated or deleted.
 | `GET` | `/api/v1/payments/` | Any authenticated | Paginated payment list |
 | `POST` | `/api/v1/payments/` | Any authenticated | Record a payment |
 | `GET` | `/api/v1/payments/{id}/` | Any authenticated | Retrieve a payment |
+| `POST` | `/api/v1/payments/{id}/approve/` | Manager+ | Confirm a payment pending review and apply it to its order |
+| `POST` | `/api/v1/payments/{id}/reject/` | Manager+ | Reject a payment pending review |
 
 **Filters:**
 
@@ -982,6 +984,7 @@ Payments are **immutable** financial records. They cannot be updated or deleted.
 |-----------|--------|-------------|
 | `sales_order` | integer | Filter by order primary key |
 | `payment_method` | `cash` · `bank_transfer` · `card` · `check` · `other` | Filter by method |
+| `status` | `confirmed` · `pending_review` · `rejected` | Filter by review status |
 | `date_from` | `YYYY-MM-DD` | Payments on or after this date |
 | `date_to` | `YYYY-MM-DD` | Payments on or before this date |
 
@@ -1001,9 +1004,41 @@ Payments are **immutable** financial records. They cannot be updated or deleted.
 
 **Reference number:** `bank_transfer`, `card` and `check` payments are rejected with `400` and a `reference_number` entry in `details` when none is supplied. This mirrors the same rule in the back-office payment form. Note it stacks with the OCR requirement below — a `bank_transfer` under OCR needs both its own bank reference *and* a `transaction_key` (or manual override `notes`), and a request missing both reports both in one response.
 
-**Auto-transition:** If the cumulative `amount_paid` across all payments for the order reaches or exceeds `total_amount`, the order automatically transitions to `paid` in the same atomic transaction.
+**Auto-transition:** If the cumulative `amount_paid` across all payments for the order reaches or exceeds `total_amount`, the order automatically transitions to `paid` in the same atomic transaction. Only `confirmed` payments count: a payment left `pending_review` does not move the order until it is [approved](#review-a-payment--post-apiv1paymentsidapprove-and-reject). The order row is locked for the whole operation, so two partial payments recorded at the same moment cannot both miss the total.
 
-Response `201 Created`: the created [Payment object](#payment-object), including the auto-generated `payment_number` (`PAY-YYYYMMDD-XXXX`).
+Response `201 Created`: the created [Payment object](#payment-object), including the auto-generated `payment_number` (`PAY-YYYYMMDD-XXXX`). An order that is no longer `confirmed` by the time the payment is written (for example, cancelled a moment earlier) returns `409` with code `order_not_payable`.
+
+---
+
+#### Review a payment — `POST /api/v1/payments/{id}/approve/` and `/reject/`
+
+A payment whose receipt could not be verified automatically is recorded as `pending_review` and does not count towards its order. A Manager or Admin settles it with one of these two endpoints. Kiosk keys and Staff users get `403`.
+
+**Approve** — body (all optional):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `transaction_key` | string | The bank's transaction key, checked by hand. Refused if another payment already holds it, which stops the same receipt from being approved twice. |
+| `notes` | string | Reviewer notes, stored in `review_notes`. |
+
+The payment becomes `confirmed` and is applied to its order exactly as if it had been recorded confirmed: a `confirmed` order that is now covered becomes `paid`. A `shipped` or `delivered` order — a kiosk sale, which skips `paid` — only gets its `paid_at`. A `paid` order is left as it is.
+
+**Reject** — body:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `notes` | string | Yes | The reason, stored in `review_notes`. A blank reason returns `400`. |
+
+The payment becomes `rejected` and the order is left unchanged. A rejected payment is final and never counts towards the order; the customer pays again with a new payment.
+
+Both return `200 OK` with the updated [Payment object](#payment-object), now carrying `reviewed_by`, `reviewed_at` and `review_notes`.
+
+| Status | Code | When |
+|--------|------|------|
+| `409` | `payment_not_pending` | The payment is not `pending_review` (already approved or rejected) |
+| `409` | `order_not_payable` | Approve only: the order is `draft`, `pending`, `cancelled` or `refunded` |
+| `409` | `duplicate_transaction` | Approve only: another payment already holds `transaction_key` |
+| `409` | `transaction_key_mismatch` | Approve only: the payment already has a different `transaction_key` |
 
 ---
 
@@ -1449,13 +1484,20 @@ Each is `null` when it cannot be stated exactly: a payment recorded while the se
   },
   "payment_method": "bank_transfer",
   "payment_method_display": "Bank Transfer",
+  "status": "confirmed",
+  "status_display": "Confirmed",
   "reference_number": "TXN-98765",
   "notes": "Wire transfer received.",
   "recorded_by": 3,
   "recorded_by_name": "Staff User",
+  "reviewed_by": null,
+  "reviewed_at": null,
+  "review_notes": "",
   "created_at": "2026-04-15T15:00:00Z"
 }
 ```
+
+`status` is `confirmed`, `pending_review` (recorded, but its receipt still needs a person to check it; it does not count towards the order) or `rejected`. `reviewed_by`, `reviewed_at` and `review_notes` are set when a Manager or Admin [approves or rejects](#review-a-payment--post-apiv1paymentsidapprove-and-reject) a pending payment, and stay empty for a payment recorded confirmed. `rejected` cannot be set when creating a payment.
 
 `currency` is the currency configuration and exchange rate in effect when the payment was recorded. It is set once and **never changes**, whatever later happens to the settings; `amount_secondary` is `amount` converted at that recorded rate (half-up to the secondary decimals), or `null` when no secondary currency was in effect. `currency.secondary` is `null` in that case too.
 

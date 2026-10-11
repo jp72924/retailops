@@ -1454,3 +1454,42 @@ msgstr "Monto del comprobante"
 
 msgid "Currency and rate changes apply to payments recorded from now on. Recorded payments keep the currency and rate they were made at; unpaid balances follow the current rate."
 msgstr "Los cambios de moneda y tasa se aplican a los pagos que se registren a partir de ahora. Los pagos ya registrados conservan la moneda y la tasa con que se hicieron; los saldos pendientes siguen la tasa vigente."
+
+msgid "Rejected"
+msgstr "Rechazado"
+
+msgid "Reviewed By"
+msgstr "Revisado por"
+
+msgid "Review Notes"
+msgstr "Notas de revisión"
+
+msgid "Review Payment"
+msgstr "Revisar pago"
+
+msgid "Bank transaction key (optional)"
+msgstr "Clave de transacción bancaria (opcional)"
+
+msgid "Notes (optional)"
+msgstr "Notas (opcional)"
+
+msgid "Approve Payment"
+msgstr "Aprobar pago"
+
+msgid "Reason for rejection"
+msgstr "Motivo del rechazo"
+
+msgid "Reject Payment"
+msgstr "Rechazar pago"
+
+msgid "Transaction key %(key)s is already recorded on another payment."
+msgstr "La clave de transacción %(key)s ya está registrada en otro pago."
+
+msgid "Payment %(payment)s approved. Order %(order)s marked as Paid."
+msgstr "Pago %(payment)s aprobado. El pedido %(order)s quedó como Pagado."
+
+msgid "Payment %(payment)s approved."
+msgstr "Pago %(payment)s aprobado."
+
+msgid "Payment %(payment)s rejected."
+msgstr "Pago %(payment)s rechazado."

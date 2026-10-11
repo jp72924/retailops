@@ -115,6 +115,11 @@ urlpatterns = [
     # GET  /payments/<pk>/  — read-only payment receipt view
     path('payments/<int:pk>/', views.payment_detail, name='payment-detail'),
 
+    # POST /payments/<pk>/approve/ | /reject/ — settle a pending_review payment
+    #      (Manager or Admin)
+    path('payments/<int:pk>/approve/', views.payment_approve, name='payment-approve'),
+    path('payments/<int:pk>/reject/', views.payment_reject, name='payment-reject'),
+
     # ── Inventory ─────────────────────────────────────────────────────────────
     # GET /inventory/  — product table with stock levels, low-stock banner,
     #                    filter bar (SKU/name, category, stock status)
