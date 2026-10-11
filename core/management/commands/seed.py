@@ -14,7 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import (
-    Customer, InventoryMovement, Payment,
+    Customer, Entitlement, InventoryMovement, Payment,
     Product, ProductCategory, Role,
     SalesOrder, SalesOrderItem, User,
 )
@@ -153,6 +153,7 @@ class Command(BaseCommand):
     def _clear(self):
         self.stdout.write('Clearing existing data…')
         InventoryMovement.objects.all().delete()
+        Entitlement.objects.all().delete()
         Payment.objects.all().delete()
         SalesOrderItem.objects.all().delete()
         SalesOrder.objects.all().delete()

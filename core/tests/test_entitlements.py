@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 from django.core import checks
+from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.db import connection
 from django.test import TestCase, override_settings
@@ -502,6 +503,19 @@ class RefundTests(DeliveryFixture):
 
         self.assertEqual([e.status for e in self.entitlements(self.order)], ['revoked', 'pending'])
         self.assertEqual(second.status, 'pending')
+
+
+class SeedResetTests(DeliveryFixture):
+    def test_resetting_the_sample_data_removes_what_was_delivered(self):
+        product = self.product()
+        make_fulfillment(product)
+        order = self.paid_order(product)
+        self.assertEqual(len(self.entitlements(order)), 1)
+
+        call_command('seed', '--force', verbosity=0)
+
+        self.assertFalse(Entitlement.objects.exists())
+        self.assertFalse(SalesOrder.objects.filter(pk=order.pk).exists())
 
 
 class DeliveryCompleteTests(DeliveryFixture):
