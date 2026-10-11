@@ -3,6 +3,8 @@ from django.urls import path
 from .views import (
     CategoryTreeView,
     CustomerOrdersView,
+    EntitlementDetailView,
+    EntitlementRevealView,
     ListingDetailView,
     ListingListView,
     OrderCreateView,
@@ -22,4 +24,6 @@ urlpatterns = [
     path('orders/<str:order_number>/',     OrderDetailView.as_view(),        name='order-detail'),
     path('orders/<str:order_number>/payments/', OrderPaymentView.as_view(),  name='order-payment'),
     path('customers/<str:external_ref>/orders/', CustomerOrdersView.as_view(), name='customer-orders'),
+    path('entitlements/<int:pk>/',         EntitlementDetailView.as_view(),  name='entitlement-detail'),
+    path('entitlements/<int:pk>/reveal/',  EntitlementRevealView.as_view(),  name='entitlement-reveal'),
 ]

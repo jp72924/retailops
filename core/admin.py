@@ -10,6 +10,7 @@ from .models import (
     SystemSettings, OcrCallLog,
     KioskStation,
     ChannelCustomerLink, ChannelKey, ChannelOrder, Listing, ListingVariant, SalesChannel,
+    Entitlement, ProductFulfillment,
 )
 
 
@@ -55,6 +56,13 @@ class ProductCategoryAdmin(admin.ModelAdmin):
     raw_id_fields = ('parent_category',)
 
 
+class ProductFulfillmentInline(admin.StackedInline):
+    """What a customer is given when they pay for the product; none means nothing is delivered."""
+    model = ProductFulfillment
+    extra = 0
+    max_num = 1
+
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = (
@@ -64,6 +72,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_filter = ('category', 'unit_of_measure', 'kind', 'track_inventory', 'is_active')
     search_fields = ('sku', 'name')
     readonly_fields = ('image_preview',)
+    inlines = [ProductFulfillmentInline]
 
     def product_thumbnail(self, obj):
         url = obj.primary_image_url
@@ -346,6 +355,48 @@ class ChannelCustomerLinkAdmin(admin.ModelAdmin):
     list_filter = ('channel',)
     search_fields = ('external_ref', 'customer__email', 'customer__first_name', 'customer__last_name')
     list_select_related = ('channel', 'customer')
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(Entitlement)
+class EntitlementAdmin(admin.ModelAdmin):
+    """
+    What was delivered for paid orders. View-only, and it never shows a value:
+    a licence key appears masked, as everywhere else outside the one reveal.
+    """
+    list_display = (
+        'id', 'order_number', 'product_sku', 'kind', 'status', 'masked_value',
+        'seats', 'activated_at', 'expires_at', 'revealed_at',
+    )
+    list_filter = ('status', 'kind')
+    search_fields = ('order_item__sales_order__order_number', 'order_item__product__sku')
+    list_select_related = ('order_item__sales_order', 'order_item__product')
+    # Named, so `value` is not rendered even in the read-only detail page.
+    fields = (
+        'order_item', 'kind', 'masked_value', 'seats', 'duration_days', 'status',
+        'activated_at', 'expires_at', 'revealed_at', 'revoked_at', 'created_at',
+    )
+    readonly_fields = fields
+
+    @admin.display(description='Order', ordering='order_item__sales_order__order_number')
+    def order_number(self, obj):
+        return obj.order_item.sales_order.order_number
+
+    @admin.display(description='Product')
+    def product_sku(self, obj):
+        return obj.order_item.product.sku
+
+    @admin.display(description='Value')
+    def masked_value(self, obj):
+        return obj.display_value or '-'
 
     def has_add_permission(self, request):
         return False

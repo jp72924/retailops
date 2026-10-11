@@ -1586,3 +1586,78 @@ msgstr "Si está activado, un cliente que la tienda informa como verificado por 
 
 msgid "How long an unpaid order holds its stock before it can be cancelled. An order with a payment, even one under review, never expires."
 msgstr "Cuánto tiempo un pedido sin pagar reserva su stock antes de poder cancelarse. Un pedido con un pago, aunque esté en revisión, nunca vence."
+
+msgid "Deliverables"
+msgstr "Entregables"
+
+msgid "Value"
+msgstr "Valor"
+
+msgid "Revealed"
+msgstr "Revelado"
+
+msgid "Value to deliver"
+msgstr "Valor a entregar"
+
+msgid "New value"
+msgstr "Nuevo valor"
+
+msgid "Supply"
+msgstr "Suministrar"
+
+msgid "Replace"
+msgstr "Reemplazar"
+
+msgid "Revoke"
+msgstr "Revocar"
+
+msgid "Revoked"
+msgstr "Revocado"
+
+msgid "Link"
+msgstr "Enlace"
+
+msgid "Instructions"
+msgstr "Instrucciones"
+
+msgid "Licence key"
+msgstr "Clave de licencia"
+
+msgid "Revoke this delivery? The customer will no longer be able to read it."
+msgstr "¿Revocar esta entrega? El cliente ya no podrá leerla."
+
+msgid "Delivery supplied."
+msgstr "Entrega suministrada."
+
+msgid "Delivery revoked."
+msgstr "Entrega revocada."
+
+msgid "This delivery was already revoked."
+msgstr "Esta entrega ya estaba revocada."
+
+msgid "This delivery was already supplied."
+msgstr "Esta entrega ya se había suministrado."
+
+msgid "This delivery was revoked and can no longer be changed."
+msgstr "Esta entrega fue revocada y ya no se puede modificar."
+
+msgid "Licence keys cannot be stored: ENTITLEMENT_ENCRYPTION_KEYS is not configured."
+msgstr "No se pueden guardar claves de licencia: ENTITLEMENT_ENCRYPTION_KEYS no está configurada."
+
+msgid "Fixed text, released when the order is paid"
+msgstr "Texto fijo, entregado al pagarse el pedido"
+
+msgid "Supplied for each order"
+msgstr "Se suministra en cada pedido"
+
+msgid "The link or instructions to release, for fixed-text delivery."
+msgstr "El enlace o las instrucciones a entregar, en la entrega de texto fijo."
+
+msgid "How long it lasts from the moment it is delivered. Empty means it does not expire."
+msgstr "Cuánto dura desde que se entrega. Vacío significa que no vence."
+
+msgid "One entitlement per unit ordered instead of one for the whole line."
+msgstr "Una entrega por unidad pedida en lugar de una para toda la línea."
+
+msgid "How many units this entitlement covers."
+msgstr "Cuántas unidades cubre esta entrega."

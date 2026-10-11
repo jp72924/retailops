@@ -74,10 +74,15 @@ class ClientReferenceConflict(ChannelOrderError):
         super().__init__('This client_reference was already used for a different order.')
 
 
-def customer_status(order, payments):
+def customer_status(order, payments, delivery_complete=False):
     """
     What state a customer should see for `order`, given its `payments`
     (every status, as already loaded).
+
+    `delivery_complete` says the whole order was delivered digitally (see
+    core.services.entitlements.delivery_complete). A paid order is not moved
+    to Delivered by software, because a refund needs it Paid, so
+    "completed" is derived: from Delivered, or from a finished delivery.
     """
     if order.status == SalesOrder.CANCELLED:
         return CANCELLED
@@ -86,7 +91,7 @@ def customer_status(order, payments):
     if order.status == SalesOrder.DELIVERED:
         return COMPLETED
     if order.status in (SalesOrder.PAID, SalesOrder.SHIPPED):
-        return PROCESSING
+        return COMPLETED if delivery_complete else PROCESSING
     if any(payment.status == Payment.PENDING_REVIEW for payment in payments):
         return PAYMENT_UNDER_REVIEW
     return AWAITING_PAYMENT
@@ -102,11 +107,15 @@ def review_status(payment):
 
 
 def channel_orders():
-    """Channel orders with everything their representation reads, in four queries."""
+    """Channel orders with everything their representation reads, in five queries."""
     return (
         ChannelOrder.objects
         .select_related('sales_order', 'currency_snapshot', 'customer_link')
-        .prefetch_related('sales_order__items__product', 'sales_order__payments')
+        .prefetch_related(
+            'sales_order__items__product',
+            'sales_order__items__entitlements',
+            'sales_order__payments',
+        )
     )
 
 

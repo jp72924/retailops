@@ -22,6 +22,11 @@ class StorefrontOrderThrottle(_ChannelThrottle):
     scope = 'storefront_order'
 
 
+class StorefrontEntitlementThrottle(_ChannelThrottle):
+    """Supplying and revealing delivered keys: sensitive, and never a bulk operation."""
+    scope = 'storefront_entitlement'
+
+
 class StorefrontPaymentThrottle(_ChannelThrottle):
     """Caps what a channel can spend on receipt OCR, which is a paid third-party call."""
     scope = 'storefront_payment'

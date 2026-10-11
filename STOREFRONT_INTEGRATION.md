@@ -30,6 +30,10 @@ in `API_GUIDE.md` and described in the OpenAPI schema (`/api/v1/schema/`, tag
   sends the receipt. The exchange rate is frozen when the order is created, so
   the amount the customer was quoted is the amount their receipt is checked
   against.
+- **A paid order delivers what it sold.** Licence keys, links and instructions are
+  recorded per order line, released when the order is paid, and revoked by a refund.
+  A key is stored encrypted and read back only by one explicit call (see
+  [Digital delivery](#digital-delivery)).
 
 ## Provision a channel
 
@@ -305,6 +309,7 @@ and nothing is left behind if it fails. It answers `201`:
     "secondary_total": "1058.50"
   },
   "payments": [],
+  "entitlements": [],
   "payment_instructions": [
     { "payment_method": "mobile_payment", "payment_method_display": "Mobile Payment",
       "bank": "Banco de Venezuela", "phone": "0414-1234567",
@@ -381,7 +386,7 @@ A channel only ever reaches its own orders: another channel's order number is a
 | `awaiting_payment` | Created and unpaid, or its only receipt was rejected |
 | `payment_under_review` | A receipt is waiting for a person |
 | `processing` | Paid; being prepared |
-| `completed` | Delivered |
+| `completed` | Delivered, or paid and fully delivered digitally (see [Digital delivery](#digital-delivery)) |
 | `cancelled` | Cancelled, including by expiring unpaid |
 | `refunded` | Refunded |
 
@@ -404,6 +409,97 @@ touched it, so a person closes it. Running it twice is harmless, and `--dry-run`
 only counts. `expires_at` is when an order *becomes eligible* for cancelling: a
 payment that arrives before the command cancels the order is accepted.
 
+### Digital delivery
+
+What a customer is given when they pay (a licence key, a download link, setup
+instructions) is delivered by RetailOps and recorded as an **entitlement**.
+
+**What is delivered is set per product**, in the Django admin, under the product's
+**Product fulfillment**:
+
+| Setting | Meaning |
+|---------|---------|
+| Mode | **Fixed text**: a link or instructions, the same for everyone, released the moment the order is paid. **Supplied**: nothing is released until a value is provided for that one order |
+| Kind | `key`, `link` or `instructions`. A key cannot be fixed text: every customer would receive the same one |
+| Template | The link or instructions to release, for fixed text. A link must be an `http(s)` URL |
+| Duration days | How long it lasts from the moment it is delivered; empty means it does not expire |
+| Per unit | One entitlement per unit ordered; otherwise one for the whole line, covering its quantity (`seats`) |
+
+A product with no fulfillment delivers nothing. There is no pool of keys: each value
+is provided for one entitlement and belongs to it.
+
+**Entitlements exist only for paid orders.** They are created at the moment an order
+becomes paid, never before, so a cancelled or expired order leaves none. Fixed text is
+`active` at once. A supplied one is `pending` until its value arrives, from **staff**
+(the order page in the back-office has a Deliverables card) or from **the store**,
+which can issue its own keys and hand them over (below). Its term, `expires_at`,
+counts from that moment. A refund **revokes** everything the order delivered, in the
+same transaction.
+
+Every order carries them:
+
+```json
+"entitlements": [
+  { "id": 41, "sku": "AV-PRO-12M", "kind": "key", "status": "active", "seats": 1,
+    "value": "••••••••K3F9", "activated_at": "2026-10-11T14:09:02Z", "expires_at": "2027-10-11T14:09:02Z" },
+  { "id": 42, "sku": "AV-GUIDE", "kind": "link", "status": "active", "seats": 1,
+    "value": "https://downloads.example.com/guide", "activated_at": "2026-10-11T14:09:02Z", "expires_at": null },
+  { "id": 43, "sku": "AV-PRO-24M", "kind": "key", "status": "pending", "seats": 1,
+    "value": null, "activated_at": null, "expires_at": null }
+]
+```
+
+`status` is `pending`, `active` or `revoked`. `value` is the text of a link or
+instructions, `null` until supplied, and **always masked for a licence key**: eight
+dots and its last four characters.
+
+`customer_status` is `completed` for a paid order once everything it sold has been
+delivered: every line has entitlements and all are `active`. A line that delivers
+nothing (a physical product, or one with no fulfillment) means delivery alone does not
+finish the order, which stays `processing` until it is marked delivered. A revoked
+entitlement keeps an order from reading as complete.
+
+**Supply a value** (the store issues the key itself):
+
+```http
+PUT /api/v1/storefront/entitlements/43/
+```
+
+```json
+{ "value": "ABCD-1234-EFGH-5678" }
+```
+
+Only a `pending` entitlement of the channel's own orders can be supplied: it becomes
+`active` and its term starts now. An active or revoked one is `409`.
+
+**Read a whole key:**
+
+```http
+POST /api/v1/storefront/entitlements/41/reveal/
+```
+
+```json
+{ "id": 41, "kind": "key", "value": "ABCD-1234-EFGH-5678", "revealed_at": "2026-10-11T14:12:40Z" }
+```
+
+This is the one place a key is ever read back. It is a **POST** because it changes
+state, not a read: the *first* reveal is recorded as `revealed_at`, which is the
+evidence if the customer later disputes a refund, and a repeat never overwrites it.
+Being a POST it cannot be triggered by a prefetch or a link. Only an `active`
+entitlement can be revealed, the response is never cached, and a channel is limited to
+60 supplies and reveals a minute. An expired entitlement can still be read.
+
+**How a key is kept.** It is stored encrypted (Fernet) with keys from the
+`ENTITLEMENT_ENCRYPTION_KEYS` environment variable, a comma-separated list: the first
+encrypts and every one decrypts. Everything that lists or shows an entitlement uses a
+four-character hint stored in clear and never decrypts a key, so a listing cannot leak
+one. Staff can supply or replace a key but never read it: the back-office, the admin,
+the staff API and the MCP server show it masked or not at all. Set
+`ENTITLEMENT_ENCRYPTION_KEYS` before the first key is stored; `manage.py check` warns
+when it is missing, and without it a key is refused (links and instructions are not
+secret and do not need it). To retire an encryption key, put the new one **first**,
+deploy, run `python manage.py rotate_entitlement_keys`, and only then drop the old one.
+
 ### Errors
 
 | Status | `code` | When |
@@ -420,6 +516,11 @@ payment that arrives before the command cancels the order is accepted.
 | `409` | `payment_under_review` | A receipt for this order is already waiting |
 | `409` | `duplicate_transaction` | This bank transaction was already recorded |
 | `422` | `receipt_field_mismatch`, `recipient_mismatch`, `amount_mismatch`, `receipt_parse_error`, … | The receipt does not match, or cannot be read |
+| `400` | `invalid_value` | A value to supply is blank, too long (2,000 characters) or, for a link, not an `http(s)` URL |
+| `409` | `entitlement_not_pending` | Only a pending entitlement can be supplied |
+| `409` | `entitlement_revoked` | A revoked entitlement can be neither supplied nor revealed |
+| `409` | `entitlement_not_active` | Only an active entitlement can be revealed; `entitlement_status` says what it is |
+| `503` | `encryption_not_configured`, `decryption_failed` | The server cannot store or read a key right now; retry later and tell the operator |
 
 ## Troubleshooting
 
@@ -433,3 +534,6 @@ payment that arrives before the command cancels the order is accepted.
 | `409 customer_email_conflict` for a returning shopper | Their email is already a RetailOps customer; enable **Trusts email verification** for the channel if the store verifies emails, and send `email_verified: true` |
 | A receipt is `needs_review` every time | OCR is off for the payment method, VEPay is unreachable, or the receipt shows no transaction key |
 | Orders never release their stock | `expire_channel_orders` is not scheduled, or the orders have a payment |
+| A paid digital order stays `processing` | A key is still `pending`: supply it, or a line delivers nothing |
+| `503 encryption_not_configured` when supplying a key | `ENTITLEMENT_ENCRYPTION_KEYS` is not set on the server |
+| `503 decryption_failed` on reveal | The key was sealed with an encryption key no longer listed in `ENTITLEMENT_ENCRYPTION_KEYS` |

@@ -95,7 +95,8 @@ def apply_confirmed_payments(order, *, at=None):
     """
     Bring the order's paid state in line with its confirmed payments.
 
-    * CONFIRMED and covered: becomes PAID, with paid_at.
+    * CONFIRMED and covered: becomes PAID, with paid_at, and what its lines
+      deliver (licence keys, links, instructions) is created.
     * SHIPPED or DELIVERED, covered, without paid_at: gets paid_at only. This
       is how an approved kiosk payment is recognised as revenue without moving
       an order that has already left the store.
@@ -104,6 +105,7 @@ def apply_confirmed_payments(order, *, at=None):
     `order` is updated in place to match the stored row.
     """
     from core.models import Payment, SalesOrder
+    from core.services.entitlements import create_entitlements
 
     with transaction.atomic():
         locked = lock_order(order.pk)
@@ -121,6 +123,9 @@ def apply_confirmed_payments(order, *, at=None):
                 locked.paid_at = stamp
                 locked.save(update_fields=['status', 'paid_at', 'updated_at'])
                 became_paid = True
+                # What the customer paid for is owed from this moment, and not
+                # before: a cancelled or expired order never reaches here.
+                create_entitlements(locked, now=stamp)
             elif (
                 locked.status in (SalesOrder.SHIPPED, SalesOrder.DELIVERED)
                 and locked.paid_at is None

@@ -235,6 +235,7 @@ Certain endpoint categories have their own per-user scopes that apply in additio
 | `storefront_read` | 300 / minute | Storefront catalogue and order reads (per sales channel) |
 | `storefront_order` | 60 / minute | Storefront order creation (per sales channel) |
 | `storefront_payment` | 30 / minute | Storefront receipt payments, each of which can cost an OCR call (per sales channel) |
+| `storefront_entitlement` | 60 / minute | Storefront supplying and revealing delivered keys (per sales channel) |
 
 When throttled, the response is `429 Too Many Requests` with:
 ```json
@@ -1339,6 +1340,8 @@ The catalogue an online store reads, and the orders it places and pays. These en
 | `GET` | `/api/v1/storefront/orders/{order_number}/` | One of the channel's own orders |
 | `POST` | `/api/v1/storefront/orders/{order_number}/payments/` | Send the receipt that pays an order; returns the order |
 | `GET` | `/api/v1/storefront/customers/{external_ref}/orders/` | A customer's orders for this channel, newest first, paged |
+| `GET` / `PUT` | `/api/v1/storefront/entitlements/{id}/` | What was delivered for an order line; `PUT {"value": ...}` supplies a `pending` one and activates it |
+| `POST` | `/api/v1/storefront/entitlements/{id}/reveal/` | The whole licence key, link or instructions. The only place a key is read back; records the first reveal |
 
 - A listing is visible when it is published and at least one variant is an active product. Prices come from the product.
 - `availability` is `in_stock`, `low_stock`, `out_of_stock` or `unlimited`. It is a label: **exact stock is never published**.
@@ -1346,6 +1349,7 @@ The catalogue an online store reads, and the orders it places and pays. These en
 - A channel only ever reaches its own orders; another channel's order number is `404`. Order responses are `no-store`.
 - `customer_status` is `awaiting_payment`, `payment_under_review`, `processing`, `completed`, `cancelled` or `refunded`; each payment reads `verified`, `needs_review` or `rejected`. Receipt images, OCR readings, transaction keys, reviewer notes and customer data are never returned.
 - Receipts are validated against the exchange rate frozen when the order was created, never the live one.
+- Every order lists its `entitlements`: what was delivered for each paid line (`pending`, `active` or `revoked`). A licence key is always masked there; only `reveal` returns it whole, and it is a `POST` because it records evidence. Delivery is configured per product in the admin and is created when the order is paid; a refund revokes it. Keys are stored encrypted with `ENTITLEMENT_ENCRYPTION_KEYS`.
 - Each channel is limited per minute (`429` beyond that): 300 catalogue and query requests, 60 order creations, 30 payments.
 
 ---
