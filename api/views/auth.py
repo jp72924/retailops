@@ -52,6 +52,14 @@ class TokenObtainSerializer(serializers.Serializer):
                 code='account_disabled',
             )
 
+        if user.is_service:
+            # A kiosk or channel service account never signs in. Answer as for a wrong
+            # password: it has no credentials to guess and nothing to confirm.
+            raise serializers.ValidationError(
+                'Invalid email or password.',
+                code='invalid_credentials',
+            )
+
         data['user'] = user
         return data
 

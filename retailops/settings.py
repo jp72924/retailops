@@ -552,7 +552,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # SessionAuthentication and BrowsableAPIRenderer are dev conveniences only.
 # They are stripped automatically when DEBUG=False so production serves pure JSON
 # and no HTML renderer is ever exposed.
-_DRF_AUTHENTICATION_CLASSES = ['rest_framework.authentication.TokenAuthentication']
+_DRF_AUTHENTICATION_CLASSES = ['api.authentication.StaffTokenAuthentication']
 _DRF_RENDERER_CLASSES = ['rest_framework.renderers.JSONRenderer']
 
 if DEBUG:

@@ -35,6 +35,12 @@ class UserViewSet(
 
     DELETE is intentionally absent — use deactivate instead.
 
+    Kiosk and Channel accounts are service accounts, created and managed by
+    provisioning. They can be listed and read here but never changed: no profile
+    update, no password, no (de)activation, and the Kiosk and Channel roles
+    cannot be assigned. A service account with a password would otherwise be a
+    person-shaped login into endpoints that accept any authenticated user.
+
     Search: ?search=<term> matches email, first_name, last_name.
     Ordering: ?ordering=<serializer field> (prefix - for desc).
     """
@@ -61,6 +67,25 @@ class UserViewSet(
             return [PasswordChangeRateThrottle()]
         return super().get_throttles()
 
+    @staticmethod
+    def _refuse_service_user(user):
+        """A 409 for a service account, None for a person."""
+        if user.is_service:
+            return Response(
+                {
+                    'error': 'Service accounts are managed by provisioning, not user management.',
+                    'code': 'service_user',
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+        return None
+
+    def update(self, request, *args, **kwargs):
+        refusal = self._refuse_service_user(self.get_object())
+        if refusal is not None:
+            return refusal
+        return super().update(request, *args, **kwargs)
+
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
         # Allow self-retrieval; block non-admins from reading other users' data.
@@ -81,6 +106,9 @@ class UserViewSet(
         Sets the target user's password. Admin only.
         """
         user = self.get_object()
+        refusal = self._refuse_service_user(user)
+        if refusal is not None:
+            return refusal
         serializer = ChangePasswordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -97,6 +125,9 @@ class UserViewSet(
         Guards against self-deactivation.
         """
         user = self.get_object()
+        refusal = self._refuse_service_user(user)
+        if refusal is not None:
+            return refusal
         if user.pk == request.user.pk:
             return Response(
                 {'error': 'You cannot deactivate your own account.', 'code': 'conflict'},
@@ -114,6 +145,9 @@ class UserViewSet(
         Sets is_active=True. Admin only.
         """
         user = self.get_object()
+        refusal = self._refuse_service_user(user)
+        if refusal is not None:
+            return refusal
         user.is_active = True
         user.save()
         return Response({'detail': f'{user.get_full_name()} reactivated.'})

@@ -1,5 +1,5 @@
 from rest_framework import serializers, status
-from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -7,6 +7,7 @@ from core.models import (
     PRIMARY_CURRENCY_LOCKED_MESSAGE, Payment, RecipientProfile, SystemSettings,
 )
 from core.services.bcv import BCVRateError, update_secondary_exchange_rate
+from api.authentication import StaffTokenAuthentication
 from api.kiosk.authentication import KioskTokenAuthentication
 from api.permissions import IsManagerOrAdmin
 
@@ -148,7 +149,7 @@ class SystemSettingsView(APIView):
     """
 
     authentication_classes = [
-        TokenAuthentication, SessionAuthentication, KioskTokenAuthentication,
+        StaffTokenAuthentication, SessionAuthentication, KioskTokenAuthentication,
     ]
 
     def get_permissions(self):
@@ -178,7 +179,7 @@ class SecondaryRateRefreshView(APIView):
     schedulers trigger an on-demand update without editing settings.
     """
 
-    authentication_classes = [TokenAuthentication, SessionAuthentication]
+    authentication_classes = [StaffTokenAuthentication, SessionAuthentication]
     permission_classes = [IsManagerOrAdmin]
 
     def post(self, request):

@@ -58,6 +58,9 @@
             {% if u.last_login %}{{ u.last_login|date:"M j, Y" }}{% else %}{% trans "Never" %}{% endif %}
           </td>
           <td class="td-actions">
+            {% if u.is_service %}
+              <span style="color:var(--muted);">{% trans "Service account" %}</span>
+            {% else %}
             <a href="{% url 'user-edit' u.pk %}" class="btn btn-secondary btn-sm">{% trans "Edit" %}</a>
             {% if u != request.user %}
               {% if u.is_active %}
@@ -78,6 +81,7 @@
                 </button>
               </form>
               {% endif %}
+            {% endif %}
             {% endif %}
           </td>
         </tr>

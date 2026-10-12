@@ -1664,3 +1664,9 @@ msgstr "Cuántas unidades cubre esta entrega."
 
 msgid "Channels that may see this listing. Leave empty to show it to every channel."
 msgstr "Canales que pueden ver este listado. Déjalo vacío para mostrarlo a todos los canales."
+
+msgid "Service account"
+msgstr "Cuenta de servicio"
+
+msgid "A kiosk is a provisioned device in the store, so its receipt payments are confirmed on a transaction key the app sends. Turn this off to accept only what RetailOps reads from the receipt itself: a kiosk receipt payment then waits for review unless OCR reads a transaction key. Check that the kiosk app copes with a payment under review first."
+msgstr "Un kiosco es un dispositivo aprovisionado en la tienda, así que sus pagos con comprobante se confirman con la clave de transacción que envía la app. Desactívalo para aceptar solo lo que RetailOps lee del propio comprobante: un pago con comprobante del kiosco queda entonces en revisión salvo que el OCR lea una clave de transacción. Antes, comprueba que la app del kiosco sepa manejar un pago en revisión."

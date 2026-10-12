@@ -1,6 +1,9 @@
 from django.contrib import admin, messages
+from django.contrib.admin.utils import unquote
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.db.models import Count, Q
+from django.http import HttpResponseRedirect
+from django.urls import reverse
 from django.utils.html import format_html
 from .models import (
     Role, User, Customer,
@@ -39,6 +42,34 @@ class UserAdmin(BaseUserAdmin):
             'fields': ('email', 'first_name', 'last_name', 'role', 'password1', 'password2'),
         }),
     )
+
+    # Kiosk and Channel users belong to provisioned devices and integrations. They are
+    # created by provisioning, never given a role or a password here, and never edited:
+    # a service account with a password would be a person-shaped login into endpoints that
+    # accept any authenticated user.
+    SERVICE_USER_MESSAGE = 'Service accounts are managed by provisioning, not user management.'
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly = super().get_readonly_fields(request, obj)
+        if obj is not None and obj.is_service:
+            return (
+                *readonly, 'password', 'email', 'first_name', 'last_name', 'role', 'timezone',
+                'language', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions',
+                'last_login',
+            )
+        return readonly
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        if db_field.name == 'role':
+            kwargs['queryset'] = Role.objects.exclude(name__in=Role.SERVICE_NAMES)
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def user_change_password(self, request, id, form_url=''):
+        user = self.get_object(request, unquote(id))
+        if user is not None and user.is_service:
+            self.message_user(request, self.SERVICE_USER_MESSAGE, messages.ERROR)
+            return HttpResponseRedirect(reverse('admin:core_user_change', args=[user.pk]))
+        return super().user_change_password(request, id, form_url)
 
 
 @admin.register(Customer)
@@ -95,10 +126,21 @@ class ProductAdmin(admin.ModelAdmin):
 
 
 class SalesOrderItemInline(admin.TabularInline):
+    """View-only: a line changes the order's total and the stock it holds."""
     model = SalesOrderItem
     extra = 0
     fields = ('product', 'quantity', 'unit_price', 'tax_rate', 'line_total')
-    readonly_fields = ('line_total',)
+    readonly_fields = fields
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SalesOrder)
@@ -106,9 +148,22 @@ class SalesOrderAdmin(admin.ModelAdmin):
     list_display = ('order_number', 'customer', 'status', 'total_amount', 'created_by', 'created_at')
     list_filter = ('status',)
     search_fields = ('order_number', 'customer__first_name', 'customer__last_name', 'customer__email')
-    readonly_fields = ('order_number', 'created_at', 'updated_at')
-    raw_id_fields = ('customer', 'created_by', 'confirmed_by')
+    # An order's status, money and stock move only through the services that lock the order,
+    # apply its payments and write the stock ledger. Editing them here would skip all of that:
+    # a status set by hand restores or deducts no stock, and a total set by hand contradicts the
+    # payments. Only the notes are free text.
+    readonly_fields = (
+        'order_number', 'customer', 'status', 'subtotal', 'tax_amount', 'discount_amount',
+        'total_amount', 'created_by', 'confirmed_by', 'created_at', 'updated_at',
+        'confirmed_at', 'paid_at',
+    )
     inlines = [SalesOrderItemInline]
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Payment)
@@ -116,11 +171,23 @@ class PaymentAdmin(admin.ModelAdmin):
     list_display = ('payment_number', 'sales_order', 'amount', 'payment_method', 'recorded_by', 'created_at')
     list_filter = ('payment_method',)
     search_fields = ('payment_number', 'sales_order__order_number', 'reference_number')
-    # currency_snapshot is editable=False, so it never appears as a form
-    # field: re-pointing a recorded payment at another rate is not an edit
-    # this admin offers. It is shown read-only instead.
-    readonly_fields = ('payment_number', 'recorded_currency', 'created_at')
-    raw_id_fields = ('sales_order', 'recorded_by')
+    # A payment is a financial record. Its status, amount, order, transaction key, OCR reading
+    # and review move only through the services that lock the order and apply the payment;
+    # changing them here would leave the order's status and the stock out of step. currency_snapshot
+    # is editable=False, so it never appears as a form field either: re-pointing a recorded payment
+    # at another rate is not an edit this admin offers. Only the notes are free text.
+    readonly_fields = (
+        'payment_number', 'sales_order', 'amount', 'payment_method', 'status', 'reference_number',
+        'receipt_image', 'ocr_receipt_data', 'transaction_key', 'origin_phone', 'origin_bank',
+        'recipient_bank', 'recipient_account', 'verified_at', 'recorded_by', 'reviewed_by',
+        'reviewed_at', 'review_notes', 'recorded_currency', 'created_at',
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
     @admin.display(description='Recorded currency')
     def recorded_currency(self, obj):

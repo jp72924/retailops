@@ -16,13 +16,13 @@ from core.models import (
 )
 from core.services.currency import CurrencyContext
 from core.services.receipt_validation import (
-    KIOSK_POLICY,
     AmountMismatchError,
     DuplicateTransactionError,
     InvalidReceiptImageError,
     ReceiptValidationError,
     assert_receipt_total_unchanged,
     assert_transaction_key_unused,
+    kiosk_policy,
     receipt_paid_date,
     validate_receipt,
 )
@@ -327,7 +327,7 @@ class KioskCheckoutView(KioskAPIMixin, APIView):
             _order_subtotal(products, items),
             settings=settings,
             currency=currency,
-            policy=KIOSK_POLICY,
+            policy=kiosk_policy(settings),
         )
 
         # Interned after the receipt passes, so a receipt rejection leaves no

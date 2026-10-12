@@ -209,7 +209,9 @@ The API uses five roles. Three are for human users with escalating privileges; t
 
 Endpoints that say "any authenticated user" are accessible to Staff, Manager, and Admin roles.
 
-> **Note:** The Kiosk role is reserved for `KioskStation` service accounts, which are created automatically when a kiosk terminal is provisioned. It cannot be assigned via `POST /api/v1/users/`.
+> **Note:** The Kiosk role is reserved for `KioskStation` service accounts, which are created automatically when a kiosk terminal is provisioned. It cannot be assigned via `POST /api/v1/users/` or `PATCH /api/v1/users/{id}/`, and neither can Channel (`400`).
+
+> **Note:** Kiosk and Channel users are **service accounts**. They are listed and readable in `/api/v1/users/` but cannot be changed through it: profile updates, password changes, `deactivate` and `reactivate` answer `409 service_user`. They never sign in: `POST /api/v1/auth/token/` and the back-office sign-in answer as for a wrong password, and a staff token held by one is refused (`401`) by every staff endpoint.
 
 > **Note:** The Channel role belongs to the service user that `manage.py provision_channel` creates for a sales channel. That user has no usable password; the channel authenticates with a key (see [Storefront Catalogue](#414-storefront-catalogue)).
 

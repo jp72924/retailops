@@ -25,7 +25,7 @@ view keeps its own response shape.
 import base64
 import binascii
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from time import perf_counter
 from decimal import Decimal, InvalidOperation
 
@@ -81,6 +81,18 @@ CHANNEL_POLICY = ReceiptPolicy(
     require_receipt_image=True,
     image_name_prefix='channel-receipt',
 )
+
+
+def kiosk_policy(settings):
+    """
+    The kiosk's policy, or the same with client evidence refused when the
+    operator turned `kiosk_trust_client_evidence` off. The default keeps what
+    the kiosk has always done: a transaction key the app sends confirms a
+    receipt payment.
+    """
+    if settings.kiosk_trust_client_evidence:
+        return KIOSK_POLICY
+    return replace(KIOSK_POLICY, trust_client_evidence=False)
 
 
 class DuplicateTransactionError(Exception):

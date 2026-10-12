@@ -31,11 +31,13 @@ class UserWriteSerializer(serializers.ModelSerializer):
 
     - password: write-only, required on create, not accepted on update
       (password changes go through the /change-password/ action).
-    - role: accepted as a primary key; validated against existing roles.
+    - role: accepted as a primary key; validated against existing roles. The
+      Kiosk and Channel roles belong to provisioned service accounts and are
+      never assigned through user management.
     - email uniqueness is enforced at both the model level and here.
     """
     role = serializers.PrimaryKeyRelatedField(
-        queryset=Role.objects.all(),
+        queryset=Role.objects.exclude(name__in=Role.SERVICE_NAMES),
         required=True,
     )
     password = serializers.CharField(

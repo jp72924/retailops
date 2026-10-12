@@ -4,6 +4,27 @@
 
 ### Breaking
 
+- **Kiosk and Channel accounts are service accounts, and user management can no
+  longer create, change or sign in as one.** The user API and the back-office
+  user pages refuse to assign the Kiosk or Channel role (`400` / `404`) and
+  answer `409 service_user` to a profile update, password change, `deactivate`
+  or `reactivate` of one; they stay listed and readable. A service account never
+  signs in: `POST /api/v1/auth/token/` and the back-office form answer as for a
+  wrong password, and the staff API refuses a token held by one (`401`). A
+  service account with a password would otherwise have been a person-shaped
+  login into every endpoint that accepts any authenticated user, and
+  `API_GUIDE.md` already said the role could not be assigned. Existing service
+  accounts have no usable password, so nothing that works today stops.
+
+- **Payments and orders are read-only in the Django admin.** Their status,
+  amount, order, transaction key, OCR reading, review and totals can no longer
+  be edited by hand, their lines cannot be edited, and neither can be added or
+  deleted there; only a payment's or an order's notes stay editable. Editing a
+  status in the admin skipped the order lock, the payment path and the stock
+  ledger: a payment set to confirmed left its order unpaid, and an order set to
+  cancelled restored no stock. Use the payment review, the order actions and the
+  API, which do it correctly.
+
 - **`reference_number` is now required for `bank_transfer`, `card` and `check`
   payments on `POST /api/v1/payments/`.** Requests without one are rejected with
   `400` and a `reference_number` entry in `details`. This applies to the REST API,
@@ -27,6 +48,14 @@
   remain editable.
 
 ### Added
+
+- **`SystemSettings.kiosk_trust_client_evidence`** (migration `0031`, default on,
+  Django admin only). On, the kiosk behaves exactly as before: a transaction key
+  its app sends confirms a receipt payment, which is acceptable only because the
+  kiosk is a provisioned device. Off, a kiosk receipt payment is confirmed only
+  on RetailOps's own OCR reading and otherwise waits for review, as a channel's
+  always does. Check that the kiosk app copes with a payment under review before
+  turning it off.
 
 - **A sales channel can be given its own assortment, can cancel an order it no
   longer wants, and can hold a call to one customer.** All additive.
