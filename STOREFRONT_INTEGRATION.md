@@ -776,9 +776,15 @@ DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py deliver_channel_
 - **Both commands refuse to run against `db.sqlite3`**, the default development database, unless
   `--allow-default-db` is given: they write demonstration settings and sample data.
 - **`retailops.demo_settings`** is the normal settings with the per-channel storefront limits raised,
-  because an automated run makes far more calls in a minute than a shop, and with
-  `CHANNEL_WEBHOOK_ALLOW_INSECURE` on so a webhook can be `http` and point at this machine. Nothing
-  else changes.
+  because an automated run makes far more calls in a minute than a shop, with
+  `CHANNEL_WEBHOOK_ALLOW_INSECURE` on so a webhook can be `http` and point at this machine, and with a
+  SQLite backend that begins every transaction with `BEGIN IMMEDIATE` (`retailops.demo_db`). Three storefronts, their
+  webhooks and the delivery worker all write to one SQLite file, and Django 4.2's plain `BEGIN` makes
+  a transaction that read first and wrote second fail with "database is locked" the moment another
+  one committed in between; asking for the write lock up front makes it wait its turn instead (up to 30
+  seconds). Put the scratch database in WAL mode as well (`pragma journal_mode=wal`, which
+  `tools/demo/start-demo.ps1` in the Trend Store repository does) so readers do not wait for writers.
+  Nothing else changes.
 - **`register_channel_webhook`** also needs `ENTITLEMENT_ENCRYPTION_KEYS` (the demonstration settings
   derive one in development), because the signing secret is stored encrypted.
 - A **VEPay stand-in** (any service that answers `POST /v1/receipts/parse` and `GET /healthz`) lets

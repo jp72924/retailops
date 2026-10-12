@@ -30,7 +30,7 @@ class DemoSettingsTests(SimpleTestCase):
     def test_every_other_setting_is_the_normal_one(self):
         # Star-import skips private names, which are not settings anyway.
         names = {name for name in dir(normal) if name.isupper() and not name.startswith('_')} - {
-            'REST_FRAMEWORK', 'CHANNEL_WEBHOOK_ALLOW_INSECURE',
+            'REST_FRAMEWORK', 'CHANNEL_WEBHOOK_ALLOW_INSECURE', 'DATABASES',
         }
 
         for name in names:
@@ -40,6 +40,17 @@ class DemoSettingsTests(SimpleTestCase):
         # The storefronts run on 127.0.0.1; a real deployment sends only to public https addresses.
         self.assertFalse(normal.CHANNEL_WEBHOOK_ALLOW_INSECURE)
         self.assertIs(demo_settings.CHANNEL_WEBHOOK_ALLOW_INSECURE, True)
+
+    def test_the_database_is_the_normal_one_except_that_it_waits_its_turn(self):
+        normal_db, demo_db = normal.DATABASES['default'], demo_settings.DATABASES['default']
+
+        if normal_db['ENGINE'] != 'django.db.backends.sqlite3':
+            self.assertEqual(demo_db, normal_db)  # PostgreSQL is left exactly as it is
+            return
+        self.assertEqual(demo_db['ENGINE'], 'retailops.demo_db')
+        self.assertEqual(demo_db['OPTIONS']['timeout'], 30)
+        rest = lambda config: {k: v for k, v in config.items() if k not in ('ENGINE', 'OPTIONS')}
+        self.assertEqual(rest(demo_db), rest(normal_db))
 
     def test_the_rest_of_the_api_configuration_is_untouched(self):
         for key, value in normal.REST_FRAMEWORK.items():
