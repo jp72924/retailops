@@ -444,7 +444,8 @@ minutes** after creation (60 by default, at least 5, set in the admin). Schedule
 this every few minutes to release it:
 
 ```bash
-python manage.py expire_channel_orders
+python manage.py expire_channel_orders                  # cron, every few minutes
+python manage.py expire_channel_orders --interval 60    # a service, looking every 60 seconds
 ```
 
 It cancels an order that lapsed unpaid and returns its stock. **An order with any
@@ -761,6 +762,7 @@ python manage.py register_channel_webhook --channel my-store \
     --url http://127.0.0.1:3001/api/retailops/webhook --dev-vars ../store/.dev.vars
 DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py runserver 127.0.0.1:8010
 DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py deliver_channel_webhooks --interval 2   # another terminal
+DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py expire_channel_orders --interval 60     # and another
 ```
 
 - **`configure_demo_site`** sets what the flow needs and nothing else: dollars as the primary
