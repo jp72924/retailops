@@ -554,12 +554,16 @@ deploy, run `python manage.py rotate_entitlement_keys`, and only then drop the o
 | `409` | `order_not_cancellable` | The order has a payment or is no longer confirmed; `customer_status` says why |
 | `409` | `payment_under_review` | A receipt for this order is already waiting |
 | `409` | `duplicate_transaction` | This bank transaction was already recorded |
-| `422` | `receipt_field_mismatch`, `recipient_mismatch`, `amount_mismatch`, `receipt_parse_error`, … | The receipt does not match, or cannot be read |
+| `422` | `receipt_field_mismatch`, `recipient_mismatch`, `amount_mismatch`, `receipt_parse_error`, … | The receipt does not match, or cannot be read. The answer says which of your fields did not match (`details.mismatches`) and never what the OCR read |
 | `400` | `invalid_value` | A value to supply is blank, too long (2,000 characters) or, for a link, not an `http(s)` URL |
 | `409` | `entitlement_not_pending` | Only a pending entitlement can be supplied |
 | `409` | `entitlement_revoked` | A revoked entitlement can be neither supplied nor revealed |
 | `409` | `entitlement_not_active` | Only an active entitlement can be revealed; `entitlement_status` says what it is |
 | `503` | `encryption_not_configured`, `decryption_failed` | The server cannot store or read a key right now; retry later and tell the operator |
+
+A refused receipt never reveals what it showed: not the reference, the amount or the bank transaction it read.
+The answers name only the store's own fields that did not match, so the endpoint cannot be used to tune a
+forged picture. Show your customer something like "the details do not match your receipt", not the reading.
 
 ## Try it locally
 
@@ -607,5 +611,6 @@ DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py runserver 127.0.
 | A receipt is `needs_review` every time | OCR is off for the payment method, VEPay is unreachable, or the receipt shows no transaction key |
 | Orders never release their stock | `expire_channel_orders` is not scheduled, or the orders have a payment |
 | A paid digital order stays `processing` | A key is still `pending`: supply it, or a line delivers nothing |
+| `500 server_error` on creating an order, only when two requests for the same cart arrive together | The scratch database is SQLite, which cannot take two writers at once (`database is locked`). The order was not created twice; ask again with the **same** `client_reference`, which returns the one order. Production databases do not do this |
 | `503 encryption_not_configured` when supplying a key | `ENTITLEMENT_ENCRYPTION_KEYS` is not set on the server |
 | `503 decryption_failed` on reveal | The key was sealed with an encryption key no longer listed in `ENTITLEMENT_ENCRYPTION_KEYS` |

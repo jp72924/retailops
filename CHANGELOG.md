@@ -298,6 +298,18 @@
 
 ### Fixed
 
+- **A refused receipt no longer tells a storefront what the OCR read.** The
+  `422 receipt_field_mismatch` answer of `POST /storefront/orders/{n}/payments/`
+  carried the OCR's reading of the receipt (`receipt_fields`, `expected_fields`, the
+  actual value of every mismatch), `amount_mismatch` carried the amount it read, and
+  `duplicate_transaction` carried the bank's transaction key. A store, or anyone
+  behind one, could use that to adjust a forged picture until it matched, which is
+  what the integration guide says a channel never sees. The answers now name only
+  *which* of the store's fields did not match (`details.mismatches`, with each
+  `code`), and `duplicate_transaction` and `amount_mismatch` carry no details. The
+  kiosk's answers are unchanged: its customer is standing at the screen.
+
+
 - **The back-office payment form re-checks the order before writing.** The form
   is only offered on Confirmed and Paid orders, but the view never checked: a
   crafted POST could pay a cancelled order back to Paid after its stock had
