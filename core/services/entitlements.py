@@ -21,13 +21,12 @@ everything that merely lists.
 """
 from datetime import timedelta
 
-from cryptography.fernet import Fernet, InvalidToken, MultiFernet
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from core.models import Entitlement, ProductFulfillment, validate_entitlement_value
+from core.services import secret_box
 
 HINT_LENGTH = 4
 # Below this a "last four characters" hint would give most of the key away.
@@ -72,22 +71,20 @@ class EntitlementStateError(EntitlementError):
 
 # ── Encryption ───────────────────────────────────────────────────────────────
 
-def _keys():
-    keys = settings.ENTITLEMENT_ENCRYPTION_KEYS
-    if not keys:
-        raise EncryptionNotConfigured()
-    return keys
-
-
 def seal(value):
     """Encrypt a key with the primary encryption key."""
-    return MultiFernet([Fernet(key) for key in _keys()]).encrypt(value.encode('utf-8')).decode('ascii')
+    try:
+        return secret_box.seal(value)
+    except secret_box.NotConfigured as exc:
+        raise EncryptionNotConfigured() from exc
 
 
 def unseal(token):
     try:
-        return MultiFernet([Fernet(key) for key in _keys()]).decrypt(token.encode('ascii')).decode('utf-8')
-    except InvalidToken as exc:
+        return secret_box.unseal(token)
+    except secret_box.NotConfigured as exc:
+        raise EncryptionNotConfigured() from exc
+    except secret_box.Undecryptable as exc:
         raise EntitlementDecryptionError() from exc
 
 
@@ -97,29 +94,46 @@ def hint_for(value):
 
 def rotate_keys():
     """
-    Re-encrypt every stored key with the primary encryption key.
+    Re-encrypt every stored secret with the primary encryption key: the licence
+    keys, and the signing secrets of the channels' webhooks.
 
     Run after putting a new key first in ENTITLEMENT_ENCRYPTION_KEYS and before
-    dropping the old one. Returns how many were re-encrypted; keys already under
-    the primary key are left untouched.
+    dropping the old one. Returns how many were re-encrypted; secrets already
+    under the primary key are left untouched.
     """
-    keys = _keys()
-    primary = Fernet(keys[0])
-    multi = MultiFernet([Fernet(key) for key in keys])
+    from core.models import ChannelWebhook
+
+    try:
+        secret_box.keys()
+    except secret_box.NotConfigured as exc:
+        raise EncryptionNotConfigured() from exc
+
+    def reseal(token):
+        try:
+            return secret_box.reseal(token)
+        except secret_box.Undecryptable as exc:
+            raise EntitlementDecryptionError() from exc
+
     rotated = 0
     for entitlement in Entitlement.objects.filter(kind=ProductFulfillment.KEY).exclude(value='').iterator():
-        token = entitlement.value.encode('ascii')
-        try:
-            primary.decrypt(token)
-            continue
-        except InvalidToken:
-            pass
-        try:
-            entitlement.value = multi.rotate(token).decode('ascii')
-        except InvalidToken as exc:
-            raise EntitlementDecryptionError() from exc
-        entitlement.save(update_fields=['value'])
-        rotated += 1
+        new = reseal(entitlement.value)
+        if new is not None:
+            entitlement.value = new
+            entitlement.save(update_fields=['value'])
+            rotated += 1
+    for webhook in ChannelWebhook.objects.iterator():
+        changed = []
+        for field in ('secret', 'previous_secret'):
+            token = getattr(webhook, field)
+            if not token:
+                continue
+            new = reseal(token)
+            if new is not None:
+                setattr(webhook, field, new)
+                changed.append(field)
+        if changed:
+            webhook.save(update_fields=changed)
+            rotated += len(changed)
     return rotated
 
 
@@ -168,6 +182,12 @@ def create_entitlements(order, *, now=None):
     return Entitlement.objects.bulk_create(created)
 
 
+def _publish_for(entitlement):
+    """Tell the order's channel (if it has one) what this entitlement's change did."""
+    from core.services.channel_events import publish_order_changes
+    publish_order_changes(entitlement.order_item.sales_order_id)
+
+
 def supply_value(entitlement_id, raw_value, *, replace=False, now=None):
     """
     Provide the value of an entitlement and activate it.
@@ -203,6 +223,7 @@ def supply_value(entitlement_id, raw_value, *, replace=False, now=None):
                 setattr(entitlement, name, content)
             fields += ['status', 'activated_at', 'expires_at']
         entitlement.save(update_fields=fields)
+        _publish_for(entitlement)
     return entitlement
 
 
@@ -237,6 +258,7 @@ def revoke(entitlement_id, *, now=None):
         entitlement.status = Entitlement.REVOKED
         entitlement.revoked_at = now
         entitlement.save(update_fields=['status', 'revoked_at'])
+        _publish_for(entitlement)
     return True
 
 

@@ -62,8 +62,10 @@ shape the rest of the architecture:
   and the kiosk endpoints (section 6), which makes this worth knowing before scaling
   out.
 - **No task queue.** There is no Celery, RQ, or Redis. Scheduled work runs as
-  management commands intended for cron: `update_bcv_rate`, `purge_receipts` and
-  `expire_channel_orders`.
+  management commands intended for cron: `update_bcv_rate`, `purge_receipts`,
+  `expire_channel_orders` and `prune_channel_events`. Sending webhooks is a loop with the
+  same shape (`deliver_channel_webhooks --interval N`, or `--once` from cron) over a table of
+  deliveries, not a queue.
 - **`responses` is a test-only library shipped in the production requirements file.**
 
 ## 2. Module map
@@ -89,12 +91,15 @@ retailops/
 │   ├── services/           bcv.py, vepay.py, receipt_matching.py, receipt_validation.py,
 │   │                       currency.py, inventory.py, orders.py, payments.py, customers.py,
 │   │                       listings.py, customer_links.py, channel_orders.py,
-│   │                       channel_payments.py, entitlements.py
+│   │                       channel_payments.py, entitlements.py, secret_box.py,
+│   │                       channel_events.py, channel_webhooks.py
+│   ├── signals.py          One post_save receiver: SalesOrder shipped or delivered -> events
 │   ├── management/         site_initialization.py (shared by init commands),
 │   │   │                   scratch.py (refuses the development database)
 │   │   └── commands/       init, bootstrap_local, seed, provision_kiosk,
 │   │                       provision_channel, expire_channel_orders, rotate_entitlement_keys,
-│   │                       import_storefront_catalog, configure_demo_site,
+│   │                       register_channel_webhook, deliver_channel_webhooks,
+│   │                       prune_channel_events, import_storefront_catalog, configure_demo_site,
 │   │                       purge_receipts, update_bcv_rate, initialize_site
 │   ├── templates/core/     Back-office templates
 │   ├── templatetags/       regional.py
@@ -276,6 +281,26 @@ translates them into its own error format.
   frozen currency snapshot, before any lock; then locks the order, re-checks its status,
   any payment under review, the amount owed and the transaction key; records the payment
   with that same snapshot; and applies it through `apply_confirmed_payments()`.
+- **`channel_events.py`** - tells a store what changed in its orders. `ChannelOrder.published_state`
+  holds what the store was last told (customer status, each payment's review status, each
+  entitlement's status); `publish_order_changes(order_id)` compares it with what is true now and
+  records one `ChannelEvent` per difference, then a `WebhookDelivery` per active address. It is called
+  at the end of every service that changes an order (`apply_confirmed_payments`, `reject_payment`,
+  `cancel_order`/`refund_order` through `_reverse`, `supply_value`, `revoke`), inside that service's
+  transaction, so a rollback leaves nothing and a commit always has its event. The sequence comes
+  from a `SequenceCounter` row that stays locked until commit, which is what keeps it gapless and in
+  commit order. An event carries only the order number and statuses. Calling it when nothing
+  changed records nothing, and an order that is not a channel's costs one query.
+- **`channel_webhooks.py`** - sends them. The body is compact sorted JSON; the signature is
+  `HMAC-SHA256(secret, "<timestamp>.<body>")` made *at send time*, so a retry carries a fresh
+  timestamp, and by both secrets while one is being rotated. Every send re-checks the address
+  (`https`, no credentials, every resolved address public) and the connection itself
+  (`_PeerGuard`, against DNS rebinding), follows no redirect and no environment proxy, and
+  waits at most 3 + 8 seconds. `deliver_due()` claims a delivery with a one-minute lease before
+  sending it, so any number of workers is safe; a failed one is retried on a fixed schedule and
+  abandoned after six attempts, and an address that fails ten in a row is switched off.
+- **`secret_box.py`** - the Fernet wrapper the licence keys and the webhook signing secrets share
+  (first key encrypts, all decrypt); `rotate_entitlement_keys` re-encrypts both.
 - **`entitlements.py`** - what a paid order delivers. `create_entitlements()` is called
   from `apply_confirmed_payments()` in the transaction that marks the order paid, so a
   cancelled or expired order never owes anything, and `refund_order()` calls
@@ -364,9 +389,13 @@ cannot silently reopen.
 
 ### Signals and background work
 
-**There are no signals.** No `post_save`, no `pre_save`, no `@receiver` anywhere in
-the codebase. Side effects are written explicitly in views and serializers, which
-makes the write path readable top to bottom.
+**There is one signal.** Side effects are written explicitly in views, serializers and
+services, which makes the write path readable top to bottom, with a single exception:
+`core/signals.py` has a `post_save` receiver on `SalesOrder` that publishes a channel's events when
+an order is saved as Shipped or Delivered. Five back-office and API views set `order.status` and
+save without going through a service, and a store must hear of a delivery whichever one did it;
+the receiver does nothing for any other status, so a service that is half way through a change never
+publishes a state it has not finished writing.
 
 There is likewise no task queue. Deferred work is a management command on a cron
 schedule: `update_bcv_rate` refreshes the secondary exchange rate, and
@@ -414,6 +443,10 @@ erDiagram
     User              ||--|| SalesChannel : "service_user (PROTECT)"
     User              ||--o{ SalesChannel : "created_by (PROTECT)"
     SalesChannel      ||--o{ ChannelKey : "keys (CASCADE)"
+    SalesChannel      ||--o{ ChannelEvent : "events (CASCADE)"
+    SalesChannel      ||--o{ ChannelWebhook : "webhooks (CASCADE)"
+    ChannelWebhook    ||--o{ WebhookDelivery : "deliveries (CASCADE)"
+    ChannelEvent      ||--o{ WebhookDelivery : "deliveries (CASCADE)"
     ProductCategory   ||--o{ Listing : "category (PROTECT)"
     Listing           ||--o{ ListingVariant : "variants (CASCADE)"
     SalesChannel      }o--o{ Listing : "listings (M2M, empty = all)"
@@ -559,6 +592,15 @@ a copy of what the store sent, never written to the `Customer` and never returne
 `OcrCallLog.channel` attributes OCR cost to the channel that spent it. `SalesChannel`
 also holds `trusts_email_verification` and `order_expiry_minutes`.
 
+**Events and webhooks.** `ChannelOrder.published_state` (JSON) is what the store was last told.
+`ChannelEvent` is unique on `(channel, sequence)`: the sequence is per channel, gapless and allocated
+in the transaction of the change; `data` holds the order number and statuses and nothing private.
+`ChannelWebhook` is unique on `(channel, url)` and keeps its signing secret and the previous one
+only encrypted (`secret_box`), a failure counter and why it was switched off. `WebhookDelivery` is
+unique on `(webhook, event)`: its state, attempt count, next attempt, the last status and the first
+300 characters of the receiver's answer. Events are deleted after 30 days by `prune_channel_events`
+unless a delivery of theirs is still waiting.
+
 **Digital delivery.** `ProductFulfillment` is a side table, one row per product, that says
 what paying for it delivers (`mode` fixed text or supplied, `entitlement_kind` key, link
 or instructions, a `template`, `duration_days`, `per_unit`), so the product form is
@@ -648,7 +690,11 @@ POST orders/                  GET  orders/<order_number>/
 POST orders/<order_number>/payments/       POST orders/<order_number>/cancel/
 GET  customers/<external_ref>/orders/
 GET  PUT entitlements/<id>/   POST entitlements/<id>/reveal/
+GET  events/?after=&limit=
 ```
+
+There is deliberately no endpoint to register a webhook: an address is an operator's act (the Django
+admin or `manage.py register_channel_webhook`), so a leaked channel key cannot name a destination.
 
 ### OpenAPI
 
@@ -818,7 +864,12 @@ new one first, running `manage.py rotate_entitlement_keys`, then dropping the ol
 malformed value raises `RuntimeError` at boot. With `DEBUG` on and none set a development
 key is derived from `SECRET_KEY`; in production there is no fallback, `manage.py check`
 warns (`core.W001`), and storing a key is refused while links and instructions, which are
-not secret, still work.
+not secret, still work. The same keys seal the webhook signing secrets.
+
+`CHANNEL_WEBHOOK_MAX_FAILURES` (default 10) is how many deliveries in a row an address may fail
+before it is switched off. `CHANNEL_WEBHOOK_ALLOW_INSECURE` (default false) lets an address be
+`http` and on this machine; it is read from the environment, and `retailops.demo_settings` sets it
+for the local demonstration. Never set it in production.
 
 Security toggles default to the safe value when `DEBUG` is false:
 `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`,

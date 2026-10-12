@@ -29,10 +29,17 @@ class DemoSettingsTests(SimpleTestCase):
 
     def test_every_other_setting_is_the_normal_one(self):
         # Star-import skips private names, which are not settings anyway.
-        names = {name for name in dir(normal) if name.isupper() and not name.startswith('_')} - {'REST_FRAMEWORK'}
+        names = {name for name in dir(normal) if name.isupper() and not name.startswith('_')} - {
+            'REST_FRAMEWORK', 'CHANNEL_WEBHOOK_ALLOW_INSECURE',
+        }
 
         for name in names:
             self.assertEqual(getattr(demo_settings, name), getattr(normal, name), name)
+
+    def test_a_webhook_may_go_to_this_machine_only_in_the_demonstration(self):
+        # The storefronts run on 127.0.0.1; a real deployment sends only to public https addresses.
+        self.assertFalse(normal.CHANNEL_WEBHOOK_ALLOW_INSECURE)
+        self.assertIs(demo_settings.CHANNEL_WEBHOOK_ALLOW_INSECURE, True)
 
     def test_the_rest_of_the_api_configuration_is_untouched(self):
         for key, value in normal.REST_FRAMEWORK.items():

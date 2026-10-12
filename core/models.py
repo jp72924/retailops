@@ -1543,6 +1543,10 @@ class ChannelOrder(models.Model):
     fulfillment = models.CharField(max_length=10, choices=FULFILLMENT_CHOICES)
     contact = models.JSONField(default=dict, blank=True, validators=[validate_channel_contact])
     created_at = models.DateTimeField(auto_now_add=True)
+    # What the store was last told about this order: its customer status, the review status of each
+    # payment and the status of each entitlement. Events are the difference between this and what is
+    # true now (see core.services.channel_events). Empty means "as created".
+    published_state = models.JSONField(default=dict, blank=True)
 
     class Meta:
         constraints = [
@@ -1558,6 +1562,111 @@ class ChannelOrder(models.Model):
 
     def __str__(self):
         return f'{self.channel} / {self.client_reference}'
+
+
+# ─── Events and webhooks ──────────────────────────────────────────────────────
+
+class ChannelEvent(models.Model):
+    """
+    Something that changed in an order of a channel, as the store is told about it.
+
+    The `sequence` is per channel, has no gaps and is allocated inside the
+    transaction that makes the change, so it follows commit order: a store that
+    reads the feed with `?after=<last sequence>` can never skip an event that
+    committed late. An event carries no personal data, no key and no amount:
+    it only says what to read again.
+    """
+    ORDER_UPDATED = 'order.updated'
+    PAYMENT_UPDATED = 'payment.updated'
+    ENTITLEMENT_UPDATED = 'entitlement.updated'
+    TYPE_CHOICES = [
+        (ORDER_UPDATED, ORDER_UPDATED),
+        (PAYMENT_UPDATED, PAYMENT_UPDATED),
+        (ENTITLEMENT_UPDATED, ENTITLEMENT_UPDATED),
+    ]
+
+    channel = models.ForeignKey(SalesChannel, on_delete=models.CASCADE, related_name='events')
+    sequence = models.PositiveBigIntegerField()
+    event_type = models.CharField(max_length=40, choices=TYPE_CHOICES)
+    order_number = models.CharField(max_length=30, db_index=True)
+    data = models.JSONField(default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['channel_id', 'sequence']
+        constraints = [
+            models.UniqueConstraint(fields=['channel', 'sequence'], name='channelevent_unique_sequence'),
+        ]
+        indexes = [models.Index(fields=['created_at'], name='channelevent_created_idx')]
+
+    def __str__(self):
+        return f'{self.channel} #{self.sequence} {self.event_type}'
+
+
+class ChannelWebhook(models.Model):
+    """
+    An address a channel's events are sent to, signed with a secret only the store knows.
+
+    Registered by an administrator, never through the channel's own key: a leaked
+    key must not be able to point RetailOps at an address of the attacker's choosing.
+    Both secrets are stored encrypted. While one is being rotated the previous one
+    keeps signing too, so the store can switch without missing a delivery.
+    """
+    channel = models.ForeignKey(SalesChannel, on_delete=models.CASCADE, related_name='webhooks')
+    url = models.URLField(max_length=500)
+    label = models.CharField(max_length=100, blank=True)
+    secret = models.CharField(max_length=400)
+    previous_secret = models.CharField(max_length=400, blank=True)
+    is_active = models.BooleanField(default=True)
+    consecutive_failures = models.PositiveIntegerField(default=0)
+    disabled_at = models.DateTimeField(null=True, blank=True)
+    disabled_reason = models.CharField(max_length=200, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['channel_id', 'url']
+        constraints = [
+            models.UniqueConstraint(fields=['channel', 'url'], name='channelwebhook_unique_url'),
+        ]
+
+    def __str__(self):
+        return f'{self.channel} -> {self.url}'
+
+
+class WebhookDelivery(models.Model):
+    """One event on its way to one address: how many times it was tried and how that went."""
+    PENDING = 'pending'
+    DELIVERED = 'delivered'
+    FAILED = 'failed'
+    STATE_CHOICES = [
+        (PENDING, _('Pending')),
+        (DELIVERED, _('Delivered')),
+        (FAILED, _('Gave up')),
+    ]
+
+    webhook = models.ForeignKey(ChannelWebhook, on_delete=models.CASCADE, related_name='deliveries')
+    event = models.ForeignKey(ChannelEvent, on_delete=models.CASCADE, related_name='deliveries')
+    state = models.CharField(max_length=10, choices=STATE_CHOICES, default=PENDING)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField()
+    last_attempt_at = models.DateTimeField(null=True, blank=True)
+    last_status_code = models.PositiveSmallIntegerField(null=True, blank=True)
+    # What went wrong, in at most 300 characters: the start of the receiver's answer, or why it was not sent.
+    last_error = models.CharField(max_length=300, blank=True)
+    delivered_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['id']
+        constraints = [
+            models.UniqueConstraint(fields=['webhook', 'event'], name='webhookdelivery_unique_event'),
+        ]
+        indexes = [models.Index(fields=['state', 'next_attempt_at'], name='webhookdelivery_due_idx')]
+
+    def __str__(self):
+        return f'{self.webhook} / {self.event} ({self.state})'
 
 
 # ─── Digital delivery ─────────────────────────────────────────────────────────

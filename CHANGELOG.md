@@ -49,6 +49,30 @@
 
 ### Added
 
+- **A store can be told when its orders change.** Every change a sales channel
+  cares about is recorded as an event (`payment.updated`, `order.updated`,
+  `entitlement.updated`) on a per-channel feed with a gapless `sequence`, read with
+  `GET /api/v1/storefront/events/?after=&limit=`. Events are differences between what the
+  store was last told and what is true now, written in the transaction that makes the
+  change (so a rollback leaves none), from payments approved, rejected or recorded, cancellations
+  and expiry, refunds, keys supplied or revoked, and orders marked shipped or delivered. They carry the
+  order number and statuses only: no customer, amount, key or receipt reading.
+
+  RetailOps can also post each event to an address an administrator registers
+  (Django admin, or `manage.py register_channel_webhook`; a channel key cannot). A delivery
+  is signed with `X-RetailOps-Signature: v1=<HMAC-SHA256 of "<timestamp>.<body>">`, the
+  timestamp being the time of that attempt, and by both secrets while one is rotated. An address must
+  be `https`, carry no credentials and resolve only to public addresses, which is checked on every
+  send and again on the connection; redirects and proxies are not followed. A failed delivery is
+  retried after 30 s, 2 min, 10 min, 1 h and 6 h; an address that fails ten in a row is switched off
+  until an administrator switches it on. `manage.py deliver_channel_webhooks --interval N` sends
+  (any number of workers is safe) and `manage.py prune_channel_events --days 30` clears old events.
+  Signing secrets are stored encrypted with `ENTITLEMENT_ENCRYPTION_KEYS`, shown once, and re-encrypted
+  by `rotate_entitlement_keys`. New settings: `CHANNEL_WEBHOOK_MAX_FAILURES` and the development-only
+  `CHANNEL_WEBHOOK_ALLOW_INSECURE`. New tables: `ChannelEvent`, `ChannelWebhook`, `WebhookDelivery`; new
+  column `ChannelOrder.published_state`. The first `post_save` receiver in the codebase
+  (`core/signals.py`) publishes shipped and delivered orders. See `STOREFRONT_INTEGRATION.md`.
+
 - **Commands to load a storefront and run it locally.**
   `manage.py import_storefront_catalog --catalog <file.json>` loads a catalogue
   (products, listings, variants, fulfilments, stock) and provisions the channel the

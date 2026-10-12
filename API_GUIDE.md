@@ -1343,6 +1343,7 @@ The catalogue an online store reads, and the orders it places and pays. These en
 | `POST` | `/api/v1/storefront/orders/{order_number}/payments/` | Send the receipt that pays an order; returns the order |
 | `POST` | `/api/v1/storefront/orders/{order_number}/cancel/` | Cancel an order that has no payment yet and give its stock back; idempotent. `409 order_not_cancellable` once it has any payment |
 | `GET` | `/api/v1/storefront/customers/{external_ref}/orders/` | A customer's orders for this channel, newest first, paged |
+| `GET` | `/api/v1/storefront/events/` | The channel's feed of order events, oldest first. `?after=<sequence>&limit=<1-500>`; returns `results` (`sequence`, `type`, `created_at`, `data`), `next_after` and `has_more`. Never cached |
 | `GET` / `PUT` | `/api/v1/storefront/entitlements/{id}/` | What was delivered for an order line; `PUT {"value": ...}` supplies a `pending` one and activates it |
 | `POST` | `/api/v1/storefront/entitlements/{id}/reveal/` | The whole licence key, link or instructions. The only place a key is read back; records the first reveal |
 
@@ -1353,7 +1354,8 @@ The catalogue an online store reads, and the orders it places and pays. These en
 - `customer_status` is `awaiting_payment`, `payment_under_review`, `processing`, `completed`, `cancelled` or `refunded`; each payment reads `verified`, `needs_review` or `rejected`. Receipt images, OCR readings, transaction keys, reviewer notes and customer data are never returned.
 - Receipts are validated against the exchange rate frozen when the order was created, never the live one.
 - Every order lists its `entitlements`: what was delivered for each paid line (`pending`, `active` or `revoked`). A licence key is always masked there; only `reveal` returns it whole, and it is a `POST` because it records evidence. Delivery is configured per product in the admin and is created when the order is paid; a refund revokes it. Keys are stored encrypted with `ENTITLEMENT_ENCRYPTION_KEYS`.
-- Each channel is limited per minute (`429` beyond that): 300 catalogue and query requests, 60 order creations and cancellations, 30 payments.
+- Each channel is limited per minute (`429` beyond that): 300 catalogue and query requests (the event feed included), 60 order creations and cancellations, 30 payments.
+- **Events and webhooks.** Every change a store cares about is recorded as an event `payment.updated`, `order.updated` or `entitlement.updated` on a per-channel feed with a gapless `sequence`. An event names the order and what changed and carries no customer, amount, key or receipt reading. RetailOps can also post each event to an `https` address an operator registered (Django admin or `manage.py register_channel_webhook`), signed with `X-RetailOps-Signature: v1=<hex HMAC-SHA256 of "<timestamp>.<raw body>">`, retried after 30 s, 2 min, 10 min, 1 h and 6 h, and switched off after ten failures in a row. A store should deduplicate by `sequence`, re-read the order, and use the feed to catch up. A channel cannot register its own address. The formats, the verification steps with a test vector, and rotation are in `STOREFRONT_INTEGRATION.md` (Events and webhooks).
 
 ---
 

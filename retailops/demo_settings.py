@@ -11,6 +11,9 @@ setting, is untouched.
 from .settings import *  # noqa: F401,F403
 from .settings import REST_FRAMEWORK
 
+# The storefronts run on this machine, so their webhooks go to http://127.0.0.1:<port>.
+CHANNEL_WEBHOOK_ALLOW_INSECURE = True
+
 DEMO_STOREFRONT_RATES = {
     'storefront_read': '6000/min',
     'storefront_order': '600/min',
