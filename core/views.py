@@ -101,7 +101,9 @@ def login_view(request):
         email = request.POST.get('email', '').strip()
         password = request.POST.get('password', '')
         user = authenticate(request, username=email, password=password)
-        if user is not None:
+        # A kiosk or channel service account never signs in; it gets the same
+        # answer as a wrong password.
+        if user is not None and not user.is_service:
             login(request, user)
             if request.POST.get('remember_me'):
                 request.session.set_expiry(None)  # persist for SESSION_COOKIE_AGE (default)
@@ -1866,12 +1868,20 @@ def inventory_adjust(request):
 
 # ── Users / Staff Management (Admin only) ─────────────────────────────────────
 
+SERVICE_USER_MESSAGE = 'Service accounts are managed by provisioning, not user management.'
+
+
+def _assignable_roles():
+    """The roles a person can be given. Kiosk and Channel belong to provisioned service accounts."""
+    return Role.objects.exclude(name__in=Role.SERVICE_NAMES)
+
+
 @role_required('Admin')
 def user_list(request):
     """GET: user table with role badges, status, and last login. Admin only."""
     return render(request, 'core/user_list.html', {
         'users': User.objects.select_related('role').order_by('first_name').all(),
-        'roles': Role.objects.all(),
+        'roles': _assignable_roles(),
     })
 
 
@@ -1908,7 +1918,7 @@ def user_invite(request):
             messages.error(request, msg)
         return redirect('user-list')
 
-    role = get_object_or_404(Role, pk=int(role_id))
+    role = get_object_or_404(_assignable_roles(), pk=int(role_id))
     user = User.objects.create_user(
         email=email,
         password=password,
@@ -1928,7 +1938,10 @@ def user_edit(request, pk):
     POST (action=change_password): set a new password.
     Redirects to user-list on success. Admin only.
     """
-    edited_user = get_object_or_404(User, pk=pk)
+    edited_user = get_object_or_404(User.objects.select_related('role'), pk=pk)
+    if edited_user.is_service:
+        messages.error(request, SERVICE_USER_MESSAGE)
+        return redirect('user-list')
 
     if request.method == 'POST':
         action = request.POST.get('action', '')
@@ -1947,7 +1960,7 @@ def user_edit(request, pk):
             if errors:
                 return render(request, 'core/user_form.html', {
                     'edited_user': edited_user,
-                    'roles': Role.objects.all(),
+                    'roles': _assignable_roles(),
                     'errors': errors,
                     'form_data': {},
                 })
@@ -1984,12 +1997,12 @@ def user_edit(request, pk):
         if errors:
             return render(request, 'core/user_form.html', {
                 'edited_user': edited_user,
-                'roles': Role.objects.all(),
+                'roles': _assignable_roles(),
                 'errors': errors,
                 'form_data': form_data,
             })
 
-        role = get_object_or_404(Role, pk=int(role_id))
+        role = get_object_or_404(_assignable_roles(), pk=int(role_id))
         edited_user.first_name = first_name
         edited_user.last_name  = last_name
         edited_user.email      = email
@@ -2004,7 +2017,7 @@ def user_edit(request, pk):
 
     return render(request, 'core/user_form.html', {
         'edited_user': edited_user,
-        'roles': Role.objects.all(),
+        'roles': _assignable_roles(),
         'errors': {},
         'form_data': {},
     })
@@ -2014,7 +2027,10 @@ def user_edit(request, pk):
 @role_required('Admin')
 def user_deactivate(request, pk):
     """POST: set User.is_active=False. Admin only."""
-    user = get_object_or_404(User, pk=pk)
+    user = get_object_or_404(User.objects.select_related('role'), pk=pk)
+    if user.is_service:
+        messages.error(request, SERVICE_USER_MESSAGE)
+        return redirect('user-list')
     if user == request.user:
         messages.error(request, 'You cannot deactivate your own account.')
         return redirect('user-list')
@@ -2028,7 +2044,10 @@ def user_deactivate(request, pk):
 @role_required('Admin')
 def user_reactivate(request, pk):
     """POST: set User.is_active=True. Admin only."""
-    user = get_object_or_404(User, pk=pk)
+    user = get_object_or_404(User.objects.select_related('role'), pk=pk)
+    if user.is_service:
+        messages.error(request, SERVICE_USER_MESSAGE)
+        return redirect('user-list')
     user.is_active = True
     user.save()
     messages.success(request, f'{user.get_full_name()} reactivated.')

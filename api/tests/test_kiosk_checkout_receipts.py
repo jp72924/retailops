@@ -169,6 +169,65 @@ class KioskCheckoutReceiptTests(APITestCase):
         self.assertNotIn('15:42', payment.notes)
         self.assertNotIn('Paid at:', payment.notes)
 
+    def _without_required_image(self):
+        sys_settings = SystemSettings.get()
+        sys_settings.receipt_image_required_for_receipt_methods = False
+        sys_settings.save()
+
+    def test_a_transaction_key_the_app_sends_confirms_a_receipt_payment_by_default(self):
+        self._without_required_image()
+        self.assertTrue(SystemSettings.get().kiosk_trust_client_evidence)
+
+        response = self._checkout(Payment.BANK_TRANSFER, receipt={
+            'reference': 'ref-claimed', 'amount_usd': '10.00', 'transaction_key': 'claimed-key',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, Payment.CONFIRMED)
+        self.assertEqual(payment.transaction_key, 'claimed-key')
+
+    def test_with_client_evidence_off_the_same_payment_waits_for_review(self):
+        self._without_required_image()
+        sys_settings = SystemSettings.get()
+        sys_settings.kiosk_trust_client_evidence = False
+        sys_settings.save()
+
+        response = self._checkout(Payment.BANK_TRANSFER, receipt={
+            'reference': 'ref-claimed', 'amount_usd': '10.00', 'transaction_key': 'claimed-key',
+        })
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, Payment.PENDING_REVIEW)
+        self.assertEqual(payment.transaction_key, '')  # the app's claim is not recorded as evidence
+        self.assertIsNone(payment.verified_at)
+
+    def test_the_setting_does_not_touch_a_payment_that_needs_no_receipt(self):
+        sys_settings = SystemSettings.get()
+        sys_settings.kiosk_trust_client_evidence = False
+        sys_settings.save()
+
+        response = self._checkout(Payment.CASH, receipt={'reference': 'cash-1'})
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Payment.objects.get().status, Payment.CONFIRMED)
+
+    @responses.activate
+    def test_with_client_evidence_off_a_matching_ocr_reading_still_confirms(self):
+        self._enable_ocr()
+        sys_settings = SystemSettings.get()
+        sys_settings.kiosk_trust_client_evidence = False
+        sys_settings.save()
+        responses.add(responses.POST, self.provider_url, json=self._vepay_payload(), status=200)
+
+        response = self._checkout(Payment.MOBILE_PAYMENT, receipt=self._receipt_payload())
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        payment = Payment.objects.get()
+        self.assertEqual(payment.status, Payment.CONFIRMED)
+        self.assertEqual(payment.transaction_key, 'bdv-000123')  # RetailOps's own reading
+
     @responses.activate
     def test_matching_ocr_receipt_is_confirmed_and_stored(self):
         self._enable_ocr()

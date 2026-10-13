@@ -67,6 +67,10 @@ class Role(models.Model):
         (KIOSK, _('Kiosk')),
         (CHANNEL, _('Channel')),
     ]
+    # Roles that belong to a provisioned device or integration, not to a person.
+    # Their users have no usable password and authenticate with a key; they are
+    # created by provisioning, never through user management, and never sign in.
+    SERVICE_NAMES = (KIOSK, CHANNEL)
 
     name = models.CharField(max_length=20, choices=NAME_CHOICES, unique=True)
     description = models.TextField(blank=True)
@@ -134,6 +138,11 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def role_name(self):
         return self.role.name if self.role else None
+
+    @property
+    def is_service(self):
+        """A kiosk or sales-channel service account: never a person, never logs in."""
+        return self.role_name in Role.SERVICE_NAMES
 
 
 # ─── Customer ─────────────────────────────────────────────────────────────────
@@ -838,6 +847,15 @@ class SystemSettings(models.Model):
     delete_receipt_image_after_days = models.PositiveIntegerField(default=90)
 
     recipient_validation_enabled = models.BooleanField(default=False)
+    kiosk_trust_client_evidence = models.BooleanField(
+        default=True,
+        help_text=_(
+            'A kiosk is a provisioned device in the store, so its receipt payments are confirmed on a '
+            'transaction key the app sends. Turn this off to accept only what RetailOps reads from the '
+            'receipt itself: a kiosk receipt payment then waits for review unless OCR reads a '
+            'transaction key. Check that the kiosk app copes with a payment under review first.'
+        ),
+    )
 
     class Meta:
         verbose_name = 'System Settings'

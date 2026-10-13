@@ -6,7 +6,7 @@ from asgiref.sync import async_to_sync
 from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import mixins, status
-from rest_framework.authentication import SessionAuthentication, TokenAuthentication
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import BasePermission
@@ -30,6 +30,7 @@ from core.services.vepay import (
     get_receipt_value,
 )
 from api.filters import PaymentFilter
+from api.authentication import StaffTokenAuthentication
 from api.kiosk.authentication import KioskTokenAuthentication
 from api.permissions import IsManagerOrAdmin
 from api.serializers.payment import (
@@ -108,7 +109,7 @@ class PaymentViewSet(
       ?ordering=created_at (default: -created_at, newest first)
     """
     authentication_classes = [
-        TokenAuthentication, SessionAuthentication, KioskTokenAuthentication,
+        StaffTokenAuthentication, SessionAuthentication, KioskTokenAuthentication,
     ]
     serializer_class = PaymentSerializer
     filterset_class  = PaymentFilter

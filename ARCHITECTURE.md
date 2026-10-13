@@ -659,7 +659,12 @@ distinct components.
 
 ### Scheme
 
-**DRF `TokenAuthentication`.** Not JWT, not OAuth. `SessionAuthentication` and
+**`StaffTokenAuthentication`** (`api/authentication.py`), a subclass of DRF `TokenAuthentication`.
+Not JWT, not OAuth. It refuses a token whose user is a kiosk or channel service account
+(`User.is_service`, from `Role.SERVICE_NAMES`), so a service account can never reach the
+staff API through the endpoints that accept any authenticated user, whatever password or
+token it was given. It joins the role in the query that finds the token, so it costs no
+extra query. `SessionAuthentication` and
 `BrowsableAPIRenderer` are appended to the DRF configuration **only when `DEBUG` is
 true** (`retailops/settings.py:519-528`), so production serves pure JSON with no HTML
 renderer exposed. Three views name their own authentication list instead of the
@@ -1322,6 +1327,13 @@ number's `SequenceCounter` row stays locked until the outer transaction commits,
 an OCR call inside would hold it behind third-party HTTP.
 Nothing read before the block is trusted inside it: the block re-resolves the
 products, re-checks stock and the total, and re-checks the transaction key.
+
+The kiosk is a provisioned device, so `KIOSK_POLICY` lets a transaction key the app
+sends confirm a receipt payment. `SystemSettings.kiosk_trust_client_evidence` (default
+on, so nothing changes; editable only in the Django admin) turns that off through
+`kiosk_policy()`: the same policy without client evidence, which is what the channel
+policy always does. A kiosk receipt payment then waits for review unless RetailOps's own
+OCR reading supplies a transaction key.
 
 The one thing carried across is the **currency context**. Checkout reads the
 configuration once, converts the receipt at that rate, and records the payment with
