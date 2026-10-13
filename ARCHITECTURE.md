@@ -90,9 +90,11 @@ retailops/
 │   │                       currency.py, inventory.py, orders.py, payments.py, customers.py,
 │   │                       listings.py, customer_links.py, channel_orders.py,
 │   │                       channel_payments.py, entitlements.py
-│   ├── management/         site_initialization.py (shared by init commands)
+│   ├── management/         site_initialization.py (shared by init commands),
+│   │   │                   scratch.py (refuses the development database)
 │   │   └── commands/       init, bootstrap_local, seed, provision_kiosk,
 │   │                       provision_channel, expire_channel_orders, rotate_entitlement_keys,
+│   │                       import_storefront_catalog, configure_demo_site,
 │   │                       purge_receipts, update_bcv_rate, initialize_site
 │   ├── templates/core/     Back-office templates
 │   ├── templatetags/       regional.py

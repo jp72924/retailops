@@ -55,3 +55,6 @@ deploy/digitalocean/
 
 # Local accidental artifacts
 =*
+
+# Scratch database, media and secrets of a local storefront demonstration
+/.demo/

@@ -561,6 +561,39 @@ deploy, run `python manage.py rotate_entitlement_keys`, and only then drop the o
 | `409` | `entitlement_not_active` | Only an active entitlement can be revealed; `entitlement_status` says what it is |
 | `503` | `encryption_not_configured`, `decryption_failed` | The server cannot store or read a key right now; retry later and tell the operator |
 
+## Try it locally
+
+To demonstrate the flow, or to develop a storefront against RetailOps, use a **scratch
+database**, never `db.sqlite3`:
+
+```bash
+export DB_NAME=.demo/demo.sqlite3 MEDIA_ROOT=.demo/media    # PowerShell: $env:DB_NAME = ...
+python manage.py migrate
+python manage.py init --demo --no-input --yes                 # documented demo users
+python manage.py configure_demo_site --ocr-url http://127.0.0.1:9100 --rate 36.50
+python manage.py import_storefront_catalog --catalog store.json \
+    --dev-vars ../store/.dev.vars --base-url http://127.0.0.1:8010
+DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py runserver 127.0.0.1:8010
+```
+
+- **`configure_demo_site`** sets what the flow needs and nothing else: dollars as the primary
+  currency and bolivares as the secondary one at a fixed rate; receipt OCR on for both receipt
+  methods, pointing at a VEPay stand-in; one account to pay into per method with **recipient
+  validation on**; and `kiosk_trust_client_evidence` off. It is idempotent.
+- **`import_storefront_catalog`** loads a catalogue from a JSON file (the format is documented in
+  the command's own docstring) and provisions the channel the file names. It matches products by
+  SKU and listings by slug, so a second run updates and creates nothing twice. Every listing it
+  imports is published to that channel only. The key is printed once, or written to `--dev-vars`
+  (merged into the file, without a byte-order mark, and never overwritten by a later run unless
+  `--new-key` is given). `--dry-run` applies everything and rolls it back.
+- **Both commands refuse to run against `db.sqlite3`**, the default development database, unless
+  `--allow-default-db` is given: they write demonstration settings and sample data.
+- **`retailops.demo_settings`** is the normal settings with the per-channel storefront limits raised,
+  because an automated run makes far more calls in a minute than a shop. Nothing else changes.
+- A **VEPay stand-in** (any service that answers `POST /v1/receipts/parse` and `GET /healthz`) lets
+  receipts verify without Tesseract; the Trend Store repository ships one in `tools/demo/`, with a
+  generator for matching, mismatching, duplicate and unreadable receipts.
+
 ## Troubleshooting
 
 | Symptom | Likely cause |

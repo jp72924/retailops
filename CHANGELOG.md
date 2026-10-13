@@ -49,6 +49,18 @@
 
 ### Added
 
+- **Commands to load a storefront and run it locally.**
+  `manage.py import_storefront_catalog --catalog <file.json>` loads a catalogue
+  (products, listings, variants, fulfilments, stock) and provisions the channel the
+  file names; it is idempotent, publishes the listings to that channel only, and
+  writes the channel key to a `.dev.vars` file once. `manage.py configure_demo_site`
+  sets the currencies, receipt OCR, an account to pay into per method and
+  `kiosk_trust_client_evidence` for a demonstration. Both refuse the default
+  development database (`db.sqlite3`) unless told otherwise, and
+  `retailops.demo_settings` raises only the per-channel storefront limits for an
+  automated run. See "Try it locally" in `STOREFRONT_INTEGRATION.md`. Nothing here
+  changes how a shop runs.
+
 - **`SystemSettings.kiosk_trust_client_evidence`** (migration `0031`, default on,
   Django admin only). On, the kiosk behaves exactly as before: a transaction key
   its app sends confirms a receipt payment, which is acceptable only because the
