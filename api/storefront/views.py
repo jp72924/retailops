@@ -194,6 +194,21 @@ def _error(message, code, http_status, **extra):
     return Response({'error': message, 'code': code, **extra}, status=http_status)
 
 
+def _channel_receipt_details(exc):
+    """
+    What a channel may be told about a receipt that was refused: which of its own fields did not match,
+    and whether trying again could help. Never what the OCR read, and never the bank's transaction key:
+    either would show how to adjust a forged picture until it matched.
+    """
+    details = exc.details or {}
+    if exc.code == 'receipt_field_mismatch':
+        return {'mismatches': {
+            field: {'code': mismatch.get('code', 'receipt_field_mismatch')}
+            for field, mismatch in (details.get('mismatches') or {}).items()
+        }}
+    return {key: details[key] for key in ('retryable',) if key in details}
+
+
 CUSTOMER_SCOPE = OpenApiParameter(
     'customer', str,
     description=(
@@ -340,23 +355,19 @@ class OrderPaymentView(StorefrontAPIMixin, APIView):
             )
         except PaymentUnderReview as exc:
             return _error(str(exc), exc.code, status.HTTP_409_CONFLICT)
-        except DuplicateTransactionError as exc:
+        except DuplicateTransactionError:
             return _error(
                 'This receipt transaction has already been recorded.',
                 'duplicate_transaction', status.HTTP_409_CONFLICT,
-                details={'transaction_key': exc.transaction_key},
             )
-        except AmountMismatchError as exc:
+        except AmountMismatchError:
             return _error(
                 'Receipt amount does not match the amount owed.',
                 'amount_mismatch', status.HTTP_422_UNPROCESSABLE_ENTITY,
-                details={
-                    'receipt_amount': str(exc.receipt_amount),
-                    'order_total': str(exc.order_total),
-                },
             )
         except ReceiptValidationError as exc:
-            extra = {'details': exc.details} if exc.details else {}
+            details = _channel_receipt_details(exc)
+            extra = {'details': details} if details else {}
             return _error(str(exc), exc.code, exc.http_status, **extra)
         except InvalidReceiptImageError as exc:
             return _error(str(exc), exc.code, exc.http_status)

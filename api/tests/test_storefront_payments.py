@@ -384,6 +384,37 @@ class WhenOcrCannotDecideTests(PaymentFixture):
         self.assertEqual(Payment.objects.count(), 0)
 
     @responses.activate
+    def test_a_refusal_never_repeats_what_the_ocr_read(self):
+        """
+        The 422 answer says *which* of the store's fields did not match, never what the receipt showed:
+        a store (or someone behind it) could otherwise tune a forged picture against the reading.
+        """
+        self.provider_reads(reference='OCR-READ-999', amount='12.34', transaction_key='OCR-BANK-KEY')
+
+        mismatch = self.pay()
+
+        self.assertEqual(mismatch.status_code, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        self.assertEqual(mismatch.data['code'], 'receipt_field_mismatch')
+        self.assertEqual(set(mismatch.data['details']), {'mismatches'})
+        for field, entry in mismatch.data['details']['mismatches'].items():
+            self.assertEqual(set(entry), {'code'}, field)
+        for leaked in ('OCR-READ-999', '12.34', 'OCR-BANK-KEY', 'expected', 'actual', 'receipt_fields'):
+            self.assertNotIn(leaked, str(mismatch.data), leaked)
+
+    @responses.activate
+    def test_a_duplicate_receipt_does_not_name_the_bank_transaction(self):
+        self.provider_reads(transaction_key='OCR-BANK-KEY')
+        self.pay()
+        other = self.place_order(reference='WEB-2').data['order_number']
+        self.provider_reads(transaction_key='OCR-BANK-KEY')
+
+        duplicate = self.pay(number=other)
+
+        self.assertEqual(duplicate.data['code'], 'duplicate_transaction')
+        self.assertNotIn('OCR-BANK-KEY', str(duplicate.data))
+        self.assertNotIn('details', duplicate.data)
+
+    @responses.activate
     def test_a_receipt_already_spent_is_refused(self):
         self.provider_reads()
         self.pay()
