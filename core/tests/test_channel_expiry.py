@@ -7,9 +7,10 @@ to settle, and a payment that lands while the command runs must win.
 """
 from datetime import timedelta
 from io import StringIO
+from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.test import TestCase
 from django.utils import timezone
 
@@ -209,3 +210,83 @@ class ExpireCommandTests(ExpiryFixture):
 
     def test_with_nothing_due_it_says_so(self):
         self.assertIn('Cancelled 0 lapsed order(s); skipped 0.', self._run())
+
+
+class ExpireLoopTests(ExpiryFixture):
+    """`--interval N` keeps looking: each pass is a normal run, and the wait between passes is N seconds."""
+
+    COMMAND = 'core.management.commands.expire_channel_orders'
+
+    def _loop(self, between_passes, *options):
+        """Run the loop; `between_passes[i]` is called at the i-th wait, and the last one ends the loop."""
+        waits = []
+        calls = iter(between_passes)
+
+        def sleep(seconds):
+            waits.append(seconds)
+            action = next(calls)
+            if action is None:
+                raise KeyboardInterrupt
+            action()
+
+        out, err = StringIO(), StringIO()
+        with patch(f'{self.COMMAND}.time.sleep', side_effect=sleep):
+            call_command('expire_channel_orders', '--interval', '60', *options, stdout=out, stderr=err)
+        return out.getvalue(), err.getvalue(), waits
+
+    def test_an_order_that_lapses_between_passes_is_cancelled_by_the_next_one(self):
+        order = self.lapsed()
+        late = []
+
+        def a_second_order_lapses():
+            late.append(self.lapsed('WEB-2'))
+
+        out, _err, waits = self._loop([a_second_order_lapses, None])
+
+        self.assertEqual(self.status_of(order), SalesOrder.CANCELLED)
+        self.assertEqual(self.status_of(late[0]), SalesOrder.CANCELLED)
+        self.assertEqual(self.stock(), 10)
+        self.assertEqual(waits, [60.0, 60.0])
+        self.assertIn('cancelled 1, skipped 0', out)
+        self.assertIn('Stopped.', out)
+
+    def test_a_quiet_pass_prints_nothing(self):
+        out, _err, _waits = self._loop([None])
+
+        self.assertNotIn('cancelled', out)
+
+    def test_a_pass_that_fails_does_not_stop_the_loop(self):
+        order = self.lapsed()
+        real = channel_order_service.expire_channel_orders
+        results = iter([RuntimeError('database is locked'), None])
+
+        def flaky(**kwargs):
+            outcome = next(results)
+            if outcome is not None:
+                raise outcome
+            return real(**kwargs)
+
+        with patch(f'{self.COMMAND}.expire_channel_orders', side_effect=flaky):
+            out, err, waits = self._loop([lambda: None, None])
+
+        self.assertIn('database is locked', err)
+        self.assertEqual(self.status_of(order), SalesOrder.CANCELLED)
+        self.assertEqual(waits, [60.0, 60.0])
+
+    def test_it_passes_the_limit_to_every_pass(self):
+        with patch(f'{self.COMMAND}.expire_channel_orders', return_value=SimpleNamespace(expired=0, skipped=0)) as expire:
+            self._loop([lambda: None, None], '--limit', '7')
+
+        self.assertEqual([call.kwargs['limit'] for call in expire.call_args_list], [7, 7])
+
+    def test_the_interval_must_be_positive(self):
+        for value in ('0', '-5'):
+            # If the check let the loop start, the first wait fails the test instead of hanging it.
+            with patch(f'{self.COMMAND}.time.sleep', side_effect=AssertionError('the loop started')):
+                with self.assertRaisesMessage(CommandError, '--interval must be greater than zero.'):
+                    call_command('expire_channel_orders', '--interval', value, stdout=StringIO())
+
+    def test_a_dry_run_cannot_loop(self):
+        with patch(f'{self.COMMAND}.time.sleep', side_effect=AssertionError('the loop started')):
+            with self.assertRaisesMessage(CommandError, '--dry-run cannot be combined with --interval.'):
+                call_command('expire_channel_orders', '--interval', '5', '--dry-run', stdout=StringIO())

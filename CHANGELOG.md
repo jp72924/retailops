@@ -320,6 +320,11 @@
   now a declared dependency. New tables: `ProductFulfillment` and `Entitlement`.
   See `STOREFRONT_INTEGRATION.md`.
 
+- **`manage.py expire_channel_orders --interval N`** keeps running and looks again every N seconds,
+  like `deliver_channel_webhooks --interval`, for a service or a demonstration with no cron. A pass that
+  fails is reported and the next one still runs. It cannot be combined with `--dry-run`. Without
+  `--interval` the command behaves as before.
+
 ### Fixed
 
 - **A refused receipt no longer tells a storefront what the OCR read.** The

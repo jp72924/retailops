@@ -65,7 +65,8 @@ shape the rest of the architecture:
   management commands intended for cron: `update_bcv_rate`, `purge_receipts`,
   `expire_channel_orders` and `prune_channel_events`. Sending webhooks is a loop with the
   same shape (`deliver_channel_webhooks --interval N`, or `--once` from cron) over a table of
-  deliveries, not a queue.
+  deliveries, not a queue; `expire_channel_orders --interval N` can loop too, for a service
+  or a demonstration without cron.
 - **`responses` is a test-only library shipped in the production requirements file.**
 
 ## 2. Module map
