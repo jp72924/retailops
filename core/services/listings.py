@@ -12,7 +12,7 @@ use for exact stock, and publishing it would hand a competitor the inventory.
 from collections import defaultdict
 
 from django.db import transaction
-from django.db.models import Exists, IntegerField, OuterRef, Prefetch, Subquery, Sum, Value
+from django.db.models import Exists, IntegerField, OuterRef, Prefetch, Q, Subquery, Sum, Value
 from django.db.models.functions import Coalesce
 from django.utils.text import slugify
 
@@ -60,10 +60,27 @@ def visible_variants():
     )
 
 
-def published_listings():
+def visible_to(channel):
     """
-    Published listings with their visible variants prefetched into
-    `storefront_variants`, and the lowest variant price as `from_price`.
+    The condition that restricts a Listing queryset to what `channel` may see.
+
+    A listing that names no channel is visible to every channel; one that
+    names some is visible only to those. ``None`` means no restriction (the
+    staff side and tests). It is two Exists() subqueries rather than a join:
+    a join would repeat a listing once per channel it names and break the
+    counts and the from_price ordering under pagination.
+    """
+    if channel is None:
+        return Q()
+    named = Listing.channels.through.objects.filter(listing_id=OuterRef('pk'))
+    return ~Exists(named) | Exists(named.filter(saleschannel_id=channel.pk))
+
+
+def published_listings(channel=None):
+    """
+    Published listings `channel` may see, with their visible variants
+    prefetched into `storefront_variants`, and the lowest variant price as
+    `from_price`.
 
     from_price is a correlated subquery rather than Min() over the join: an
     aggregate would force a GROUP BY, and pagination would then have to
@@ -76,6 +93,7 @@ def published_listings():
     return (
         Listing.objects
         .filter(is_published=True)
+        .filter(visible_to(channel))
         .filter(Exists(live_variants))
         .select_related('category')
         .annotate(from_price=Subquery(cheapest))
@@ -85,20 +103,23 @@ def published_listings():
     )
 
 
-def orderable_products(skus):
+def orderable_products(skus, channel=None):
     """
-    ``{sku: Product}`` for the SKUs a channel may order.
+    ``{sku: Product}`` for the SKUs `channel` may order.
 
     The same rule as the catalogue, so a channel can order exactly what it can
-    see: a variant of a published listing whose product is active. A SKU that
-    belongs to no listing, or to an unpublished one, is simply absent; an
-    internal product cannot be bought by guessing its SKU.
+    see: a variant of a published listing that is visible to it, whose product
+    is active. A SKU that belongs to no listing, to an unpublished one or to
+    another channel's is simply absent; an internal product, or another
+    store's, cannot be bought by guessing its SKU.
     """
     variants = (
         ListingVariant.objects
         .filter(listing__is_published=True, product__is_active=True, product__sku__in=list(skus))
         .select_related('product')
     )
+    if channel is not None:
+        variants = variants.filter(listing__in=Listing.objects.filter(visible_to(channel)))
     return {variant.product.sku: variant.product for variant in variants}
 
 
@@ -116,18 +137,20 @@ def category_and_descendants(category_id):
     return found
 
 
-def category_tree():
+def category_tree(channel=None):
     """
-    Categories that lead to at least one published, visible listing, as a
-    nested list. Each node's `listing_count` includes its descendants; empty
-    branches are pruned.
+    Categories that lead to at least one published listing `channel` may see,
+    as a nested list. Each node's `listing_count` includes its descendants;
+    empty branches are pruned.
     """
     live_variants = ListingVariant.objects.filter(
         listing=OuterRef('pk'), product__is_active=True,
     )
     own = defaultdict(int)
     for category_id in (
-        Listing.objects.filter(is_published=True).filter(Exists(live_variants))
+        Listing.objects.filter(is_published=True)
+        .filter(visible_to(channel))
+        .filter(Exists(live_variants))
         .values_list('category_id', flat=True)
     ):
         own[category_id] += 1

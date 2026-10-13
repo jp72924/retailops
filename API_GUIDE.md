@@ -233,7 +233,7 @@ Certain endpoint categories have their own per-user scopes that apply in additio
 | `kiosk_checkout` | 30 / minute | Checkout submission (kiosk flow) |
 | `kiosk_poll` | 60 / minute | Status polling (kiosk flow) |
 | `storefront_read` | 300 / minute | Storefront catalogue and order reads (per sales channel) |
-| `storefront_order` | 60 / minute | Storefront order creation (per sales channel) |
+| `storefront_order` | 60 / minute | Storefront order creation and cancellation (per sales channel) |
 | `storefront_payment` | 30 / minute | Storefront receipt payments, each of which can cost an OCR call (per sales channel) |
 | `storefront_entitlement` | 60 / minute | Storefront supplying and revealing delivered keys (per sales channel) |
 
@@ -1332,25 +1332,26 @@ The catalogue an online store reads, and the orders it places and pays. These en
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/v1/storefront/catalog/listings/` | Paginated published listings with their variants. Filters: `category` (includes subcategories), `display_type`; `search`; `ordering` = `sort` · `title` · `created_at` · `from_price` |
-| `GET` | `/api/v1/storefront/catalog/listings/{slug}/` | One listing, with `description`, `features`, `attributes` and `currency` |
+| `GET` | `/api/v1/storefront/catalog/listings/` | Paginated published listings with their variants, `features` and `attributes`. Filters: `category` (includes subcategories), `display_type`; `search`; `ordering` = `sort` · `title` · `created_at` · `from_price` |
+| `GET` | `/api/v1/storefront/catalog/listings/{slug}/` | One listing, with `description` and `currency` |
 | `GET` | `/api/v1/storefront/catalog/categories/` | Categories that lead to a visible listing, nested, with `listing_count` |
 | `GET` | `/api/v1/storefront/payment-instructions/` | The primary active recipient profile for each payment method |
 | `POST` | `/api/v1/storefront/orders/` | Create and confirm an order, reserving its stock and freezing the exchange rate. Idempotent on `client_reference`: a repeat returns the same order with `200` |
 | `GET` | `/api/v1/storefront/orders/{order_number}/` | One of the channel's own orders |
 | `POST` | `/api/v1/storefront/orders/{order_number}/payments/` | Send the receipt that pays an order; returns the order |
+| `POST` | `/api/v1/storefront/orders/{order_number}/cancel/` | Cancel an order that has no payment yet and give its stock back; idempotent. `409 order_not_cancellable` once it has any payment |
 | `GET` | `/api/v1/storefront/customers/{external_ref}/orders/` | A customer's orders for this channel, newest first, paged |
 | `GET` / `PUT` | `/api/v1/storefront/entitlements/{id}/` | What was delivered for an order line; `PUT {"value": ...}` supplies a `pending` one and activates it |
 | `POST` | `/api/v1/storefront/entitlements/{id}/reveal/` | The whole licence key, link or instructions. The only place a key is read back; records the first reveal |
 
-- A listing is visible when it is published and at least one variant is an active product. Prices come from the product.
+- A listing is visible to a channel when it is published, at least one variant is an active product, and it names no channel or names that one (`Listing.channels`; empty means every channel). A channel can neither see nor order another channel's listing. Prices come from the product.
 - `availability` is `in_stock`, `low_stock`, `out_of_stock` or `unlimited`. It is a label: **exact stock is never published**.
 - Every response carries a live `currency` block. The catalogue is sent with `Cache-Control: max-age=60` and payment instructions with `no-store`.
-- A channel only ever reaches its own orders; another channel's order number is `404`. Order responses are `no-store`.
+- A channel only ever reaches its own orders; another channel's order number is `404`. Order responses are `no-store`. Adding `?customer=<external_ref>` to an order, payment, cancel, entitlement or reveal call also makes another customer's order or entitlement a `404`; a store that mixes up customers then fails closed.
 - `customer_status` is `awaiting_payment`, `payment_under_review`, `processing`, `completed`, `cancelled` or `refunded`; each payment reads `verified`, `needs_review` or `rejected`. Receipt images, OCR readings, transaction keys, reviewer notes and customer data are never returned.
 - Receipts are validated against the exchange rate frozen when the order was created, never the live one.
 - Every order lists its `entitlements`: what was delivered for each paid line (`pending`, `active` or `revoked`). A licence key is always masked there; only `reveal` returns it whole, and it is a `POST` because it records evidence. Delivery is configured per product in the admin and is created when the order is paid; a refund revokes it. Keys are stored encrypted with `ENTITLEMENT_ENCRYPTION_KEYS`.
-- Each channel is limited per minute (`429` beyond that): 300 catalogue and query requests, 60 order creations, 30 payments.
+- Each channel is limited per minute (`429` beyond that): 300 catalogue and query requests, 60 order creations and cancellations, 30 payments.
 
 ---
 

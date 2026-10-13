@@ -26,6 +26,8 @@ from core.models import Entitlement, RecipientProfile
 from core.services.channel_orders import (
     ClientReferenceConflict,
     InvalidOrderItems,
+    OrderNotCancellable,
+    cancel_channel_order,
     channel_orders,
     create_channel_order,
     customer_status,
@@ -132,20 +134,23 @@ class ListingListView(StorefrontAPIMixin, ListAPIView):
     ordering = ['sort', 'pk']
 
     def get_queryset(self):
-        return published_listings()
+        return published_listings(self.request.channel)
 
 
 @extend_schema_view(get=extend_schema(
     tags=TAGS,
     summary='Retrieve a listing',
-    description='One published listing with its variants. 404 if it is unpublished or has none on sale.',
+    description=(
+        'One published listing with its variants. 404 if it is unpublished, has none on sale, '
+        'or is published only to other channels.'
+    ),
 ))
 class ListingDetailView(StorefrontAPIMixin, RetrieveAPIView):
     serializer_class = StorefrontListingDetailSerializer
     lookup_field = 'slug'
 
     def get_queryset(self):
-        return published_listings()
+        return published_listings(self.request.channel)
 
 
 @extend_schema_view(get=extend_schema(
@@ -159,7 +164,7 @@ class ListingDetailView(StorefrontAPIMixin, RetrieveAPIView):
 ))
 class CategoryTreeView(StorefrontAPIMixin, APIView):
     def get(self, request):
-        return Response({'results': category_tree(), 'currency': live_currency_payload()})
+        return Response({'results': category_tree(request.channel), 'currency': live_currency_payload()})
 
 
 @extend_schema_view(get=extend_schema(
@@ -189,13 +194,32 @@ def _error(message, code, http_status, **extra):
     return Response({'error': message, 'code': code, **extra}, status=http_status)
 
 
+CUSTOMER_SCOPE = OpenApiParameter(
+    'customer', str,
+    description=(
+        'Optional. The `external_ref` of the customer the store is acting for. When given, an order '
+        'or entitlement that is not that customer\'s is a `404`, so a store that mixes up its '
+        'customers fails closed instead of showing one customer another\'s order. Present but '
+        'empty matches nothing.'
+    ),
+)
+
+
+def _customer_scope(request):
+    """The `?customer=` the store asked to be held to, or None when it did not ask."""
+    return request.query_params.get('customer')
+
+
 def _own_order(request, order_number):
-    """The channel's order with this number, or 404. Another channel's is a 404 too."""
-    channel_order = (
-        channel_orders()
-        .filter(channel=request.channel, sales_order__order_number=order_number)
-        .first()
-    )
+    """
+    The channel's order with this number, or 404. Another channel's is a 404 too,
+    and so is another customer's when the store names the customer.
+    """
+    orders = channel_orders().filter(channel=request.channel, sales_order__order_number=order_number)
+    customer = _customer_scope(request)
+    if customer is not None:
+        orders = orders.filter(customer_link__external_ref=customer)
+    channel_order = orders.first()
     if channel_order is None:
         raise NotFound()
     return channel_order
@@ -267,6 +291,7 @@ class OrderCreateView(StorefrontAPIMixin, APIView):
     tags=TAGS,
     summary='Retrieve an order',
     description='One of the channel\'s own orders. `404` for any other, including another channel\'s.',
+    parameters=[CUSTOMER_SCOPE],
     responses=StorefrontOrderSerializer,
 ))
 class OrderDetailView(StorefrontAPIMixin, APIView):
@@ -286,6 +311,7 @@ class OrderDetailView(StorefrontAPIMixin, APIView):
         'decide it is `needs_review` and a person settles it. Returns the order. '
         'Only a confirmed order takes a payment, and not while another is under review.'
     ),
+    parameters=[CUSTOMER_SCOPE],
     request=StorefrontPaymentCreateSerializer,
     responses={201: StorefrontOrderSerializer},
 ))
@@ -339,6 +365,40 @@ class OrderPaymentView(StorefrontAPIMixin, APIView):
         return Response(StorefrontOrderSerializer(fresh).data, status=status.HTTP_201_CREATED)
 
 
+@extend_schema_view(post=extend_schema(
+    tags=TAGS,
+    summary='Cancel an order',
+    description=(
+        'Cancels an order that has no payment yet and gives its stock back, so a store whose customer '
+        'changes the cart does not strand stock until the order expires. An order with any payment, '
+        'even a rejected one, can no longer be cancelled by the store: a person settles it '
+        '(`409 order_not_cancellable`, with its `customer_status`). Cancelling an order that is '
+        'already cancelled changes nothing and returns it. The `client_reference` stays used: a new '
+        'attempt needs a new one. Returns the order.'
+    ),
+    parameters=[CUSTOMER_SCOPE],
+    request=None,
+    responses=StorefrontOrderSerializer,
+))
+class OrderCancelView(StorefrontAPIMixin, APIView):
+    throttle_classes = [StorefrontOrderThrottle]
+    cache_max_age = None
+
+    def post(self, request, order_number):
+        channel_order = _own_order(request, order_number)
+        try:
+            cancel_channel_order(channel_order)
+        except OrderNotCancellable as exc:
+            return _error(
+                str(exc), exc.code, status.HTTP_409_CONFLICT,
+                customer_status=customer_status(
+                    exc.order, exc.order.payments.all(), delivery_complete(exc.order),
+                ),
+            )
+        fresh = channel_orders().get(pk=channel_order.pk)
+        return Response(StorefrontOrderSerializer(fresh).data)
+
+
 @extend_schema_view(get=extend_schema(
     tags=TAGS,
     summary="A customer's orders",
@@ -368,12 +428,17 @@ class CustomerOrdersView(StorefrontAPIMixin, ListAPIView):
 
 def _own_entitlement(request, pk):
     """The channel's own entitlement, or 404. Another channel's, or a non-channel order's, is a 404 too."""
-    entitlement = (
+    entitlements = (
         Entitlement.objects
         .select_related('order_item__product')
         .filter(pk=pk, order_item__sales_order__channel_order__channel=request.channel)
-        .first()
     )
+    customer = _customer_scope(request)
+    if customer is not None:
+        entitlements = entitlements.filter(
+            order_item__sales_order__channel_order__customer_link__external_ref=customer,
+        )
+    entitlement = entitlements.first()
     if entitlement is None:
         raise NotFound()
     return entitlement
@@ -384,6 +449,7 @@ def _own_entitlement(request, pk):
         tags=TAGS,
         summary='Retrieve an entitlement',
         description='What was delivered for an order line. A licence key is masked; see `reveal`.',
+        parameters=[CUSTOMER_SCOPE],
         responses=StorefrontEntitlementSerializer,
     ),
     put=extend_schema(
@@ -394,6 +460,7 @@ def _own_entitlement(request, pk):
             'This is how a store that issues its own licence keys hands them to RetailOps. '
             'Only a pending entitlement can be supplied; an active or revoked one is `409`.'
         ),
+        parameters=[CUSTOMER_SCOPE],
         request=StorefrontEntitlementValueSerializer,
         responses=StorefrontEntitlementSerializer,
     ),
@@ -434,6 +501,7 @@ class EntitlementDetailView(StorefrontAPIMixin, APIView):
         '`revealed_at`, which is the evidence if the customer later disputes a refund. Only an '
         '`active` entitlement can be revealed. Never cached.'
     ),
+    parameters=[CUSTOMER_SCOPE],
     request=None,
     responses={200: {
         'type': 'object',

@@ -313,9 +313,11 @@ class ListingVariantInline(admin.TabularInline):
 class ListingAdmin(admin.ModelAdmin):
     list_display = ('title', 'slug', 'category', 'display_type', 'badge', 'is_published', 'sort')
     list_editable = ('is_published', 'sort')
-    list_filter = ('is_published', 'display_type', 'category')
+    list_filter = ('is_published', 'display_type', 'category', 'channels')
     search_fields = ('title', 'slug', 'variants__product__sku', 'variants__product__name')
     prepopulated_fields = {'slug': ('title',)}
+    # Empty means every channel; naming some restricts the listing to them.
+    filter_horizontal = ('channels',)
     inlines = [ListingVariantInline]
     actions = ['publish_listings', 'unpublish_listings']
 

@@ -1661,3 +1661,6 @@ msgstr "Una entrega por unidad pedida en lugar de una para toda la línea."
 
 msgid "How many units this entitlement covers."
 msgstr "Cuántas unidades cubre esta entrega."
+
+msgid "Channels that may see this listing. Leave empty to show it to every channel."
+msgstr "Canales que pueden ver este listado. Déjalo vacío para mostrarlo a todos los canales."

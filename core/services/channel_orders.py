@@ -24,7 +24,7 @@ from collections import OrderedDict
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
-from django.db.models import Exists, OuterRef
+from django.db.models import Exists, OuterRef, Prefetch
 from django.utils import timezone
 
 from core.models import (
@@ -107,12 +107,21 @@ def review_status(payment):
 
 
 def channel_orders():
-    """Channel orders with everything their representation reads, in five queries."""
+    """
+    Channel orders with everything their representation reads, in four queries.
+
+    The lines are fetched once with their product and the listing variant that
+    sold it, so a line can name the listing and the variant label without a
+    query per line.
+    """
+    lines = SalesOrderItem.objects.select_related(
+        'product', 'product__listing_variant__listing',
+    )
     return (
         ChannelOrder.objects
         .select_related('sales_order', 'currency_snapshot', 'customer_link')
         .prefetch_related(
-            'sales_order__items__product',
+            Prefetch('sales_order__items', queryset=lines),
             'sales_order__items__entitlements',
             'sales_order__payments',
         )
@@ -169,7 +178,7 @@ def create_channel_order(channel, *, client_reference, profile, items, fulfillme
         _assert_same_request(existing, profile, merged)
         return existing, False
 
-    products = orderable_products(merged)
+    products = orderable_products(merged, channel)
     unavailable = [sku for sku in merged if sku not in products]
     if unavailable:
         raise InvalidOrderItems(f'Not available for sale: {", ".join(unavailable)}.')
@@ -235,6 +244,40 @@ def create_channel_order(channel, *, client_reference, profile, items, fulfillme
         return existing, False
 
     return channel_orders().get(pk=channel_order.pk), True
+
+
+class OrderNotCancellable(ChannelOrderError):
+    """A paid order, or one with any payment, is closed by a person, not by the store."""
+    code = 'order_not_cancellable'
+
+    def __init__(self, order):
+        self.order = order
+        super().__init__('This order can no longer be cancelled.')
+
+
+def cancel_channel_order(channel_order):
+    """
+    Cancel an unpaid order the store no longer wants, giving its stock back.
+
+    A store that lets its customer change the cart after the order exists
+    would otherwise strand that stock until the order expires. Only an order
+    with no payment at all can be cancelled, for the reason an expiring order
+    is never one with a payment: a person may be about to approve it. The
+    order is locked and re-checked, so a payment that lands meanwhile wins.
+    Cancelling an already cancelled order changes nothing, so a retry is safe;
+    the reference stays used, as it does for an expired order.
+
+    Raises OrderNotCancellable.
+    """
+    with transaction.atomic():
+        order = lock_order(channel_order.sales_order_id)
+        if order.status == SalesOrder.CANCELLED:
+            return
+        if order.status != SalesOrder.CONFIRMED or order.payments.exists():
+            raise OrderNotCancellable(order)
+        order.notes = f'{order.notes}\nCancelled by the channel.'.strip()
+        order.save(update_fields=['notes', 'updated_at'])
+        cancel_order(order, channel_order.channel.service_user)
 
 
 class ExpiryResult:
