@@ -7,3 +7,4 @@ class CoreConfig(AppConfig):
 
     def ready(self):
         from core import checks  # noqa: F401  (registers the system checks)
+        from core import signals  # noqa: F401  (publishes channel events when an order ships or is delivered)

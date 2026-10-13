@@ -5,6 +5,7 @@ from .views import (
     CustomerOrdersView,
     EntitlementDetailView,
     EntitlementRevealView,
+    EventFeedView,
     ListingDetailView,
     ListingListView,
     OrderCancelView,
@@ -28,4 +29,5 @@ urlpatterns = [
     path('customers/<str:external_ref>/orders/', CustomerOrdersView.as_view(), name='customer-orders'),
     path('entitlements/<int:pk>/',         EntitlementDetailView.as_view(),  name='entitlement-detail'),
     path('entitlements/<int:pk>/reveal/',  EntitlementRevealView.as_view(),  name='entitlement-reveal'),
+    path('events/',                        EventFeedView.as_view(),          name='event-feed'),
 ]

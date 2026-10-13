@@ -320,6 +320,6 @@ def expire_channel_orders(*, now=None, limit=500):
                 continue
             order.notes = f'{order.notes}\nExpired unpaid on {now:%Y-%m-%d %H:%M} UTC.'.strip()
             order.save(update_fields=['notes', 'updated_at'])
-            cancel_order(order, channel_order.channel.service_user)
+            cancel_order(order, channel_order.channel.service_user, reason='expired')
             result.expired += 1
     return result

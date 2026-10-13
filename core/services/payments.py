@@ -105,6 +105,7 @@ def apply_confirmed_payments(order, *, at=None):
     `order` is updated in place to match the stored row.
     """
     from core.models import Payment, SalesOrder
+    from core.services.channel_events import publish_order_changes
     from core.services.entitlements import create_entitlements
 
     with transaction.atomic():
@@ -132,6 +133,10 @@ def apply_confirmed_payments(order, *, at=None):
             ):
                 locked.paid_at = stamp
                 locked.save(update_fields=['paid_at', 'updated_at'])
+
+        # The store hears about whatever changed above (and about a payment that was only recorded
+        # or approved), once, from the finished state.
+        publish_order_changes(locked.pk)
 
         order.status = locked.status
         order.paid_at = locked.paid_at
@@ -197,6 +202,7 @@ def reject_payment(payment, *, user, notes):
     at when the customer disputes it.
     """
     from core.models import Payment
+    from core.services.channel_events import publish_order_changes
 
     notes = (notes or '').strip()
     if not notes:
@@ -216,4 +222,5 @@ def reject_payment(payment, *, user, notes):
         locked.reviewed_at = timezone.now()
         locked.review_notes = notes
         locked.save(update_fields=['status', 'reviewed_by', 'reviewed_at', 'review_notes'])
+        publish_order_changes(locked.sales_order_id)
     return locked

@@ -57,7 +57,9 @@ def restore_stock_for_order(order, user, *, notes):
     return InventoryMovement.objects.bulk_create(movements)
 
 
-def _reverse(order, user, *, expected, new_status, verb, revoke_deliveries=False):
+def _reverse(order, user, *, expected, new_status, verb, revoke_deliveries=False, reason=None):
+    from core.services.channel_events import publish_order_changes
+
     with transaction.atomic():
         locked = lock_order(order.pk)
         if locked.status != expected:
@@ -69,17 +71,23 @@ def _reverse(order, user, *, expected, new_status, verb, revoke_deliveries=False
         restore_stock_for_order(
             locked, user, notes=f'Stock restored on {verb} of {locked.order_number}',
         )
+        publish_order_changes(locked.pk, reason=reason)
     order.status = locked.status
     order.updated_at = locked.updated_at
     return order
 
 
-def cancel_order(order, user):
-    """Confirmed -> Cancelled, giving back the stock the order took."""
+def cancel_order(order, user, *, reason=None):
+    """
+    Confirmed -> Cancelled, giving back the stock the order took.
+
+    `reason` is what a channel's store is told when it differs from the plain
+    "cancelled": an order that lapsed unpaid is "expired".
+    """
     from core.models import SalesOrder
     return _reverse(
         order, user, expected=SalesOrder.CONFIRMED, new_status=SalesOrder.CANCELLED,
-        verb='cancellation',
+        verb='cancellation', reason=reason,
     )
 
 

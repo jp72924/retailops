@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin.utils import unquote
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
@@ -13,6 +14,7 @@ from .models import (
     SystemSettings, OcrCallLog,
     KioskStation,
     ChannelCustomerLink, ChannelKey, ChannelOrder, Listing, ListingVariant, SalesChannel,
+    ChannelEvent, ChannelWebhook, WebhookDelivery,
     Entitlement, ProductFulfillment,
 )
 
@@ -466,6 +468,128 @@ class EntitlementAdmin(admin.ModelAdmin):
     @admin.display(description='Value')
     def masked_value(self, obj):
         return obj.display_value or '-'
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+# ── Events and webhooks ──────────────────────────────────────────────────────
+
+class ChannelWebhookForm(forms.ModelForm):
+    class Meta:
+        model = ChannelWebhook
+        fields = ('channel', 'url', 'label', 'is_active')
+
+    def clean_url(self):
+        from core.services.channel_webhooks import UnsafeTarget, check_url_shape
+        url = self.cleaned_data['url']
+        try:
+            check_url_shape(url)
+        except UnsafeTarget as exc:
+            raise forms.ValidationError(str(exc))
+        return url
+
+
+@admin.register(ChannelWebhook)
+class ChannelWebhookAdmin(admin.ModelAdmin):
+    """
+    Where a channel's events are sent. Registering an address is done here and nowhere a channel's
+    own key can reach: a leaked key must not be able to name a destination. The signing secret is
+    shown once, when the address is added or its secret rotated; only an encrypted copy is kept.
+    """
+    form = ChannelWebhookForm
+    list_display = ('channel', 'url', 'label', 'is_active', 'consecutive_failures', 'disabled_at', 'has_previous_secret')
+    list_filter = ('channel', 'is_active')
+    search_fields = ('url', 'label', 'channel__name')
+    readonly_fields = ('consecutive_failures', 'disabled_at', 'disabled_reason', 'created_by', 'created_at', 'updated_at')
+    actions = ['rotate_secrets', 'clear_previous_secrets', 'reactivate_webhooks']
+
+    def get_fields(self, request, obj=None):
+        fields = ['channel', 'url', 'label', 'is_active']
+        if obj is not None:
+            fields += ['consecutive_failures', 'disabled_at', 'disabled_reason', 'created_by', 'created_at', 'updated_at']
+        return fields
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj is None:
+            return ()
+        return ('channel',) + self.readonly_fields
+
+    @admin.display(boolean=True, description='Rotating')
+    def has_previous_secret(self, obj):
+        return bool(obj.previous_secret)
+
+    def save_model(self, request, obj, form, change):
+        from core.services import secret_box
+        from core.services.channel_webhooks import new_secret
+        if change:
+            super().save_model(request, obj, form, change)
+            return
+        secret = new_secret()
+        obj.secret = secret_box.seal(secret)
+        obj.created_by = request.user
+        super().save_model(request, obj, form, change)
+        messages.warning(request, f'Signing secret for {obj.url} (copy it now, it is shown only once): {secret}')
+
+    @admin.action(description='Rotate the signing secret (both sign until the old one is cleared; shown once)')
+    def rotate_secrets(self, request, queryset):
+        from core.services.channel_webhooks import rotate_secret
+        for webhook in queryset:
+            secret = rotate_secret(webhook)
+            messages.warning(request, f'New signing secret for {webhook.url} (copy it now, it is shown only once): {secret}')
+
+    @admin.action(description='Clear the previous signing secret (finish a rotation)')
+    def clear_previous_secrets(self, request, queryset):
+        from core.services.channel_webhooks import clear_previous_secret
+        for webhook in queryset:
+            clear_previous_secret(webhook)
+        self.message_user(request, f'{queryset.count()} webhook(s) now sign with the current secret only.', messages.SUCCESS)
+
+    @admin.action(description='Switch back on, and send what was waiting')
+    def reactivate_webhooks(self, request, queryset):
+        from core.services.channel_webhooks import reactivate
+        released = sum(reactivate(webhook) for webhook in queryset)
+        self.message_user(request, f'{queryset.count()} webhook(s) switched on; {released} delivery(ies) released.', messages.SUCCESS)
+
+
+@admin.register(WebhookDelivery)
+class WebhookDeliveryAdmin(admin.ModelAdmin):
+    """The trail of every delivery: how often it was tried and what the receiver said. View-only."""
+    list_display = ('id', 'webhook', 'event', 'order', 'state', 'attempts', 'last_status_code', 'next_attempt_at', 'delivered_at')
+    list_filter = ('state', 'webhook__channel')
+    search_fields = ('event__order_number', 'webhook__url')
+    list_select_related = ('webhook__channel', 'event')
+    readonly_fields = [field.name for field in WebhookDelivery._meta.fields]
+    actions = ['retry_now']
+
+    @admin.display(description='Order', ordering='event__order_number')
+    def order(self, delivery):
+        return delivery.event.order_number
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    @admin.action(description='Try again now', permissions=['change'])
+    def retry_now(self, request, queryset):
+        from django.utils import timezone
+        updated = queryset.update(state=WebhookDelivery.PENDING, attempts=0, next_attempt_at=timezone.now())
+        self.message_user(request, f'{updated} delivery(ies) queued.', messages.SUCCESS)
+
+
+@admin.register(ChannelEvent)
+class ChannelEventAdmin(admin.ModelAdmin):
+    """The feed of a channel, as the store reads it. View-only."""
+    list_display = ('channel', 'sequence', 'event_type', 'order_number', 'created_at')
+    list_filter = ('channel', 'event_type')
+    search_fields = ('order_number',)
+    readonly_fields = [field.name for field in ChannelEvent._meta.fields]
 
     def has_add_permission(self, request):
         return False

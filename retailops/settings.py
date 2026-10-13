@@ -98,6 +98,14 @@ def _entitlement_keys(env):
 
 ENTITLEMENT_ENCRYPTION_KEYS = _entitlement_keys(os.environ)
 
+# ── Webhooks to a channel's store ─────────────────────────────────────────────
+# See core.services.channel_webhooks. The signing secrets are encrypted with the keys above.
+# CHANNEL_WEBHOOK_ALLOW_INSECURE is for development only: it lets a webhook use http and point at
+# this machine. With it off (the default) an address must be https and resolve to public addresses.
+CHANNEL_WEBHOOK_ALLOW_INSECURE = _env_bool(os.environ, 'CHANNEL_WEBHOOK_ALLOW_INSECURE', False)
+# How many deliveries in a row may fail before an address is switched off.
+CHANNEL_WEBHOOK_MAX_FAILURES = int(os.environ.get('CHANNEL_WEBHOOK_MAX_FAILURES', '10'))
+
 _allowed_hosts_env = os.environ.get('DJANGO_ALLOWED_HOSTS', '')
 ALLOWED_HOSTS = (
     [h.strip() for h in _allowed_hosts_env.split(',') if h.strip()]

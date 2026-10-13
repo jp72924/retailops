@@ -34,6 +34,12 @@ in `API_GUIDE.md` and described in the OpenAPI schema (`/api/v1/schema/`, tag
   recorded per order line, released when the order is paid, and revoked by a refund.
   A key is stored encrypted and read back only by one explicit call (see
   [Digital delivery](#digital-delivery)).
+- **The store can be told when an order changes.** Every change a store cares about
+  (a payment approved or rejected, an order cancelled or refunded, a key issued) is
+  recorded as an event on a feed the store can read, and RetailOps can also post each
+  event to an address the store registered, signed so the store knows it came from
+  RetailOps (see [Events and webhooks](#events-and-webhooks)). An event never carries a
+  customer, an amount or a key: it says which order to read again.
 
 ## Provision a channel
 
@@ -565,6 +571,180 @@ A refused receipt never reveals what it showed: not the reference, the amount or
 The answers name only the store's own fields that did not match, so the endpoint cannot be used to tune a
 forged picture. Show your customer something like "the details do not match your receipt", not the reading.
 
+## Events and webhooks
+
+A store can ask RetailOps on a timer whether an order changed, or be told. Both rest on one
+thing, a **feed of events** per channel. A **webhook** is a convenience on top of it that
+delivers each event the moment it is recorded; the feed is how a store that was down, or lost a
+delivery, catches up. So a store that uses webhooks should also read the feed, and should treat
+a webhook as a nudge, not as the truth: it says *which order to read again*.
+
+### What an event says
+
+| `type` | When | `data` |
+|--------|------|--------|
+| `payment.updated` | A payment of the order is recorded, approved or rejected | `order_number`, `payment_number`, `review_status` (`verified`, `needs_review` or `rejected`) |
+| `order.updated` | The order's `customer_status` changed | `order_number`, `client_reference`, `customer_status`, `reason` |
+| `entitlement.updated` | A delivery of the order became `pending`, `active` or `revoked` | `order_number`, `entitlement_id`, `sku`, `kind`, `status` |
+
+`reason` says why an order's status changed, for a mail or a log line: `paid`,
+`payment_under_review`, `payment_rejected`, `shipped`, `delivered`, `cancelled`, `expired` or
+`refunded`. An event carries **no customer, no amount, no key and no receipt reading**; re-read
+the order (`GET /orders/{order_number}/`) and act on that.
+
+Events are *differences*: RetailOps remembers what each order's store was last told and records one
+event for each thing that is different now, from the finished state, in the same transaction as
+the change. Approving a payment that pays the order is one `payment.updated`, one `order.updated`
+(`processing`, reason `paid`) and one `entitlement.updated` for each delivery, in that order. A
+change that is rolled back leaves no event, and a change that commits always has one.
+
+Each event has a `sequence`: a number that belongs to the channel, **has no gaps** and follows commit
+order, so a store that has seen event 41 can never see 40 later.
+
+### Read the feed
+
+```http
+GET /api/v1/storefront/events/?after=41&limit=100
+```
+
+```json
+{
+  "results": [
+    { "sequence": 42, "type": "payment.updated", "created_at": "2026-10-12T12:00:00Z",
+      "data": { "order_number": "SO-20261012-0001", "payment_number": "PAY-20261012-0003", "review_status": "verified" } },
+    { "sequence": 43, "type": "order.updated", "created_at": "2026-10-12T12:00:00Z",
+      "data": { "order_number": "SO-20261012-0001", "client_reference": "WEB-1", "customer_status": "processing", "reason": "paid" } }
+  ],
+  "next_after": 43,
+  "has_more": false
+}
+```
+
+- Oldest first. `after` is the last `sequence` the store processed (`0`, the default, starts at the
+  beginning); `limit` is 1 to 500 (100 by default). A value that is not a whole number in range is `400`.
+- Store `next_after` and pass it next time; while `has_more` is true there is more to read now.
+- A channel only ever reads its own events. The response is never cached, and the call counts with
+  the other reads (300 a minute).
+- Events are kept for 30 days (`manage.py prune_channel_events --days 30`, daily, or as the operator
+  decides). A store that has been away longer should re-read the orders it still cares about.
+
+### Receive webhooks
+
+RetailOps posts one event per request:
+
+```http
+POST https://shop.example/api/retailops/webhook
+Content-Type: application/json
+X-RetailOps-Event: order.updated
+X-RetailOps-Delivery: 118
+X-RetailOps-Timestamp: 1800000000
+X-RetailOps-Signature: v1=d86d8d0931486a66868f19d1b0cdb6e49e404e94b6bf33f7d8c6857025878704
+```
+
+```json
+{"channel":"trend-store","created_at":"2026-10-12T12:00:00Z","data":{"order_number":"SO-20261012-0001"},"sequence":7,"type":"order.updated"}
+```
+
+The body is compact JSON with sorted keys, the same bytes on every attempt. The signature is the
+hex of `HMAC-SHA256(secret, "<timestamp>.<raw body>")`, where `secret` is the channel's signing
+secret (it begins `whsec_`) and `timestamp` is the header, in seconds, **of this attempt**: a retry
+an hour later carries a new timestamp and a new signature. While a secret is being rotated the header
+holds two, `v1=<new>,v1=<old>`.
+
+A receiver should:
+
+1. **Read the raw body before parsing it**; the signature covers those exact bytes.
+2. **Compare in constant time** the expected signature (for each secret it holds) with each
+   `v1=` value, and accept if any matches. Anything else is `401`, with no effect.
+3. **Reject an old timestamp**: more than 300 seconds from its own clock is a replay (`401`).
+4. **Ignore what it already handled**: delivery is *at least once*, so the same `sequence` can
+   arrive twice, and two events can arrive out of order. A repeat is `200`, doing nothing.
+5. **Answer `2xx` quickly** (RetailOps waits 8 seconds). Anything else, a redirect included, is a failure.
+6. **Re-read the order** and act on what it says, not on the payload.
+7. **Notice a gap.** If the `sequence` it receives is more than one past the last one it processed,
+   read the feed from the last one.
+
+```python
+import hashlib, hmac, time
+
+def verify(secrets, signature_header, timestamp, raw_body, tolerance=300):
+    if abs(time.time() - int(timestamp)) > tolerance:
+        return False
+    message = f"{timestamp}.".encode() + raw_body
+    given = [part[3:] for part in signature_header.split(",") if part.startswith("v1=")]
+    return any(
+        hmac.compare_digest(hmac.new(s.encode(), message, hashlib.sha256).hexdigest(), g)
+        for s in secrets for g in given
+    )
+```
+
+A test vector for any language: secret `whsec_test_secret_1234567890`, timestamp `1800000000` and
+the body
+
+```
+{"channel":"trend-editorial","created_at":"2026-10-12T12:00:00Z","data":{"order_number":"SO-20261012-0001"},"sequence":7,"type":"order.updated"}
+```
+
+sign to `d86d8d0931486a66868f19d1b0cdb6e49e404e94b6bf33f7d8c6857025878704`.
+
+### What RetailOps does when the store does not answer
+
+| Attempt | Waits before the next |
+|---------|-----------------------|
+| 1st failure | 30 seconds |
+| 2nd | 2 minutes |
+| 3rd | 10 minutes |
+| 4th | 1 hour |
+| 5th | 6 hours |
+| 6th | gives up on that event (it stays on the feed) |
+
+An address that fails **ten deliveries in a row** is switched off, and nothing more is sent until an
+administrator switches it back on (Django admin → **Channel webhooks** → *Switch back on*), which
+sends what waited. A success starts the count again. Every delivery is kept in the admin (**Webhook
+deliveries**): how often it was tried, the status and the first 300 characters of what the receiver
+said. *Try again now* queues a delivery that gave up.
+
+### Where a webhook may point
+
+An address is checked every time it is used, not only when it is registered. It must be `https`,
+carry no credentials, and **every address its name resolves to must be a public one**; the machine the
+connection actually reaches is checked too, because a name can resolve differently the second time.
+Redirects are not followed, an environment proxy is ignored, and waiting is bounded (3 seconds to
+connect, 8 to read). Without this a webhook would be a way to make RetailOps fetch
+`http://169.254.169.254/` for whoever can name an address.
+
+For that reason **a channel cannot register its own address**: it is an operator's act, in the
+Django admin (**Channel webhooks → Add**) or
+
+```bash
+python manage.py register_channel_webhook --channel trend-store \
+    --url https://shop.example/api/retailops/webhook
+```
+
+The signing secret is shown once, because only an encrypted copy is kept
+(`ENTITLEMENT_ENCRYPTION_KEYS`, as for licence keys; `rotate_entitlement_keys` re-encrypts these
+too). `--dev-vars FILE` writes it to a `.dev.vars` file as `RETAILOPS_WEBHOOK_SECRET` instead of printing it.
+The command is idempotent; `--new-secret` starts a rotation and `--drop-previous` ends it.
+
+**Rotate a signing secret without downtime.** Run **Rotate the signing secret** in the admin (or
+`--new-secret`); RetailOps signs with both. Give the store the new one, let it accept either, and then
+run **Clear the previous signing secret** (or `--drop-previous`).
+
+### Run the delivery
+
+Delivering is a loop that sends what is due. Run one of:
+
+```bash
+python manage.py deliver_channel_webhooks --interval 5   # a service, looking every 5 seconds
+python manage.py deliver_channel_webhooks --once         # cron, every minute
+```
+
+One worker is enough and two are harmless: a delivery is claimed before it is sent, and one that a
+dying worker left half way is taken again after a minute. Set
+`CHANNEL_WEBHOOK_MAX_FAILURES` (default 10) to change when an address is switched off.
+`CHANNEL_WEBHOOK_ALLOW_INSECURE=1` lets an address be `http` and on this machine; it is for
+development only and `retailops.demo_settings` turns it on.
+
 ## Try it locally
 
 To demonstrate the flow, or to develop a storefront against RetailOps, use a **scratch
@@ -577,7 +757,10 @@ python manage.py init --demo --no-input --yes                 # documented demo 
 python manage.py configure_demo_site --ocr-url http://127.0.0.1:9100 --rate 36.50
 python manage.py import_storefront_catalog --catalog store.json \
     --dev-vars ../store/.dev.vars --base-url http://127.0.0.1:8010
+python manage.py register_channel_webhook --channel my-store \
+    --url http://127.0.0.1:3001/api/retailops/webhook --dev-vars ../store/.dev.vars
 DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py runserver 127.0.0.1:8010
+DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py deliver_channel_webhooks --interval 2   # another terminal
 ```
 
 - **`configure_demo_site`** sets what the flow needs and nothing else: dollars as the primary
@@ -593,7 +776,11 @@ DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py runserver 127.0.
 - **Both commands refuse to run against `db.sqlite3`**, the default development database, unless
   `--allow-default-db` is given: they write demonstration settings and sample data.
 - **`retailops.demo_settings`** is the normal settings with the per-channel storefront limits raised,
-  because an automated run makes far more calls in a minute than a shop. Nothing else changes.
+  because an automated run makes far more calls in a minute than a shop, and with
+  `CHANNEL_WEBHOOK_ALLOW_INSECURE` on so a webhook can be `http` and point at this machine. Nothing
+  else changes.
+- **`register_channel_webhook`** also needs `ENTITLEMENT_ENCRYPTION_KEYS` (the demonstration settings
+  derive one in development), because the signing secret is stored encrypted.
 - A **VEPay stand-in** (any service that answers `POST /v1/receipts/parse` and `GET /healthz`) lets
   receipts verify without Tesseract; the Trend Store repository ships one in `tools/demo/`, with a
   generator for matching, mismatching, duplicate and unreadable receipts.
@@ -614,3 +801,8 @@ DJANGO_SETTINGS_MODULE=retailops.demo_settings python manage.py runserver 127.0.
 | `500 server_error` on creating an order, only when two requests for the same cart arrive together | The scratch database is SQLite, which cannot take two writers at once (`database is locked`). The order was not created twice; ask again with the **same** `client_reference`, which returns the one order. Production databases do not do this |
 | `503 encryption_not_configured` when supplying a key | `ENTITLEMENT_ENCRYPTION_KEYS` is not set on the server |
 | `503 decryption_failed` on reveal | The key was sealed with an encryption key no longer listed in `ENTITLEMENT_ENCRYPTION_KEYS` |
+| Webhooks stopped arriving | The address was switched off after ten failures in a row (**Channel webhooks** in the admin shows when and why), or `deliver_channel_webhooks` is not running |
+| A webhook is refused as `401` by the store though RetailOps sent it | The body was parsed and re-serialised before verifying (sign the raw bytes), the store's clock is more than 5 minutes off, or it still holds only the old secret after a rotation |
+| A delivery says `Not sent: The address does not resolve to a public address.` | The address names this machine or a private network, which production refuses; use a public `https` address (`CHANNEL_WEBHOOK_ALLOW_INSECURE` is for development only) |
+| A delivery says `the signing secret could not be read` | The secret was sealed with an encryption key no longer listed in `ENTITLEMENT_ENCRYPTION_KEYS`; rotate the signing secret in the admin |
+| The store sees the same event twice, or out of order | That is allowed: deduplicate by `sequence` and re-read the order |

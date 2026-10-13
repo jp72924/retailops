@@ -14,7 +14,7 @@ import logging
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
 from rest_framework import status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -22,7 +22,7 @@ from rest_framework.views import APIView
 from api.kiosk.serializers import KioskRecipientProfileSerializer
 from api.pagination import CappedPageNumberPagination
 from core.exceptions import InsufficientStockError
-from core.models import Entitlement, RecipientProfile
+from core.models import ChannelEvent, Entitlement, RecipientProfile
 from core.services.channel_orders import (
     ClientReferenceConflict,
     InvalidOrderItems,
@@ -543,4 +543,79 @@ class EntitlementRevealView(StorefrontAPIMixin, APIView):
             'kind': entitlement.kind,
             'value': value,
             'revealed_at': entitlement.revealed_at,
+        })
+# ── Events ───────────────────────────────────────────────────────────────────
+
+FEED_DEFAULT_LIMIT = 100
+FEED_MAX_LIMIT = 500
+
+
+def _feed_param(request, name, *, default, minimum, maximum=None):
+    raw = request.query_params.get(name)
+    if raw in (None, ''):
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        raise ValidationError({name: 'Must be a whole number.'})
+    if value < minimum or (maximum is not None and value > maximum):
+        bound = f'between {minimum} and {maximum}' if maximum is not None else f'at least {minimum}'
+        raise ValidationError({name: f'Must be {bound}.'})
+    return value
+
+
+@extend_schema_view(get=extend_schema(
+    tags=TAGS,
+    summary='Read the channel\'s events',
+    description=(
+        'What changed in the channel\'s orders, oldest first: an order\'s customer status, a '
+        'payment\'s review status, an entitlement\'s status. An event says what to read again '
+        '(it carries the order number, never a customer, an amount or a key), so the store reads '
+        'the order and acts on that. `sequence` is per channel, has no gaps and follows commit '
+        'order: keep the last one you handled and ask for `?after=<it>`, and you cannot miss '
+        'one. Webhooks tell you sooner; this is how you catch up after being away.'
+    ),
+    parameters=[
+        OpenApiParameter('after', int, description='Return events with a sequence greater than this. Default 0.'),
+        OpenApiParameter('limit', int, description='At most this many (1-500). Default 100.'),
+    ],
+    responses={200: {
+        'type': 'object',
+        'properties': {
+            'results': {'type': 'array', 'items': {'type': 'object', 'properties': {
+                'sequence': {'type': 'integer'},
+                'type': {'type': 'string', 'enum': [choice[0] for choice in ChannelEvent.TYPE_CHOICES]},
+                'created_at': {'type': 'string', 'format': 'date-time'},
+                'data': {'type': 'object'},
+            }}},
+            'next_after': {'type': 'integer', 'description': 'Pass this as `after` to continue.'},
+            'has_more': {'type': 'boolean'},
+        },
+    }},
+))
+class EventFeedView(StorefrontAPIMixin, APIView):
+    cache_max_age = None
+
+    def get(self, request):
+        after = _feed_param(request, 'after', default=0, minimum=0)
+        limit = _feed_param(request, 'limit', default=FEED_DEFAULT_LIMIT, minimum=1, maximum=FEED_MAX_LIMIT)
+        events = list(
+            ChannelEvent.objects
+            .filter(channel=request.channel, sequence__gt=after)
+            .order_by('sequence')[:limit + 1]
+        )
+        has_more = len(events) > limit
+        events = events[:limit]
+        return Response({
+            'results': [
+                {
+                    'sequence': event.sequence,
+                    'type': event.event_type,
+                    'created_at': event.created_at,
+                    'data': event.data,
+                }
+                for event in events
+            ],
+            'next_after': events[-1].sequence if events else after,
+            'has_more': has_more,
         })
